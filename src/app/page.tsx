@@ -148,9 +148,16 @@ export default function Home() {
             <header className="sticky top-0 z-10 w-full border-b bg-background/80 backdrop-blur-sm">
                 <div className="container mx-auto flex h-16 items-center justify-between px-4">
                     <div className="flex items-center gap-2">
-                        <Sheet className="h-6 w-6 text-primary" />
-                        <h1 className="text-xl font-bold font-headline">Excel Workflow Automator</h1>
+                         <a href="/" className="flex items-center gap-2">
+                            <Sheet className="h-6 w-6 text-primary" />
+                            <h1 className="text-xl font-bold font-headline">Excel Workflow Automator</h1>
+                        </a>
                     </div>
+                     <nav className="flex items-center gap-4">
+                        <Button variant="ghost" asChild>
+                           <a href="/key-checker">Verificador de Chaves</a>
+                        </Button>
+                    </nav>
                 </div>
             </header>
 
@@ -172,6 +179,7 @@ export default function Home() {
                                 files={files}
                                 onFileChange={handleFileChange}
                                 onClearFile={handleClearFile}
+                                isOptional={true}
                             />
                         </CardContent>
                     </Card>

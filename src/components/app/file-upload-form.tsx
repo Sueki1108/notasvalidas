@@ -11,9 +11,10 @@ interface FileUploadFormProps {
     files: FileList;
     onFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearFile: (fileName: string) => void;
+    isOptional?: boolean;
 }
 
-export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile }: FileUploadFormProps) {
+export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile, isOptional=false }: FileUploadFormProps) {
     return (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {requiredFiles.map((name) => (
@@ -36,7 +37,9 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
                             <label htmlFor={name} className="flex h-full w-full cursor-pointer flex-col items-center justify-center text-center">
                                 <Upload className="h-10 w-10 text-muted-foreground" />
                                 <p className="mt-2 font-semibold">{name}.xlsx</p>
-                                <p className="text-sm text-muted-foreground">Clique para carregar</p>
+                                <p className="text-sm text-muted-foreground">
+                                    Clique para carregar {isOptional && <span className="text-xs">(Opcional)</span>}
+                                </p>
                             </label>
                             <input
                                 id={name}
