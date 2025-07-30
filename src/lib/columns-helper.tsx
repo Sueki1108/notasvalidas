@@ -1,0 +1,35 @@
+"use client"
+
+import { ColumnDef } from "@tanstack/react-table"
+import { ArrowUpDown } from "lucide-react"
+import { Button } from "@/components/ui/button"
+
+export function getColumns<TData>(data: TData[]): ColumnDef<TData>[] {
+  if (!data || data.length === 0) {
+    return []
+  }
+
+  const keys = Object.keys(data[0] as object) as (keyof TData)[]
+
+  return keys.map((key) => ({
+    accessorKey: key,
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          {String(key)}
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      )
+    },
+    cell: ({ row }) => {
+        const value = row.getValue(key as string);
+        if (value === null || typeof value === 'undefined') {
+          return <span className="text-muted-foreground">N/A</span>;
+        }
+        return <div>{String(value)}</div>;
+    },
+  }))
+}
