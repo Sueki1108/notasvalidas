@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { KeyRound, FileUp, FileText, Loader2, Copy, CheckCircle, XCircle, Download, Ban, Circle } from "lucide-react";
+import { KeyRound, FileUp, FileText, Loader2, Copy, CheckCircle, XCircle, Download, Ban, Circle, Sheet } from "lucide-react";
 import { KeyResultsDisplay } from "@/components/app/key-results-display";
 
 export type KeyCheckResult = {
