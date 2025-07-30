@@ -55,12 +55,11 @@ export default function Home() {
         setError(null);
         setResults(null);
         
-        const missingFiles = requiredFiles.filter(name => !files[name]);
-        if (missingFiles.length > 0) {
+        if (Object.keys(files).length === 0) {
             toast({
                 variant: "destructive",
-                title: "Arquivos Faltando",
-                description: `Por favor, carregue os seguintes arquivos: ${missingFiles.join(", ")}`,
+                title: "Nenhum arquivo carregado",
+                description: "Por favor, carregue pelo menos uma planilha para processar.",
             });
             return;
         }
@@ -118,7 +117,7 @@ export default function Home() {
             ];
             
             orderedSheetNames.forEach(sheetName => {
-                if (results[sheetName]) {
+                if (results[sheetName] && results[sheetName].length > 0) {
                     const worksheet = XLSX.utils.json_to_sheet(results[sheetName]);
                     // Basic autofit - set widths
                     const cols = Object.keys(results[sheetName][0] || {});
@@ -163,7 +162,7 @@ export default function Home() {
                                 <UploadCloud className="h-8 w-8 text-primary" />
                                 <div>
                                     <CardTitle className="font-headline text-2xl">1. Carregar Planilhas</CardTitle>
-                                    <CardDescription>Faça o upload dos 6 arquivos Excel necessários para o processamento.</CardDescription>
+                                    <CardDescription>Faça o upload dos arquivos Excel para o processamento.</CardDescription>
                                 </div>
                             </div>
                         </CardHeader>
@@ -188,7 +187,7 @@ export default function Home() {
                             </div>
                         </CardHeader>
                         <CardContent>
-                            <Button onClick={handleSubmit} disabled={processing || requiredFiles.some(name => !files[name])} className="w-full">
+                            <Button onClick={handleSubmit} disabled={processing || Object.keys(files).length === 0} className="w-full">
                                 {processing ? "Processando..." : "Processar Arquivos"}
                             </Button>
                         </CardContent>

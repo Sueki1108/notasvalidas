@@ -61,13 +61,15 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
 
     return (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:grid-flow-col">
-                    {orderedSheetNames.map(sheetName => (
-                        results[sheetName] && <TabsTrigger key={sheetName} value={sheetName}>{sheetName}</TabsTrigger>
-                    ))}
-                </TabsList>
-                <div className="mt-2 sm:mt-0 sm:ml-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
+                <div className='flex-grow overflow-x-auto'>
+                    <TabsList className="inline-flex h-auto">
+                        {orderedSheetNames.map(sheetName => (
+                            results[sheetName] && results[sheetName].length > 0 && <TabsTrigger key={sheetName} value={sheetName}>{sheetName}</TabsTrigger>
+                        ))}
+                    </TabsList>
+                </div>
+                <div className="mt-2 sm:mt-0 sm:ml-4 flex-shrink-0">
                      <Button variant="outline" onClick={handleGetInsights} disabled={isInsightLoading}>
                         {isInsightLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BrainCircuit className="mr-2 h-4 w-4" />}
                         Obter Insights com IA
@@ -75,7 +77,7 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
                 </div>
             </div>
             {orderedSheetNames.map(sheetName => (
-                results[sheetName] && (
+                results[sheetName] && results[sheetName].length > 0 && (
                     <TabsContent key={sheetName} value={sheetName}>
                         <DataTable columns={getColumns(results[sheetName])} data={results[sheetName]} />
                     </TabsContent>
