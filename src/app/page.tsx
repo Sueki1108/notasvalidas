@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import type { ChangeEvent } from "react";
+import { useRouter } from 'next/navigation';
 import * as XLSX from "xlsx";
-import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit } from "lucide-react";
+import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, FileUp } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import { processUploadedFiles } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
 
 const requiredFiles = [
     "NF-Stock NFE",
@@ -25,10 +27,14 @@ const requiredFiles = [
 
 export default function Home() {
     const [files, setFiles] = useState<FileList>({});
+    const [textFile, setTextFile] = useState<File | null>(null);
     const [processing, setProcessing] = useState(false);
     const [results, setResults] = useState<Record<string, any[]> | null>(null);
     const [error, setError] = useState<string | null>(null);
     const { toast } = useToast();
+    const router = useRouter();
+    const [isNavigating, startTransition] = useTransition();
+
 
     const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -38,15 +44,17 @@ export default function Home() {
         }
     };
 
+    const handleTextFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        setTextFile(file || null);
+    };
+
     const handleClearFile = (fileName: string) => {
         setFiles(prev => {
             const newFiles = {...prev};
             delete newFiles[fileName];
-            // Also reset the file input value
             const input = document.querySelector(`input[name="${fileName}"]`) as HTMLInputElement;
-            if (input) {
-                input.value = "";
-            }
+            if (input) input.value = "";
             return newFiles;
         });
     };
@@ -68,14 +76,28 @@ export default function Home() {
         for (const name in files) {
             formData.append(name, files[name] as Blob, files[name]?.name);
         }
+        
+        if (textFile) {
+            formData.append("textFile", textFile, textFile.name);
+        }
 
         setProcessing(true);
         try {
             const resultData = await processUploadedFiles(formData);
+
             if (resultData.error) {
               throw new Error(resultData.error);
             }
-            setResults(resultData.data);
+
+            if (resultData.data) {
+                setResults(resultData.data);
+                sessionStorage.setItem('processedData', JSON.stringify(resultData.data));
+            }
+            if (resultData.keyCheckResults) {
+                sessionStorage.setItem('keyCheckResults', JSON.stringify(resultData.keyCheckResults));
+            }
+
+
             toast({
                 title: "Processamento Concluído",
                 description: "Os arquivos foram processados com sucesso.",
@@ -92,6 +114,21 @@ export default function Home() {
             setProcessing(false);
         }
     };
+    
+    const handleNavigateToKeyChecker = () => {
+        if (!sessionStorage.getItem('keyCheckResults')) {
+            toast({
+                variant: "destructive",
+                title: "Dados Insuficientes",
+                description: "Processe os arquivos junto com um arquivo de texto para ver os resultados.",
+            });
+            return;
+        }
+        startTransition(() => {
+            router.push('/key-checker');
+        });
+    };
+
 
     const handleDownload = () => {
         if (!results) return;
@@ -143,6 +180,8 @@ export default function Home() {
         }
     };
 
+    const isProcessButtonDisabled = processing || Object.keys(files).length === 0;
+
     return (
         <div className="min-h-screen bg-background text-foreground">
             <header className="sticky top-0 z-10 w-full border-b bg-background/80 backdrop-blur-sm">
@@ -154,8 +193,8 @@ export default function Home() {
                         </a>
                     </div>
                      <nav className="flex items-center gap-4">
-                        <Button variant="ghost" asChild>
-                           <a href="/key-checker">Verificador de Chaves</a>
+                         <Button variant="ghost" onClick={handleNavigateToKeyChecker} disabled={isNavigating}>
+                            {isNavigating ? "Navegando..." : "Verificador de Chaves"}
                         </Button>
                     </nav>
                 </div>
@@ -163,17 +202,17 @@ export default function Home() {
 
             <main className="container mx-auto p-4 md:p-8">
                 <div className="mx-auto max-w-5xl space-y-8">
-                    <Card className="shadow-lg">
+                     <Card className="shadow-lg">
                         <CardHeader>
                             <div className="flex items-center gap-3">
                                 <UploadCloud className="h-8 w-8 text-primary" />
                                 <div>
-                                    <CardTitle className="font-headline text-2xl">1. Carregar Planilhas</CardTitle>
-                                    <CardDescription>Faça o upload dos arquivos Excel para o processamento.</CardDescription>
+                                    <CardTitle className="font-headline text-2xl">1. Carregar Arquivos</CardTitle>
+                                    <CardDescription>Faça o upload das planilhas e do arquivo de texto para o processamento.</CardDescription>
                                 </div>
                             </div>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="space-y-6">
                             <FileUploadForm
                                 requiredFiles={requiredFiles}
                                 files={files}
@@ -181,6 +220,14 @@ export default function Home() {
                                 onClearFile={handleClearFile}
                                 isOptional={true}
                             />
+                             <div className="border-t pt-6">
+                                <label htmlFor="text-upload" className="font-medium text-lg flex items-center gap-2">
+                                  <FileUp className="h-5 w-5" />
+                                  Arquivo de Texto para Comparação (Opcional)
+                                </label>
+                                <p className="text-sm text-muted-foreground mb-2">Carregue um arquivo .txt para comparar com as chaves válidas geradas.</p>
+                                <Input id="text-upload" type="file" onChange={handleTextFileChange} accept=".txt" />
+                            </div>
                         </CardContent>
                     </Card>
 
@@ -190,12 +237,12 @@ export default function Home() {
                                 <Cpu className="h-8 w-8 text-primary" />
                                 <div>
                                     <CardTitle className="font-headline text-2xl">2. Processar Dados</CardTitle>
-                                    <CardDescription>Após o upload, clique no botão para iniciar a automação.</CardDescription>
+                                    <CardDescription>Após o upload, clique no botão para iniciar a automação e a verificação das chaves.</CardDescription>
                                 </div>
                             </div>
                         </CardHeader>
                         <CardContent>
-                            <Button onClick={handleSubmit} disabled={processing || Object.keys(files).length === 0} className="w-full">
+                            <Button onClick={handleSubmit} disabled={isProcessButtonDisabled} className="w-full">
                                 {processing ? "Processando..." : "Processar Arquivos"}
                             </Button>
                         </CardContent>

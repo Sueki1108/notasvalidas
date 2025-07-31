@@ -1,16 +1,14 @@
 // src/app/key-checker/page.tsx
 "use client";
 
-import { useState } from "react";
-import type { ChangeEvent } from "react";
-import * as XLSX from "xlsx";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { KeyRound, FileUp, FileText, Loader2, Copy, CheckCircle, XCircle, Download, Ban, Circle, Sheet } from "lucide-react";
+import { KeyRound, FileText, Loader2, Sheet, BarChart } from "lucide-react";
 import { KeyResultsDisplay } from "@/components/app/key-results-display";
+import { useRouter } from 'next/navigation';
 
 export type KeyCheckResult = {
     keysNotFoundInTxt: string[];
@@ -18,79 +16,37 @@ export type KeyCheckResult = {
 };
 
 export default function KeyCheckerPage() {
-    const [spreadsheetFile, setSpreadsheetFile] = useState<File | null>(null);
-    const [textFile, setTextFile] = useState<File | null>(null);
-    const [processing, setProcessing] = useState(false);
     const [results, setResults] = useState<KeyCheckResult | null>(null);
-    const [error, setError] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
     const { toast } = useToast();
+    const router = useRouter();
 
-    const handleSpreadsheetChange = (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        setSpreadsheetFile(file || null);
-    };
-
-    const handleTextFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        setTextFile(file || null);
-    };
-
-    const handleSubmit = async () => {
-        if (!spreadsheetFile || !textFile) {
-            toast({
-                variant: "destructive",
-                title: "Arquivos Faltando",
-                description: "Por favor, carregue a planilha e o arquivo de texto.",
-            });
-            return;
-        }
-
-        setError(null);
-        setResults(null);
-        setProcessing(true);
-
+    useEffect(() => {
         try {
-            // 1. Read Spreadsheet
-            const spreadsheetData = await spreadsheetFile.arrayBuffer();
-            const workbook = XLSX.read(spreadsheetData);
-            const sheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[sheetName];
-            const json: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
-
-            if (json.length === 0 || json[0].length === 0) {
-                 throw new Error("A planilha está vazia ou não possui colunas.");
+            const storedResults = sessionStorage.getItem('keyCheckResults');
+            if (storedResults) {
+                const parsedResults = JSON.parse(storedResults);
+                setResults(parsedResults);
+            } else {
+                 toast({
+                    variant: "destructive",
+                    title: "Nenhum resultado encontrado",
+                    description: "Por favor, processe os arquivos na página inicial primeiro.",
+                });
+                // Redirect back to home if no data is found
+                router.push('/');
             }
-            const spreadsheetKeys = new Set(json.map(row => String(row[0]).trim()).filter(key => key));
-
-            // 2. Read Text File
-            const textContent = await textFile.text();
-            const normalizedText = textContent.replace(/\r\n/g, '\n').replace(/\r/g, '');
-            const keyPattern = /\b\d{44}\b/g;
-            const keysInTxt = new Set(normalizedText.match(keyPattern) || []);
-
-            // 3. Compare Keys
-            const keysNotFoundInTxt = [...spreadsheetKeys].filter(key => !keysInTxt.has(key));
-            const keysInTxtNotInSheet = [...keysInTxt].filter(key => !spreadsheetKeys.has(key));
-
-            setResults({ keysNotFoundInTxt, keysInTxtNotInSheet });
-             toast({
-                title: "Verificação Concluída",
-                description: "A comparação entre a planilha e o arquivo de texto foi finalizada.",
-            });
-
-        } catch (err: any) {
-            const errorMessage = err.message || "Ocorreu um erro desconhecido.";
-            setError(errorMessage);
+        } catch (error) {
             toast({
                 variant: "destructive",
-                title: "Erro no Processamento",
-                description: errorMessage,
+                title: "Erro ao carregar resultados",
+                description: "Os dados de resultado podem estar corrompidos. Tente processar novamente.",
             });
+            router.push('/');
         } finally {
-            setProcessing(false);
+            setLoading(false);
         }
-    };
-
+    }, [toast, router]);
 
     return (
         <div className="min-h-screen bg-background text-foreground">
@@ -104,7 +60,7 @@ export default function KeyCheckerPage() {
                     </div>
                      <nav className="flex items-center gap-4">
                         <Button variant="ghost" asChild>
-                           <a href="/key-checker">Verificador de Chaves</a>
+                           <a href="/">Processamento Principal</a>
                         </Button>
                     </nav>
                 </div>
@@ -115,57 +71,32 @@ export default function KeyCheckerPage() {
                     <Card className="shadow-lg">
                         <CardHeader>
                             <div className="flex items-center gap-3">
-                                <FileUp className="h-8 w-8 text-primary" />
-                                <div>
-                                    <CardTitle className="font-headline text-2xl">1. Carregar Arquivos</CardTitle>
-                                    <CardDescription>Faça o upload da planilha e do arquivo de texto para comparação.</CardDescription>
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                           <div>
-                             <label htmlFor="spreadsheet-upload" className="font-medium">Planilha (.xlsx, .xls, .csv)</label>
-                             <Input id="spreadsheet-upload" type="file" onChange={handleSpreadsheetChange} accept=".xlsx,.xls,.csv" className="mt-2" />
-                           </div>
-                            <div>
-                             <label htmlFor="text-upload" className="font-medium">Arquivo de Texto (.txt)</label>
-                             <Input id="text-upload" type="file" onChange={handleTextFileChange} accept=".txt" className="mt-2" />
-                           </div>
-                        </CardContent>
-                    </Card>
-
-                     <Card className="shadow-lg">
-                        <CardHeader>
-                             <div className="flex items-center gap-3">
                                 <KeyRound className="h-8 w-8 text-primary" />
                                 <div>
-                                    <CardTitle className="font-headline text-2xl">2. Comparar Chaves</CardTitle>
-                                    <CardDescription>Clique para iniciar a verificação das chaves entre os arquivos.</CardDescription>
+                                    <CardTitle className="font-headline text-2xl">Resultados da Verificação de Chaves</CardTitle>
+                                    <CardDescription>Comparação entre as "Chaves Válidas" processadas e o arquivo de texto fornecido.</CardDescription>
                                 </div>
                             </div>
                         </CardHeader>
                         <CardContent>
-                             <Button onClick={handleSubmit} disabled={processing || !spreadsheetFile || !textFile} className="w-full">
-                                {processing ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Processando...
-                                    </>
-                                ) : "Comparar Arquivos"}
-                            </Button>
+                             {loading ? (
+                                <div className="flex items-center justify-center p-8">
+                                    <Loader2 className="mr-2 h-8 w-8 animate-spin" />
+                                    <p>Carregando resultados...</p>
+                                </div>
+                            ) : results ? (
+                                <KeyResultsDisplay results={results} />
+                            ) : (
+                                <Alert>
+                                    <BarChart className="h-4 w-4" />
+                                    <AlertTitle>Nenhum resultado para exibir</AlertTitle>
+                                    <AlertDescription>
+                                       Não foram encontrados resultados da verificação de chaves. Volte para a página inicial e processe os arquivos.
+                                    </AlertDescription>
+                                </Alert>
+                            )}
                         </CardContent>
                     </Card>
-
-                    {error && (
-                        <Alert variant="destructive">
-                            <FileText className="h-4 w-4" />
-                            <AlertTitle>Erro</AlertTitle>
-                            <AlertDescription>{error}</AlertDescription>
-                        </Alert>
-                    )}
-
-                    {results && <KeyResultsDisplay results={results} />}
-
                  </div>
             </main>
              <footer className="mt-12 border-t py-6">
