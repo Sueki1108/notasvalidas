@@ -15,6 +15,20 @@ interface FileUploadFormProps {
 }
 
 export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile, isOptional=false }: FileUploadFormProps) {
+    const getFileAcceptType = (fileName: string) => {
+        if (fileName.toLowerCase().includes('txt')) {
+            return '.txt';
+        }
+        return ".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel";
+    }
+
+    const getDisplayName = (fileName: string) => {
+        if (fileName.toLowerCase().includes('txt')) {
+            return fileName;
+        }
+        return `${fileName}.xlsx`;
+    }
+
     return (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {requiredFiles.map((name) => (
@@ -28,7 +42,7 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
                             </div>
                             <div className="flex flex-col items-center gap-2 text-center">
                                 <FileCheck className="h-10 w-10 text-primary" />
-                                <p className="font-semibold">{name}.xlsx</p>
+                                <p className="font-semibold">{files[name]?.[0]?.name || getDisplayName(name)}</p>
                                 <p className="text-xs text-muted-foreground">
                                     {files[name]?.length} arquivo(s) carregado(s)
                                 </p>
@@ -38,7 +52,7 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
                          <>
                             <label htmlFor={name} className="flex h-full w-full cursor-pointer flex-col items-center justify-center text-center">
                                 <Upload className="h-10 w-10 text-muted-foreground" />
-                                <p className="mt-2 font-semibold">{name}.xlsx</p>
+                                <p className="mt-2 font-semibold">{getDisplayName(name)}</p>
                                 <p className="text-sm text-muted-foreground">
                                     Clique para carregar {isOptional && <span className="text-xs">(Opcional)</span>}
                                 </p>
@@ -47,10 +61,10 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
                                 id={name}
                                 name={name}
                                 type="file"
-                                accept=".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                                accept={getFileAcceptType(name)}
                                 className="sr-only"
                                 onChange={onFileChange}
-                                multiple
+                                multiple={!name.toLowerCase().includes('txt')}
                             />
                         </>
                     )}

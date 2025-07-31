@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import type { ChangeEvent } from "react";
 import { useRouter } from 'next/navigation';
 import * as XLSX from "xlsx";
-import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, FileUp } from "lucide-react";
+import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,6 @@ import { processUploadedFiles } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Input } from "@/components/ui/input";
 
 const requiredFiles = [
     "NF-Stock NFE",
@@ -22,12 +21,12 @@ const requiredFiles = [
     "NF-Stock Itens",
     "NF-Stock NFE Operação Não Realizada",
     "NF-Stock NFE Operação Desconhecida",
-    "NF-Stock CTE Desacordo de Serviço"
+    "NF-Stock CTE Desacordo de Serviço",
+    "SPED TXT"
 ];
 
 export default function Home() {
     const [files, setFiles] = useState<FileList>({});
-    const [textFile, setTextFile] = useState<File | null>(null);
     const [processing, setProcessing] = useState(false);
     const [results, setResults] = useState<Record<string, any[]> | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -43,15 +42,11 @@ export default function Home() {
         }
     };
 
-    const handleTextFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        setTextFile(file || null);
-    };
-
     const handleClearFile = (fileName: string) => {
         setFiles(prev => {
             const newFiles = {...prev};
             delete newFiles[fileName];
+            // Reset the specific input field
             const input = document.querySelector(`input[name="${fileName}"]`) as HTMLInputElement;
             if (input) input.value = "";
             return newFiles;
@@ -72,7 +67,10 @@ export default function Home() {
         }
 
         const formData = new FormData();
+        const textFile = files['SPED TXT']?.[0]; // Get the text file from the 'files' state
+
         for (const name in files) {
+            if (name === 'SPED TXT') continue; // Skip text file in this loop
             const fileList = files[name];
             if (fileList) {
                 for (const file of fileList) {
@@ -210,7 +208,7 @@ export default function Home() {
                                 <UploadCloud className="h-8 w-8 text-primary" />
                                 <div>
                                     <CardTitle className="font-headline text-2xl">1. Carregar Arquivos</CardTitle>
-                                    <CardDescription>Faça o upload das planilhas e do arquivo de texto para o processamento.</CardDescription>
+                                    <CardDescription>Faça o upload das planilhas e do arquivo SPED TXT para o processamento.</CardDescription>
                                 </div>
                             </div>
                         </CardHeader>
@@ -222,14 +220,6 @@ export default function Home() {
                                 onClearFile={handleClearFile}
                                 isOptional={true}
                             />
-                             <div className="border-t pt-6">
-                                <label htmlFor="text-upload" className="font-medium text-lg flex items-center gap-2">
-                                  <FileUp className="h-5 w-5" />
-                                  Arquivo de Texto para Comparação (Opcional)
-                                </label>
-                                <p className="text-sm text-muted-foreground mb-2">Carregue um arquivo .txt para comparar com as chaves válidas geradas.</p>
-                                <Input id="text-upload" type="file" onChange={handleTextFileChange} accept=".txt" />
-                            </div>
                         </CardContent>
                     </Card>
 
