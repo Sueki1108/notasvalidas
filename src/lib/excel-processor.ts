@@ -81,12 +81,22 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
     processedDfs["Notas Válidas"] = [...dfNfeValidas, ...dfCteValidas];
     processedDfs["Notas Canceladas"] = [...dfNfeCanceladas, ...dfCteCanceladas];
 
-    // Remover linhas de resumo de "Notas Válidas"
-    const phrasesToRemove = ["Valor total das notas", "Valor Total da Prestação"];
+    // Remover linhas de resumo e vazias de "Notas Válidas"
+    const phrasesToRemove = ["TOTAL", "Valor total das notas", "Valor Total da Prestação"];
     if (processedDfs["Notas Válidas"]) {
         processedDfs["Notas Válidas"] = processedDfs["Notas Válidas"].filter(row => {
+             // Check if row is empty
+            if (!row || Object.keys(row).length === 0) {
+                return false;
+            }
+            // Check if all values are null or empty strings
+            const isRowEffectivelyEmpty = Object.values(row).every(value => value === null || String(value).trim() === '');
+            if (isRowEffectivelyEmpty) {
+                return false;
+            }
+            // Check for phrases to remove
             return !Object.values(row).some(value => 
-                typeof value === 'string' && phrasesToRemove.some(phrase => value.includes(phrase))
+                typeof value === 'string' && phrasesToRemove.some(phrase => value.toUpperCase().includes(phrase))
             );
         });
     }

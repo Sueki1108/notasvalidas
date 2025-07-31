@@ -9,11 +9,11 @@ type DataFrames = { [key: string]: any[] };
 export async function processUploadedFiles(formData: FormData) {
   try {
     const dataFrames: DataFrames = {};
-    const textFile = formData.get('textFile') as File | null;
+    const textFiles: File[] = formData.getAll('SPED TXT') as File[];
     const fileEntries: { [key: string]: File[] } = {};
 
     for (const [key, value] of formData.entries()) {
-        if (key === 'textFile') continue;
+        if (key === 'SPED TXT') continue;
         if (!fileEntries[key]) {
             fileEntries[key] = [];
         }
@@ -36,12 +36,18 @@ export async function processUploadedFiles(formData: FormData) {
     const processedData = processDataFrames(dataFrames);
     
     let keyCheckResults = null;
-    if (textFile && processedData['Chaves Válidas']) {
+    if (textFiles.length > 0 && processedData['Chaves Válidas']) {
         const spreadsheetKeysArray = processedData['Chaves Válidas'].map(row => String(row['Chave de acesso']).trim()).filter(key => key);
         const spreadsheetKeys = new Set(spreadsheetKeysArray);
 
-        const textContent = await textFile.text();
-        const normalizedText = textContent.replace(/\\r\\n/g, '\\n').replace(/\\r/g, '');
+        let combinedTextContent = '';
+        for (const textFile of textFiles) {
+             if (textFile.size > 0) {
+                combinedTextContent += await textFile.text() + '\\n';
+             }
+        }
+        
+        const normalizedText = combinedTextContent.replace(/\\r\\n/g, '\\n').replace(/\\r/g, '');
         const keyPattern = /\\b\\d{44}\\b/g;
         const keysInTxt = new Set(normalizedText.match(keyPattern) || []);
 

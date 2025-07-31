@@ -67,10 +67,10 @@ export default function Home() {
         }
 
         const formData = new FormData();
-        const textFile = files['SPED TXT']?.[0]; // Get the text file from the 'files' state
+        const textFiles = files['SPED TXT'];
 
         for (const name in files) {
-            if (name === 'SPED TXT') continue; // Skip text file in this loop
+             if (name === 'SPED TXT') continue;
             const fileList = files[name];
             if (fileList) {
                 for (const file of fileList) {
@@ -79,8 +79,10 @@ export default function Home() {
             }
         }
         
-        if (textFile) {
-            formData.append("textFile", textFile, textFile.name);
+        if (textFiles) {
+             for (const file of textFiles) {
+                formData.append("SPED TXT", file, file.name);
+            }
         }
 
         setProcessing(true);

@@ -64,7 +64,7 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
                                 accept={getFileAcceptType(name)}
                                 className="sr-only"
                                 onChange={onFileChange}
-                                multiple={!name.toLowerCase().includes('txt')}
+                                multiple={true}
                             />
                         </>
                     )}
