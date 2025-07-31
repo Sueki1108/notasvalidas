@@ -43,12 +43,12 @@ export async function processUploadedFiles(formData: FormData) {
         let combinedTextContent = '';
         for (const textFile of textFiles) {
              if (textFile.size > 0) {
-                combinedTextContent += await textFile.text() + '\\n';
+                combinedTextContent += await textFile.text() + '\n';
              }
         }
         
-        const normalizedText = combinedTextContent.replace(/\\r\\n/g, '\\n').replace(/\\r/g, '');
-        const keyPattern = /\\b\\d{44}\\b/g;
+        const normalizedText = combinedTextContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        const keyPattern = /\b\d{44}\b/g;
         const keysInTxt = new Set(normalizedText.match(keyPattern) || []);
 
         const keysNotFoundInTxt = [...spreadsheetKeys].filter(key => !keysInTxt.has(key));
