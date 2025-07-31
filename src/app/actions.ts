@@ -8,23 +8,29 @@ type DataFrames = { [key: string]: any[] };
 
 export async function processUploadedFiles(formData: FormData) {
   try {
-    const files = formData.getAll('file') as File[];
-    const fileNames = formData.getAll('fileName') as string[];
-    const textFile = formData.get('textFile') as File | null;
-
     const dataFrames: DataFrames = {};
+    const textFile = formData.get('textFile') as File | null;
+    const fileEntries: { [key: string]: File[] } = {};
 
     for (const [key, value] of formData.entries()) {
-        // Ignorar o textFile aqui, pois ele será tratado separadamente
         if (key === 'textFile') continue;
+        if (!fileEntries[key]) {
+            fileEntries[key] = [];
+        }
+        fileEntries[key].push(value as File);
+    }
 
-        const file = value as File;
-        const buffer = await file.arrayBuffer();
-        const workbook = XLSX.read(buffer, { type: 'buffer' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
-        dataFrames[key] = jsonData;
+    for (const key in fileEntries) {
+        const files = fileEntries[key];
+        dataFrames[key] = [];
+        for (const file of files) {
+            const buffer = await file.arrayBuffer();
+            const workbook = XLSX.read(buffer, { type: 'buffer' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+            dataFrames[key].push(...jsonData);
+        }
     }
 
     const processedData = processDataFrames(dataFrames);

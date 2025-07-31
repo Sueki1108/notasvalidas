@@ -1,10 +1,10 @@
 "use client"
 
 import type { ChangeEvent } from "react";
-import { Upload, File, X } from "lucide-react";
+import { Upload, File, X, FileCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export type FileList = Record<string, File | null>;
+export type FileList = Record<string, File[] | null>;
 
 interface FileUploadFormProps {
     requiredFiles: string[];
@@ -18,8 +18,8 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
     return (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {requiredFiles.map((name) => (
-                <div key={name} className="relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-secondary/50 p-4 transition-all">
-                    {files[name] ? (
+                <div key={name} className="relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-secondary/50 p-4 transition-all min-h-[160px]">
+                    {files[name] && files[name]!.length > 0 ? (
                         <>
                             <div className="absolute right-1 top-1">
                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onClearFile(name)}>
@@ -27,9 +27,11 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
                                 </Button>
                             </div>
                             <div className="flex flex-col items-center gap-2 text-center">
-                                <File className="h-10 w-10 text-primary" />
+                                <FileCheck className="h-10 w-10 text-primary" />
                                 <p className="font-semibold">{name}.xlsx</p>
-                                <p className="text-xs text-muted-foreground truncate max-w-full">{files[name]?.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                    {files[name]?.length} arquivo(s) carregado(s)
+                                </p>
                             </div>
                         </>
                     ) : (
@@ -48,6 +50,7 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
                                 accept=".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
                                 className="sr-only"
                                 onChange={onFileChange}
+                                multiple
                             />
                         </>
                     )}

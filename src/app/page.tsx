@@ -35,12 +35,11 @@ export default function Home() {
     const router = useRouter();
     const [isNavigating, startTransition] = useTransition();
 
-
     const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
+        const selectedFiles = e.target.files;
         const fileName = e.target.name;
-        if (file) {
-            setFiles(prev => ({ ...prev, [fileName]: file }));
+        if (selectedFiles && selectedFiles.length > 0) {
+            setFiles(prev => ({ ...prev, [fileName]: Array.from(selectedFiles) }));
         }
     };
 
@@ -74,7 +73,12 @@ export default function Home() {
 
         const formData = new FormData();
         for (const name in files) {
-            formData.append(name, files[name] as Blob, files[name]?.name);
+            const fileList = files[name];
+            if (fileList) {
+                for (const file of fileList) {
+                    formData.append(name, file as Blob, file.name);
+                }
+            }
         }
         
         if (textFile) {
@@ -96,7 +100,6 @@ export default function Home() {
             if (resultData.keyCheckResults) {
                 sessionStorage.setItem('keyCheckResults', JSON.stringify(resultData.keyCheckResults));
             }
-
 
             toast({
                 title: "Processamento Concluído",
@@ -128,7 +131,6 @@ export default function Home() {
             router.push('/key-checker');
         });
     };
-
 
     const handleDownload = () => {
         if (!results) return;
