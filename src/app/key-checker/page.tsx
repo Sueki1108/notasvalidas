@@ -13,6 +13,8 @@ import { useRouter } from 'next/navigation';
 export type KeyCheckResult = {
     keysNotFoundInTxt: string[];
     keysInTxtNotInSheet: string[];
+    duplicateKeysInSheet: string[];
+    duplicateKeysInTxt: string[];
 };
 
 export default function KeyCheckerPage() {

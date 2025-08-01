@@ -6,6 +6,20 @@ import { processDataFrames } from '@/lib/excel-processor';
 // Type for the file data structure expected by the processor
 type DataFrames = { [key: string]: any[] };
 
+const findDuplicates = (arr: string[]): string[] => {
+    const seen = new Set<string>();
+    const duplicates = new Set<string>();
+    for (const item of arr) {
+        if (seen.has(item)) {
+            duplicates.add(item);
+        } else {
+            seen.add(item);
+        }
+    }
+    return Array.from(duplicates);
+};
+
+
 export async function processUploadedFiles(formData: FormData) {
   try {
     const dataFrames: DataFrames = {};
@@ -42,12 +56,21 @@ export async function processUploadedFiles(formData: FormData) {
         
         const normalizedText = textFileContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         const keyPattern = /\b\d{44}\b/g;
-        const keysInTxt = new Set(normalizedText.match(keyPattern) || []);
+        const allKeysInTxt = normalizedText.match(keyPattern) || [];
+        const keysInTxt = new Set(allKeysInTxt);
 
         const keysNotFoundInTxt = [...spreadsheetKeys].filter(key => !keysInTxt.has(key));
         const keysInTxtNotInSheet = [...keysInTxt].filter(key => !spreadsheetKeys.has(key));
         
-        keyCheckResults = { keysNotFoundInTxt, keysInTxtNotInSheet };
+        const duplicateKeysInSheet = findDuplicates(spreadsheetKeysArray);
+        const duplicateKeysInTxt = findDuplicates(allKeysInTxt);
+
+        keyCheckResults = { 
+            keysNotFoundInTxt, 
+            keysInTxtNotInSheet,
+            duplicateKeysInSheet,
+            duplicateKeysInTxt,
+        };
     }
 
     return { data: processedData, keyCheckResults };

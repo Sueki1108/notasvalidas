@@ -5,7 +5,7 @@ import { useState } from "react";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Copy, CheckCircle, XCircle, Download, Ban, Circle } from "lucide-react";
+import { Copy, CheckCircle, XCircle, Download, Ban, Circle, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { KeyCheckResult } from "@/app/key-checker/page";
 
@@ -13,7 +13,7 @@ interface KeyResultsDisplayProps {
     results: KeyCheckResult;
 }
 
-const KeyItem = ({ nfeKey }: { nfeKey: string }) => {
+const KeyItem = ({ nfeKey, isDuplicate }: { nfeKey: string, isDuplicate: boolean }) => {
     const { toast } = useToast();
     const [status, setStatus] = useState<'default' | 'checked' | 'cancelled'>('default');
 
@@ -55,9 +55,9 @@ const KeyItem = ({ nfeKey }: { nfeKey: string }) => {
     }
 
     return (
-        <div className={`p-3 rounded-lg border flex flex-col md:flex-row md:items-center md:justify-between gap-4 transition-colors ${getStatusClasses()}`}>
+        <div className={`p-3 rounded-lg border flex flex-col gap-4 transition-colors ${getStatusClasses()}`}>
             <div className="flex-grow font-mono text-sm break-all">
-                <div className="flex items-center gap-2 mb-2 md:mb-0">
+                <div className="flex items-center gap-2 mb-1">
                      <span
                         className={`px-2 py-1 text-xs font-bold text-white rounded-md ${invoiceModel === 'NFE' ? 'bg-emerald-500' : invoiceModel === 'CTE' ? 'bg-amber-500' : 'bg-gray-500'}`}
                     >
@@ -65,6 +65,12 @@ const KeyItem = ({ nfeKey }: { nfeKey: string }) => {
                     </span>
                     <span>{nfeKey}</span>
                 </div>
+                 {isDuplicate && (
+                    <div className="flex items-center gap-1 text-xs text-amber-700 font-semibold">
+                        <AlertTriangle className="h-3 w-3" />
+                        <span>Possível duplicidade</span>
+                    </div>
+                )}
             </div>
             <div className="flex-shrink-0 flex items-center flex-wrap gap-2">
                  <div className="text-sm font-mono flex items-center gap-2 bg-gray-200 px-2 py-1 rounded">
@@ -89,6 +95,8 @@ const KeyItem = ({ nfeKey }: { nfeKey: string }) => {
 
 export function KeyResultsDisplay({ results }: KeyResultsDisplayProps) {
     const { toast } = useToast();
+    const duplicateSheetKeys = new Set(results.duplicateKeysInSheet || []);
+    const duplicateTxtKeys = new Set(results.duplicateKeysInTxt || []);
 
     const handleDownload = (keys: string[], filename: string) => {
         if (keys.length === 0) {
@@ -127,7 +135,7 @@ export function KeyResultsDisplay({ results }: KeyResultsDisplayProps) {
                 </CardHeader>
                 <CardContent className="space-y-2">
                     {results.keysNotFoundInTxt.length > 0 ? (
-                        results.keysNotFoundInTxt.map(key => <KeyItem key={key} nfeKey={key} />)
+                        results.keysNotFoundInTxt.map(key => <KeyItem key={key} nfeKey={key} isDuplicate={duplicateSheetKeys.has(key)} />)
                     ) : (
                         <p className="text-muted-foreground italic">Boas notícias! Todas as chaves da planilha foram encontradas no arquivo de texto.</p>
                     )}
@@ -149,7 +157,7 @@ export function KeyResultsDisplay({ results }: KeyResultsDisplayProps) {
                 </CardHeader>
                 <CardContent className="space-y-2">
                     {results.keysInTxtNotInSheet.length > 0 ? (
-                        results.keysInTxtNotInSheet.map(key => <KeyItem key={key} nfeKey={key} />)
+                        results.keysInTxtNotInSheet.map(key => <KeyItem key={key} nfeKey={key} isDuplicate={duplicateTxtKeys.has(key)} />)
                     ) : (
                         <p className="text-muted-foreground italic">Boas notícias! Todas as chaves do arquivo de texto foram encontradas na sua planilha.</p>
                     )}
