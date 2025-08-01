@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import type { ChangeEvent } from "react";
 import { useRouter } from 'next/navigation';
 import * as XLSX from "xlsx";
@@ -25,21 +26,16 @@ const requiredFiles = [
     "SPED TXT"
 ];
 
-// Helper to create a serializable representation of the file list
-const getSerializableFileList = (files: FileList) => {
-    const serializable: Record<string, { name: string; size: number; type: string }[]> = {};
-    for (const key in files) {
-        const fileList = files[key];
-        if (fileList) {
-            serializable[key] = fileList.map(file => ({ name: file.name, size: file.size, type: file.type }));
-        }
-    }
-    return serializable;
+// This is a global in-memory cache for files.
+// It's a workaround for the fact that we can't store File objects in sessionStorage directly.
+if (typeof window !== 'undefined' && !(window as any).__file_cache) {
+    (window as any).__file_cache = {};
 }
+const fileCache: FileList = typeof window !== 'undefined' ? (window as any).__file_cache : {};
 
 
 export default function Home() {
-    const [files, setFiles] = useState<FileList>({});
+    const [files, setFiles] = useState<FileList>(fileCache);
     const [processing, setProcessing] = useState(false);
     const [results, setResults] = useState<Record<string, any[]> | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -54,23 +50,32 @@ export default function Home() {
             if (storedResults) {
                 setResults(JSON.parse(storedResults));
             }
+            
+            // Files are now managed in the global `fileCache`
+            setFiles(fileCache);
 
-            const storedFilesMeta = sessionStorage.getItem('loadedFilesMeta');
-            if(storedFilesMeta){
-                const filesMeta = JSON.parse(storedFilesMeta);
-                const restoredFiles: FileList = {};
-                for(const key in filesMeta){
-                     // Create dummy File objects for display purposes
-                    restoredFiles[key] = filesMeta[key].map((meta: any) => new File([], meta.name, { type: meta.type }));
-                }
-                setFiles(restoredFiles);
-            }
         } catch (e) {
             console.error("Failed to parse state from sessionStorage", e);
             sessionStorage.removeItem('processedData');
-            sessionStorage.removeItem('loadedFilesMeta');
         }
     }, []);
+
+    const updateFileCache = (newFiles: FileList) => {
+        for (const key in newFiles) {
+            if (newFiles[key]) {
+                fileCache[key] = newFiles[key];
+            } else {
+                delete fileCache[key];
+            }
+        }
+         // Clean up keys that were removed
+        for (const key in fileCache) {
+            if (!newFiles[key]) {
+                delete fileCache[key];
+            }
+        }
+    };
+    
 
     const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
         const selectedFiles = e.target.files;
@@ -78,10 +83,7 @@ export default function Home() {
         if (selectedFiles && selectedFiles.length > 0) {
             const newFiles = { ...files, [fileName]: Array.from(selectedFiles) };
             setFiles(newFiles);
-            sessionStorage.setItem('loadedFilesMeta', JSON.stringify(getSerializableFileList(newFiles)));
-             // Also store the actual files for re-submission if needed, though this has limits
-             // Note: Storing full file objects is not standard, we're relying on browser behavior here.
-             // A more robust solution might involve IndexedDB for larger files.
+            updateFileCache(newFiles);
         }
     };
 
@@ -89,7 +91,7 @@ export default function Home() {
         const newFiles = {...files};
         delete newFiles[fileName];
         setFiles(newFiles);
-        sessionStorage.setItem('loadedFilesMeta', JSON.stringify(getSerializableFileList(newFiles)));
+        updateFileCache(newFiles);
 
         const input = document.querySelector(`input[name="${fileName}"]`) as HTMLInputElement;
         if (input) input.value = "";
@@ -97,7 +99,7 @@ export default function Home() {
 
     const handleSubmit = async () => {
         setError(null);
-        setResults(null);
+        // Do not clear results immediately, allow a smoother transition
         
         const hasFiles = Object.values(files).some(fileList => fileList && fileList.length > 0);
         if (!hasFiles) {
@@ -141,9 +143,14 @@ export default function Home() {
             if (resultData.data) {
                 setResults(resultData.data);
                 sessionStorage.setItem('processedData', JSON.stringify(resultData.data));
+            } else {
+                setResults(null);
+                sessionStorage.removeItem('processedData');
             }
             if (resultData.keyCheckResults) {
                 sessionStorage.setItem('keyCheckResults', JSON.stringify(resultData.keyCheckResults));
+            } else {
+                 sessionStorage.removeItem('keyCheckResults');
             }
 
             toast({
@@ -153,6 +160,7 @@ export default function Home() {
         } catch (err: any) {
             const errorMessage = err.message || "Ocorreu um erro desconhecido.";
             setError(errorMessage);
+            setResults(null);
             toast({
                 variant: "destructive",
                 title: "Erro no Processamento",
@@ -165,7 +173,7 @@ export default function Home() {
     
     const handleNavigateToKeyChecker = () => {
         const keyResults = sessionStorage.getItem('keyCheckResults');
-        if (!keyResults || keyResults === 'null') {
+        if (!keyResults || keyResults === 'null' || keyResults === '{}') {
             toast({
                 variant: "destructive",
                 title: "Dados Insuficientes",
@@ -346,3 +354,5 @@ export default function Home() {
         </div>
     );
 }
+
+    

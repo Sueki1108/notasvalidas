@@ -1,3 +1,4 @@
+
 // src/app/key-checker/page.tsx
 "use client";
 
@@ -6,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { KeyRound, FileText, Loader2, Sheet, BarChart } from "lucide-react";
+import { KeyRound, FileText, Loader2, Sheet } from "lucide-react";
 import { KeyResultsDisplay } from "@/components/app/key-results-display";
 import { useRouter } from 'next/navigation';
 
@@ -26,7 +27,7 @@ export default function KeyCheckerPage() {
     useEffect(() => {
         try {
             const storedResults = sessionStorage.getItem('keyCheckResults');
-            if (storedResults) {
+            if (storedResults && storedResults !== 'null') {
                 const parsedResults = JSON.parse(storedResults);
                 setResults(parsedResults);
             } else {
@@ -109,3 +110,5 @@ export default function KeyCheckerPage() {
         </div>
     );
 }
+
+    
