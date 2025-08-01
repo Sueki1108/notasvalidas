@@ -79,7 +79,7 @@ export default function Home() {
             }
         }
         
-        if (textFiles) {
+        if (textFiles && textFiles.length > 0) {
              for (const file of textFiles) {
                 formData.append("SPED TXT", file, file.name);
             }
@@ -119,7 +119,8 @@ export default function Home() {
     };
     
     const handleNavigateToKeyChecker = () => {
-        if (!sessionStorage.getItem('keyCheckResults')) {
+        const keyResults = sessionStorage.getItem('keyCheckResults');
+        if (!keyResults || keyResults === 'null') {
             toast({
                 variant: "destructive",
                 title: "Dados Insuficientes",
