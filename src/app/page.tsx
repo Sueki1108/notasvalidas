@@ -80,9 +80,11 @@ export default function Home() {
         }
         
         if (textFiles && textFiles.length > 0) {
-             for (const file of textFiles) {
-                formData.append("SPED TXT", file, file.name);
+            let combinedTextContent = '';
+            for (const file of textFiles) {
+                combinedTextContent += await file.text() + '\n';
             }
+            formData.append("SPED TXT", combinedTextContent);
         }
 
         setProcessing(true);

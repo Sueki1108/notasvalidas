@@ -9,7 +9,7 @@ type DataFrames = { [key: string]: any[] };
 export async function processUploadedFiles(formData: FormData) {
   try {
     const dataFrames: DataFrames = {};
-    const textFiles: File[] = formData.getAll('SPED TXT') as File[];
+    const textFileContent = formData.get('SPED TXT') as string | null;
     const fileEntries: { [key: string]: File[] } = {};
 
     for (const [key, value] of formData.entries()) {
@@ -36,18 +36,11 @@ export async function processUploadedFiles(formData: FormData) {
     const processedData = processDataFrames(dataFrames);
 
     let keyCheckResults = null;
-    if (textFiles.length > 0 && processedData['Chaves Válidas']) {
+    if (textFileContent && processedData['Chaves Válidas']) {
         const spreadsheetKeysArray = processedData['Chaves Válidas'].map(row => String(row['Chave de acesso']).trim()).filter(key => key);
         const spreadsheetKeys = new Set(spreadsheetKeysArray);
-
-        let combinedTextContent = '';
-        for (const textFile of textFiles) {
-             if (textFile && textFile.size > 0) {
-                combinedTextContent += await textFile.text() + '\n';
-             }
-        }
         
-        const normalizedText = combinedTextContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        const normalizedText = textFileContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         const keyPattern = /\b\d{44}\b/g;
         const keysInTxt = new Set(normalizedText.match(keyPattern) || []);
 
