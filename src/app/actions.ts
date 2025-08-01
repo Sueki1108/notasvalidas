@@ -42,7 +42,7 @@ export async function processUploadedFiles(formData: FormData) {
 
         let combinedTextContent = '';
         for (const textFile of textFiles) {
-             if (textFile.size > 0) {
+             if (textFile && textFile.size > 0) {
                 combinedTextContent += await textFile.text() + '\n';
              }
         }
