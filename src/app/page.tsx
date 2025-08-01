@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import type { ChangeEvent } from "react";
 import { useRouter } from 'next/navigation';
 import * as XLSX from "xlsx";
@@ -25,6 +25,19 @@ const requiredFiles = [
     "SPED TXT"
 ];
 
+// Helper to create a serializable representation of the file list
+const getSerializableFileList = (files: FileList) => {
+    const serializable: Record<string, { name: string; size: number; type: string }[]> = {};
+    for (const key in files) {
+        const fileList = files[key];
+        if (fileList) {
+            serializable[key] = fileList.map(file => ({ name: file.name, size: file.size, type: file.type }));
+        }
+    }
+    return serializable;
+}
+
+
 export default function Home() {
     const [files, setFiles] = useState<FileList>({});
     const [processing, setProcessing] = useState(false);
@@ -34,30 +47,60 @@ export default function Home() {
     const router = useRouter();
     const [isNavigating, startTransition] = useTransition();
 
+    useEffect(() => {
+        // Restore state from sessionStorage on component mount
+        try {
+            const storedResults = sessionStorage.getItem('processedData');
+            if (storedResults) {
+                setResults(JSON.parse(storedResults));
+            }
+
+            const storedFilesMeta = sessionStorage.getItem('loadedFilesMeta');
+            if(storedFilesMeta){
+                const filesMeta = JSON.parse(storedFilesMeta);
+                const restoredFiles: FileList = {};
+                for(const key in filesMeta){
+                     // Create dummy File objects for display purposes
+                    restoredFiles[key] = filesMeta[key].map((meta: any) => new File([], meta.name, { type: meta.type }));
+                }
+                setFiles(restoredFiles);
+            }
+        } catch (e) {
+            console.error("Failed to parse state from sessionStorage", e);
+            sessionStorage.removeItem('processedData');
+            sessionStorage.removeItem('loadedFilesMeta');
+        }
+    }, []);
+
     const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
         const selectedFiles = e.target.files;
         const fileName = e.target.name;
         if (selectedFiles && selectedFiles.length > 0) {
-            setFiles(prev => ({ ...prev, [fileName]: Array.from(selectedFiles) }));
+            const newFiles = { ...files, [fileName]: Array.from(selectedFiles) };
+            setFiles(newFiles);
+            sessionStorage.setItem('loadedFilesMeta', JSON.stringify(getSerializableFileList(newFiles)));
+             // Also store the actual files for re-submission if needed, though this has limits
+             // Note: Storing full file objects is not standard, we're relying on browser behavior here.
+             // A more robust solution might involve IndexedDB for larger files.
         }
     };
 
     const handleClearFile = (fileName: string) => {
-        setFiles(prev => {
-            const newFiles = {...prev};
-            delete newFiles[fileName];
-            // Reset the specific input field
-            const input = document.querySelector(`input[name="${fileName}"]`) as HTMLInputElement;
-            if (input) input.value = "";
-            return newFiles;
-        });
+        const newFiles = {...files};
+        delete newFiles[fileName];
+        setFiles(newFiles);
+        sessionStorage.setItem('loadedFilesMeta', JSON.stringify(getSerializableFileList(newFiles)));
+
+        const input = document.querySelector(`input[name="${fileName}"]`) as HTMLInputElement;
+        if (input) input.value = "";
     };
 
     const handleSubmit = async () => {
         setError(null);
         setResults(null);
         
-        if (Object.keys(files).length === 0) {
+        const hasFiles = Object.values(files).some(fileList => fileList && fileList.length > 0);
+        if (!hasFiles) {
             toast({
                 variant: "destructive",
                 title: "Nenhum arquivo carregado",
@@ -66,29 +109,29 @@ export default function Home() {
             return;
         }
 
-        const formData = new FormData();
-        const textFiles = files['SPED TXT'];
-
-        for (const name in files) {
-             if (name === 'SPED TXT') continue;
-            const fileList = files[name];
-            if (fileList) {
-                for (const file of fileList) {
-                    formData.append(name, file as Blob, file.name);
-                }
-            }
-        }
-        
-        if (textFiles && textFiles.length > 0) {
-            let combinedTextContent = '';
-            for (const file of textFiles) {
-                combinedTextContent += await file.text() + '\n';
-            }
-            formData.append("SPED TXT", combinedTextContent);
-        }
-
         setProcessing(true);
         try {
+            const formData = new FormData();
+            const textFiles = files['SPED TXT'];
+
+            for (const name in files) {
+                if (name === 'SPED TXT') continue;
+                const fileList = files[name];
+                if (fileList) {
+                    for (const file of fileList) {
+                        formData.append(name, file as Blob, file.name);
+                    }
+                }
+            }
+
+            if (textFiles && textFiles.length > 0) {
+                let combinedTextContent = '';
+                for (const file of textFiles) {
+                    combinedTextContent += await file.text() + '\n';
+                }
+                formData.append("SPED TXT", combinedTextContent);
+            }
+
             const resultData = await processUploadedFiles(formData);
 
             if (resultData.error) {

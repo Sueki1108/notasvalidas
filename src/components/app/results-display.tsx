@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from '@/components/ui/button';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { DataTable } from '@/components/app/data-table';
 import { getColumns } from '@/lib/columns-helper';
 import { enhanceSpreadsheetWithInsights } from '@/ai/flows/enhance-with-insights';
@@ -17,11 +17,32 @@ interface ResultsDisplayProps {
 }
 
 export function ResultsDisplay({ results }: ResultsDisplayProps) {
-    const [activeTab, setActiveTab] = useState(Object.keys(results)[0]);
+    const [activeTab, setActiveTab] = useState('');
     const [insights, setInsights] = useState<string | null>(null);
     const [isInsightModalOpen, setInsightModalOpen] = useState(false);
     const [isInsightLoading, setInsightLoading] = useState(false);
     const { toast } = useToast();
+
+    const orderedSheetNames = [
+        "Notas Válidas", "Itens Válidos", "Chaves Válidas",
+        ...Object.keys(results).filter(name => !["Notas Válidas", "Itens Válidos", "Chaves Válidas"].includes(name))
+    ];
+    
+    useEffect(() => {
+        const storedTab = sessionStorage.getItem('activeTab');
+        if (storedTab && orderedSheetNames.includes(storedTab)) {
+            setActiveTab(storedTab);
+        } else if (orderedSheetNames.length > 0) {
+            // Find first valid sheet to set as active
+            const firstValidSheet = orderedSheetNames.find(sheetName => results[sheetName] && results[sheetName].length > 0);
+            setActiveTab(firstValidSheet || '');
+        }
+    }, [results]); // Re-run when results change
+
+    const handleTabChange = (value: string) => {
+        setActiveTab(value);
+        sessionStorage.setItem('activeTab', value);
+    };
 
     const handleGetInsights = async () => {
         const dataForInsight = results[activeTab];
@@ -54,13 +75,8 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
         }
     };
     
-    const orderedSheetNames = [
-        "Notas Válidas", "Itens Válidos", "Chaves Válidas",
-        ...Object.keys(results).filter(name => !["Notas Válidas", "Itens Válidos", "Chaves Válidas"].includes(name))
-    ];
-
     return (
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
                 <div className='flex-grow overflow-x-auto'>
                     <TabsList className="inline-flex h-auto">

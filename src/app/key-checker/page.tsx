@@ -88,7 +88,7 @@ export default function KeyCheckerPage() {
                                 <KeyResultsDisplay results={results} />
                             ) : (
                                 <Alert>
-                                    <BarChart className="h-4 w-4" />
+                                    <FileText className="h-4 w-4" />
                                     <AlertTitle>Nenhum resultado para exibir</AlertTitle>
                                     <AlertDescription>
                                        Não foram encontrados resultados da verificação de chaves. Volte para a página inicial e processe os arquivos.
