@@ -99,8 +99,11 @@ export function KeyResultsDisplay({ results }: KeyResultsDisplayProps) {
             });
             return;
         }
-        const data = keys.map(key => ({ Chave: key }));
+        const data = keys.map(key => ({ "Chave de acesso": key }));
         const worksheet = XLSX.utils.json_to_sheet(data);
+        // Basic autofit - set widths
+        worksheet['!cols'] = [{ wch: 50 }];
+
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Chaves");
         XLSX.writeFile(workbook, filename);
@@ -116,9 +119,9 @@ export function KeyResultsDisplay({ results }: KeyResultsDisplayProps) {
                             <CardTitle className="font-headline text-2xl text-red-700">Chaves da Planilha NÃO ENCONTRADAS no Texto</CardTitle>
                             <CardDescription>Estas chaves estavam na sua planilha mas não no arquivo .txt.</CardDescription>
                         </div>
-                        <Button onClick={() => handleDownload(results.keysNotFoundInTxt, "chaves_planilha_nao_encontradas.csv")} disabled={results.keysNotFoundInTxt.length === 0}>
+                        <Button onClick={() => handleDownload(results.keysNotFoundInTxt, "chaves_planilha_nao_encontradas.xlsx")} disabled={results.keysNotFoundInTxt.length === 0}>
                             <Download className="mr-2 h-4 w-4" />
-                            Baixar CSV
+                            Baixar XLSX
                         </Button>
                     </div>
                 </CardHeader>
@@ -138,9 +141,9 @@ export function KeyResultsDisplay({ results }: KeyResultsDisplayProps) {
                             <CardTitle className="font-headline text-2xl text-blue-700">Chaves do Texto NÃO ENCONTRADAS na Planilha</CardTitle>
                             <CardDescription>Estas chaves estavam no seu arquivo .txt mas não na planilha.</CardDescription>
                         </div>
-                        <Button onClick={() => handleDownload(results.keysInTxtNotInSheet, "chaves_txt_nao_encontradas.csv")} disabled={results.keysInTxtNotInSheet.length === 0}>
+                        <Button onClick={() => handleDownload(results.keysInTxtNotInSheet, "chaves_txt_nao_encontradas.xlsx")} disabled={results.keysInTxtNotInSheet.length === 0}>
                             <Download className="mr-2 h-4 w-4" />
-                            Baixar CSV
+                            Baixar XLSX
                         </Button>
                     </div>
                 </CardHeader>
