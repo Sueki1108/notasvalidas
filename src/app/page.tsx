@@ -114,25 +114,20 @@ export default function Home() {
         setProcessing(true);
         try {
             const formData = new FormData();
-            const textFiles = files['SPED TXT'];
-
+            
             for (const name in files) {
-                if (name === 'SPED TXT') continue;
                 const fileList = files[name];
                 if (fileList) {
                     for (const file of fileList) {
-                        formData.append(name, file as Blob, file.name);
+                        if (name === 'SPED TXT') {
+                             formData.append(name, await file.text());
+                        } else {
+                            formData.append(name, file as Blob, file.name);
+                        }
                     }
                 }
             }
 
-            if (textFiles && textFiles.length > 0) {
-                let combinedTextContent = '';
-                for (const file of textFiles) {
-                    combinedTextContent += await file.text() + '\n';
-                }
-                formData.append("SPED TXT", combinedTextContent);
-            }
 
             const resultData = await processUploadedFiles(formData);
 
@@ -354,5 +349,3 @@ export default function Home() {
         </div>
     );
 }
-
-    
