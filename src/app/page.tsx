@@ -62,10 +62,10 @@ export default function Home() {
 
     const updateFileCache = (newFiles: FileList) => {
         for (const key in newFiles) {
-            if (newFiles[key]) {
-                fileCache[key] = newFiles[key];
+            if (newFiles[key] && newFiles[key]!.length > 0) {
+                 fileCache[key] = newFiles[key];
             } else {
-                delete fileCache[key];
+                 delete fileCache[key];
             }
         }
          // Clean up keys that were removed
@@ -81,7 +81,8 @@ export default function Home() {
         const selectedFiles = e.target.files;
         const fileName = e.target.name;
         if (selectedFiles && selectedFiles.length > 0) {
-            const newFiles = { ...files, [fileName]: Array.from(selectedFiles) };
+            const currentFiles = files[fileName] || [];
+            const newFiles = { ...files, [fileName]: [...currentFiles, ...Array.from(selectedFiles)] };
             setFiles(newFiles);
             updateFileCache(newFiles);
         }
@@ -114,20 +115,27 @@ export default function Home() {
         setProcessing(true);
         try {
             const formData = new FormData();
+            let allTextContents: string[] = [];
             
             for (const name in files) {
                 const fileList = files[name];
                 if (fileList) {
                     for (const file of fileList) {
                         if (name === 'SPED TXT') {
-                             formData.append(name, await file.text());
+                            // Read content now and append later
+                            allTextContents.push(await file.text());
                         } else {
-                            formData.append(name, file as Blob, file.name);
+                            // Create a new File object with a modified name to be the key
+                            const newFile = new File([file], name, { type: file.type });
+                            formData.append('files', newFile);
                         }
                     }
                 }
             }
 
+            if (allTextContents.length > 0) {
+                formData.append('SPED TXT', allTextContents.join('\n'));
+            }
 
             const resultData = await processUploadedFiles(formData);
 

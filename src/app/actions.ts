@@ -24,33 +24,29 @@ const findDuplicates = (arr: string[]): string[] => {
 export async function processUploadedFiles(formData: FormData) {
   try {
     const dataFrames: DataFrames = {};
-    const textFilesContent = formData.getAll('SPED TXT').join('\n');
     
-    // Group files by their form field name
-    const fileEntries: { [key: string]: File[] } = {};
-    for (const [key, value] of formData.entries()) {
-      if (value instanceof File) {
-        if (!fileEntries[key]) {
-          fileEntries[key] = [];
-        }
-        fileEntries[key].push(value);
-      }
-    }
-
-    for (const key in fileEntries) {
-        if (key === 'SPED TXT') continue; // Handled separately
-        const files = fileEntries[key];
-        dataFrames[key] = [];
-        for (const file of files) {
+    // Group files by their form field name and read their content
+    const fileEntries = formData.getAll('files');
+    
+    for (const file of fileEntries) {
+        if (file instanceof File) {
+            if (!dataFrames[file.name]) {
+                dataFrames[file.name] = [];
+            }
             const buffer = await file.arrayBuffer();
             const workbook = XLSX.read(buffer, { type: 'buffer' });
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
             const jsonData = XLSX.utils.sheet_to_json(worksheet);
-            dataFrames[key].push(...jsonData);
+            dataFrames[file.name].push(...jsonData);
         }
     }
-
+    
+    const textFilesContent = (formData.get('SPED TXT') as string | null) || '';
+    
+    // Rename keys to match the expected format if needed
+    // This part is tricky if file.name is not what you expect for the key
+    // Assuming the client sends the correct "name" for the dataframe
     const processedData = processDataFrames(dataFrames);
 
     let keyCheckResults = null;
