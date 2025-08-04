@@ -9,11 +9,15 @@ const cleanAndToStr = (value: any): string => {
     if (value === null || typeof value === 'undefined') {
         return "";
     }
-    const strValue = String(value);
-    // Check if it's a number ending in .0
-    if (/^\d+\.0$/.test(strValue)) {
-        return strValue.slice(0, -2);
+    // Convert to string and trim
+    const strValue = String(value).trim();
+    
+    // If it's a number, convert to integer string to remove ".0"
+    const num = Number(strValue);
+    if (!isNaN(num) && String(num) === strValue) {
+        return String(parseInt(strValue, 10));
     }
+    
     return strValue;
 };
 
@@ -99,7 +103,8 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
     const sourceSheetsForRemoval = [
         "NF-Stock NFE Operação Não Realizada",
         "NF-Stock NFE Operação Desconhecida",
-        "NF-Stock CTE Desacordo de Serviço"
+        "NF-Stock CTE Desacordo de Serviço",
+        "Notas Canceladas"
     ];
     
     sourceSheetsForRemoval.forEach(sheetName => {
@@ -131,7 +136,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
 
     // Etapa 5: Filtrar a lista de notas válidas para criar a versão final
     processedDfs["Notas Válidas"] = notasValidasTemporaria.filter(row => 
-        row && !chavesUnicasARemover.has(cleanAndToStr(row["Chave Unica"]))
+        row && row["Chave Unica"] && !chavesUnicasARemover.has(cleanAndToStr(row["Chave Unica"]))
     );
     
     // Etapa 6: Criar "Itens Válidos" e "Chaves Válidas" a partir das "Notas Válidas" JÁ FILTRADAS
@@ -139,7 +144,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
 
     if (processedDfs["NF-Stock Itens"]?.length > 0 && processedDfs["NF-Stock Itens"][0]?.["Chave Unica"]) {
         processedDfs["Itens Válidos"] = processedDfs["NF-Stock Itens"].filter(row => 
-            row && chavesFinaisValidas.has(cleanAndToStr(row["Chave Unica"]))
+            row && row["Chave Unica"] && chavesFinaisValidas.has(cleanAndToStr(row["Chave Unica"]))
         );
     }
 
