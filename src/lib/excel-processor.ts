@@ -14,6 +14,9 @@ const cleanAndToStr = (value: any): string => {
     
     // If it's a number, convert to integer string to remove ".0"
     const num = Number(strValue);
+    if (!isNaN(num) && String(num) === strValue && !strValue.includes('.')) {
+        return strValue;
+    }
     if (!isNaN(num) && String(num) === strValue) {
         return String(parseInt(strValue, 10));
     }
@@ -122,7 +125,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         const emissaoPropriaMask = (row: any) => {
             if (!row || !row["CFOP_Itens"]) return false;
             const cfop = cleanAndToStr(row["CFOP_Itens"]);
-            return cfop.startsWith('1') || cfop.startsWith('2');
+            return cfop.startsWith('5') || cfop.startsWith('6') || cfop.startsWith('7');
         };
         
         processedDfs["Emissão Própria"] = notasValidasTemporaria.filter(emissaoPropriaMask);
@@ -163,7 +166,6 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
             return !isNaN(valor) && valor > 1200.00;
         };
         processedDfs["Imobilizados"] = processedDfs["Itens Válidos"].filter(imobilizadosMask);
-        processedDfs["Itens Válidos"] = processedDfs["Itens Válidos"].filter(row => !imobilizadosMask(row));
     }
     
     // Etapa 8: Adicionar descrição do CFOP a todas as abas
