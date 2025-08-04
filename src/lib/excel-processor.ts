@@ -1,3 +1,4 @@
+
 import { cfopDescriptions } from './cfop';
 
 type DataFrame = any[];
@@ -101,14 +102,16 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         });
     }
 
-    // Coletar Chaves Únicas das abas de operação para remoção
+    // Coletar Chaves Únicas das abas de operação e de Emissão Própria para remoção
+    const chavesUnicasARemover = new Set<string>();
+
+    // 1. Chaves de operações não realizadas/desconhecidas/desacordo
     const sourceSheetsForRemoval = [
         "NF-Stock NFE Operação Não Realizada",
         "NF-Stock NFE Operação Desconhecida",
         "NF-Stock CTE Desacordo de Serviço"
     ];
     
-    const chavesUnicasARemover = new Set<string>();
     sourceSheetsForRemoval.forEach(sheetName => {
         if (processedDfs[sheetName]?.length > 0 && processedDfs[sheetName][0] && "Chave Unica" in processedDfs[sheetName][0]) {
             processedDfs[sheetName].forEach(row => {
@@ -119,36 +122,38 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         }
     });
 
-    // Aplicar remoção a "Notas Válidas" com base nas chaves de operação
-    if (chavesUnicasARemover.size > 0 && processedDfs["Notas Válidas"]?.length > 0 && processedDfs["Notas Válidas"][0] && "Chave Unica" in processedDfs["Notas Válidas"][0]) {
-        processedDfs["Notas Válidas"] = processedDfs["Notas Válidas"].filter(row => row && !chavesUnicasARemover.has(cleanAndToStr(row["Chave Unica"])));
-    }
-    
-    // Criar a aba "Emissão Própria"
+    // 2. Criar a aba "Emissão Própria" e coletar suas chaves para remoção de "Notas Válidas"
     if (processedDfs["Notas Válidas"]?.length > 0 && processedDfs["Notas Válidas"][0] && "CFOP_Itens" in processedDfs["Notas Válidas"][0]) {
         const emissaoPropriaMask = (row: any) => {
             if (!row || !row["CFOP_Itens"]) return false;
             const cfop = cleanAndToStr(row["CFOP_Itens"]);
             return cfop.startsWith('1') || cfop.startsWith('2');
         };
+        
         processedDfs["Emissão Própria"] = processedDfs["Notas Válidas"].filter(emissaoPropriaMask);
-        processedDfs["Notas Válidas"] = processedDfs["Notas Válidas"].filter(row => !emissaoPropriaMask(row));
+        
+        // Adicionar chaves de emissão própria à lista de remoção
+        processedDfs["Emissão Própria"].forEach(row => {
+            if(row && row["Chave Unica"]) {
+                chavesUnicasARemover.add(cleanAndToStr(row["Chave Unica"]));
+            }
+        });
     }
 
-    // Criar a aba "Itens Válidos"
+    // Aplicar remoção a "Notas Válidas" com base em TODAS as chaves coletadas
+    if (chavesUnicasARemover.size > 0 && processedDfs["Notas Válidas"]?.length > 0 && processedDfs["Notas Válidas"][0] && "Chave Unica" in processedDfs["Notas Válidas"][0]) {
+        processedDfs["Notas Válidas"] = processedDfs["Notas Válidas"].filter(row => row && !chavesUnicasARemover.has(cleanAndToStr(row["Chave Unica"])));
+    }
+    
+    // Criar a aba "Itens Válidos" a partir das "Notas Válidas" já filtradas
     if (processedDfs["NF-Stock Itens"] && processedDfs["Notas Válidas"]?.length > 0 && processedDfs["Notas Válidas"][0] && "Chave Unica" in processedDfs["Notas Válidas"][0]) {
         const chavesValidas = new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave Unica"])).filter(Boolean));
         if (processedDfs["NF-Stock Itens"].length > 0 && processedDfs["NF-Stock Itens"][0] && "Chave Unica" in processedDfs["NF-Stock Itens"][0]) {
             processedDfs["Itens Válidos"] = processedDfs["NF-Stock Itens"].filter(row => row && chavesValidas.has(cleanAndToStr(row["Chave Unica"])));
         }
     }
-
-    // Aplicar remoção a "Itens Válidos"
-    if (chavesUnicasARemover.size > 0 && processedDfs["Itens Válidos"]?.length > 0 && processedDfs["Itens Válidos"][0] && "Chave Unica" in processedDfs["Itens Válidos"][0]) {
-        processedDfs["Itens Válidos"] = processedDfs["Itens Válidos"].filter(row => row && !chavesUnicasARemover.has(cleanAndToStr(row["Chave Unica"])));
-    }
     
-    // Criar a aba "Imobilizados"
+    // Criar a aba "Imobilizados" a partir dos "Itens Válidos"
     if (processedDfs["Itens Válidos"]?.length > 0 && processedDfs["Itens Válidos"][0] && "Valor Unitário" in processedDfs["Itens Válidos"][0]) {
         const imobilizadosMask = (row: any) => {
             if (!row || !row["Valor Unitário"]) return false;
@@ -159,7 +164,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         processedDfs["Itens Válidos"] = processedDfs["Itens Válidos"].filter(row => !imobilizadosMask(row));
     }
     
-    // Criar aba "Chaves Válidas"
+    // Criar aba "Chaves Válidas" a partir das "Notas Válidas" já filtradas
     if (processedDfs["Notas Válidas"]?.length > 0 && processedDfs["Notas Válidas"][0] && "Chave de acesso" in processedDfs["Notas Válidas"][0]) {
         const uniqueAccessKeys = [...new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean))];
         processedDfs["Chaves Válidas"] = uniqueAccessKeys.map(key => ({ "Chave de acesso": key }));
