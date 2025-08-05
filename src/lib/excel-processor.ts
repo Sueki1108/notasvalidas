@@ -73,7 +73,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
     // Step 3: Identify and separate exceptions
     const chavesUnicasARemover = new Set<string>();
 
-    // Exception 1: Canceladas
+    // Exception: Canceladas
     processedDfs["Notas Canceladas"] = notasTemporaria.filter(row => row && row["Status"] === "Canceladas");
     processedDfs["Notas Canceladas"].forEach(row => {
         if (row && row["Chave Unica"]) {
@@ -81,13 +81,13 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         }
     });
 
-    // Exception 2: Emissão Própria (CFOP starting with '1' or '2' in items)
+    // Exception: Emissão Própria (CFOP starting with '5' or '6' in items)
     const chavesEmissaoPropria = new Set<string>();
     if (originalItens) {
         originalItens.forEach(item => {
             if (item && item["CFOP"]) {
                 const cfop = cleanAndToStr(item["CFOP"]);
-                if (cfop.startsWith('1') || cfop.startsWith('2')) {
+                if (cfop.startsWith('5') || cfop.startsWith('6')) {
                     chavesEmissaoPropria.add(cleanAndToStr(item["Chave Unica"]));
                 }
             }
@@ -103,7 +103,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         }
     });
     
-    // Exception 3, 4, 5: Loaded exception sheets
+    // Exception: Loaded exception sheets
     const exceptionSheets = [
         "NF-Stock NFE Operação Não Realizada",
         "NF-Stock NFE Operação Desconhecida",
@@ -157,7 +157,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
     }
 
     // Step 7: Add CFOP and Description to specific note sheets
-    const sheetsToAddCfop = [
+    const sheetsToAddCfopToNotes = [
         "Notas Válidas", 
         "NF-Stock NFE Operação Não Realizada", 
         "Notas Canceladas", 
@@ -165,54 +165,43 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         "NF-Stock NFE Operação Desconhecida"
     ];
 
-    for (const sheetName of sheetsToAddCfop) {
+    for (const sheetName of sheetsToAddCfopToNotes) {
         if (processedDfs[sheetName] && processedDfs[sheetName].length > 0) {
             processedDfs[sheetName] = processedDfs[sheetName].map(row => {
                 if (row && row["Chave Unica"]) {
                     const chaveUnica = cleanAndToStr(row["Chave Unica"]);
                     const cfopCodeStr = chaveUnicaToCfopMap.get(chaveUnica);
                     if (cfopCodeStr) {
-                        const cfopCode = parseInt(cfopCodeStr, 10);
-                        const description = cfopDescriptions[cfopCode] || '';
-                        const newRow = { ...row, "CFOP": cfopCodeStr, "Descricao CFOP": description };
-                        const entries = Object.entries(newRow);
-                        const colIndex = entries.findIndex(([key]) => key === "Chave Unica");
-                        if(colIndex > -1) {
-                             const cfopEntry = entries.pop(); //remove cfop
-                             const descEntry = entries.pop(); // remove desc
-                             if(cfopEntry && descEntry){
-                                entries.splice(colIndex + 1, 0, descEntry);
-                                entries.splice(colIndex + 1, 0, cfopEntry);
-                             }
-                        }
-                        return Object.fromEntries(entries);
+                         return { ...row, "CFOP": cfopCodeStr };
                     }
                 }
-                return { ...row, "CFOP": "", "Descricao CFOP": "" };
+                return { ...row, "CFOP": "" };
             });
         }
     }
     
-    // Step 8: Add CFOP description to Itens Válidos
-    if (processedDfs["Itens Válidos"] && processedDfs["Itens Válidos"].length > 0) {
-        processedDfs["Itens Válidos"] = processedDfs["Itens Válidos"].map(row => {
-            if (!row || !("CFOP" in row)) return row;
-            const cfopCode = parseInt(cleanAndToStr(row["CFOP"]), 10);
-            const description = cfopDescriptions[cfopCode] || '';
-            const newColName = 'Descricao CFOP';
-            
-            const newRow = { ...row };
-            const entries = Object.entries(newRow);
-            const colIndex = entries.findIndex(([key]) => key === "CFOP");
-            
-            if (colIndex > -1 && !Object.prototype.hasOwnProperty.call(row, newColName)) {
-                entries.splice(colIndex + 1, 0, [newColName, description]);
-            }
+    // Step 8: Final loop to add CFOP description wherever CFOP exists
+    for (const sheetName in processedDfs) {
+        const df = processedDfs[sheetName];
+        if (df && df.length > 0 && "CFOP" in df[0]) {
+            processedDfs[sheetName] = df.map(row => {
+                if (!row || !("CFOP" in row) || ("Descricao CFOP" in row)) return row;
 
-            return Object.fromEntries(entries);
-        });
+                const cfopCode = parseInt(cleanAndToStr(row["CFOP"]), 10);
+                const description = cfopDescriptions[cfopCode] || '';
+                
+                const newRow: { [key: string]: any } = {};
+                for (const key in row) {
+                    newRow[key] = row[key];
+                    if (key === "CFOP") {
+                        newRow["Descricao CFOP"] = description;
+                    }
+                }
+                return newRow;
+            });
+        }
     }
-
+    
     // Step 9: Remove original sheets that will not be displayed
     delete processedDfs["NF-Stock NFE"];
     delete processedDfs["NF-Stock CTE"];
