@@ -81,13 +81,13 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         }
     });
 
-    // Exception 2: Emissão Própria (CFOP starting with '5' or '6' in items)
+    // Exception 2: Emissão Própria (CFOP starting with '1' or '2' in items)
     const chavesEmissaoPropria = new Set<string>();
     if (originalItens) {
         originalItens.forEach(item => {
             if (item && item["CFOP"]) {
                 const cfop = cleanAndToStr(item["CFOP"]);
-                if (cfop.startsWith('5') || cfop.startsWith('6')) {
+                if (cfop.startsWith('1') || cfop.startsWith('2')) {
                     chavesEmissaoPropria.add(cleanAndToStr(item["Chave Unica"]));
                 }
             }
@@ -156,27 +156,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         processedDfs["Imobilizados"] = [];
     }
 
-    // Step 7: Add CFOP description to Itens Válidos
-    if (processedDfs["Itens Válidos"] && processedDfs["Itens Válidos"].length > 0) {
-        processedDfs["Itens Válidos"] = processedDfs["Itens Válidos"].map(row => {
-            if (!row || !("CFOP" in row)) return row;
-            const cfopCode = parseInt(cleanAndToStr(row["CFOP"]), 10);
-            const description = cfopDescriptions[cfopCode] || '';
-            const newColName = 'Descricao CFOP';
-            
-            const newRow = { ...row };
-            const entries = Object.entries(newRow);
-            const colIndex = entries.findIndex(([key]) => key === "CFOP");
-            
-            if (colIndex > -1 && !Object.prototype.hasOwnProperty.call(row, newColName)) {
-                entries.splice(colIndex + 1, 0, [newColName, description]);
-            }
-
-            return Object.fromEntries(entries);
-        });
-    }
-    
-    // Step 8: Add CFOP and Description to specific note sheets
+    // Step 7: Add CFOP and Description to specific note sheets
     const sheetsToAddCfop = [
         "Notas Válidas", 
         "NF-Stock NFE Operação Não Realizada", 
@@ -194,12 +174,43 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
                     if (cfopCodeStr) {
                         const cfopCode = parseInt(cfopCodeStr, 10);
                         const description = cfopDescriptions[cfopCode] || '';
-                        return { ...row, "CFOP": cfopCodeStr, "Descricao CFOP": description };
+                        const newRow = { ...row, "CFOP": cfopCodeStr, "Descricao CFOP": description };
+                        const entries = Object.entries(newRow);
+                        const colIndex = entries.findIndex(([key]) => key === "Chave Unica");
+                        if(colIndex > -1) {
+                             const cfopEntry = entries.pop(); //remove cfop
+                             const descEntry = entries.pop(); // remove desc
+                             if(cfopEntry && descEntry){
+                                entries.splice(colIndex + 1, 0, descEntry);
+                                entries.splice(colIndex + 1, 0, cfopEntry);
+                             }
+                        }
+                        return Object.fromEntries(entries);
                     }
                 }
                 return { ...row, "CFOP": "", "Descricao CFOP": "" };
             });
         }
+    }
+    
+    // Step 8: Add CFOP description to Itens Válidos
+    if (processedDfs["Itens Válidos"] && processedDfs["Itens Válidos"].length > 0) {
+        processedDfs["Itens Válidos"] = processedDfs["Itens Válidos"].map(row => {
+            if (!row || !("CFOP" in row)) return row;
+            const cfopCode = parseInt(cleanAndToStr(row["CFOP"]), 10);
+            const description = cfopDescriptions[cfopCode] || '';
+            const newColName = 'Descricao CFOP';
+            
+            const newRow = { ...row };
+            const entries = Object.entries(newRow);
+            const colIndex = entries.findIndex(([key]) => key === "CFOP");
+            
+            if (colIndex > -1 && !Object.prototype.hasOwnProperty.call(row, newColName)) {
+                entries.splice(colIndex + 1, 0, [newColName, description]);
+            }
+
+            return Object.fromEntries(entries);
+        });
     }
 
     // Step 9: Remove original sheets that will not be displayed
