@@ -10,15 +10,11 @@ const cleanAndToStr = (value: any): string => {
         return "";
     }
     // Convert to string and trim
-    const strValue = String(value).trim();
+    let strValue = String(value).trim();
     
-    // If it's a number, convert to integer string to remove ".0"
-    const num = Number(strValue);
-    if (!isNaN(num) && String(num) === strValue && !strValue.includes('.')) {
-        return strValue;
-    }
-    if (!isNaN(num) && String(num) === strValue) {
-        return String(parseInt(strValue, 10));
+    // If it's a number ending in .0, remove the .0
+    if (strValue.endsWith('.0')) {
+        strValue = strValue.substring(0, strValue.length - 2);
     }
     
     return strValue;
@@ -49,7 +45,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
             const cfopLookup = new Map<string, any>();
             dfItens.forEach(row => {
                 if(row && row["Chave Unica"]) {
-                    cfopLookup.set(row["Chave Unica"], row["CFOP"]);
+                    cfopLookup.set(cleanAndToStr(row["Chave Unica"]), row["CFOP"]);
                 }
             });
 
@@ -62,10 +58,15 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
 
             targetSheets.forEach(sheetName => {
                 if (processedDfs[sheetName] && processedDfs[sheetName].length > 0 && processedDfs[sheetName][0] && "Chave Unica" in processedDfs[sheetName][0]) {
-                    processedDfs[sheetName] = processedDfs[sheetName].map(row => ({
-                        ...row,
-                        "CFOP_Itens": cfopLookup.get(row["Chave Unica"])
-                    }));
+                    processedDfs[sheetName] = processedDfs[sheetName].map(row => {
+                         if (row && row["Chave Unica"]) {
+                            return {
+                                ...row,
+                                "CFOP_Itens": cfopLookup.get(cleanAndToStr(row["Chave Unica"]))
+                            };
+                         }
+                         return row;
+                    });
                 }
             });
         }
@@ -135,6 +136,8 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
                 chavesUnicasARemover.add(cleanAndToStr(row["Chave Unica"]));
             }
         });
+    } else {
+        processedDfs["Emissão Própria"] = [];
     }
 
     // Etapa 5: Filtrar a lista de notas válidas para criar a versão final
@@ -149,6 +152,8 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         processedDfs["Itens Válidos"] = processedDfs["NF-Stock Itens"].filter(row => 
             row && row["Chave Unica"] && chavesFinaisValidas.has(cleanAndToStr(row["Chave Unica"]))
         );
+    } else {
+        processedDfs["Itens Válidos"] = [];
     }
 
     if (processedDfs["Notas Válidas"].length > 0 && processedDfs["Notas Válidas"][0]?.["Chave de acesso"]) {
@@ -166,6 +171,8 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
             return !isNaN(valor) && valor > 1200.00;
         };
         processedDfs["Imobilizados"] = processedDfs["Itens Válidos"].filter(imobilizadosMask);
+    } else {
+        processedDfs["Imobilizados"] = [];
     }
     
     // Etapa 8: Adicionar descrição do CFOP a todas as abas
@@ -177,17 +184,18 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         columnsToCheck.forEach(colName => {
             if (df[0] && colName in df[0]) {
                 processedDfs[sheetName] = df.map(row => {
-                    if (!row) return row;
+                    if (!row || !(colName in row)) return row;
                     const cfopCode = parseInt(cleanAndToStr(row[colName]), 10);
                     const description = cfopDescriptions[cfopCode] || '';
                     const newColName = `Descricao ${colName}`;
                     
                     const newRow = { ...row };
                     const entries = Object.entries(newRow);
-                    const index = entries.findIndex(([key]) => key === colName);
+                    const colIndex = entries.findIndex(([key]) => key === colName);
                     
-                    if (index > -1 && !Object.keys(row).includes(newColName)) { // Evita adicionar a coluna de descrição múltiplas vezes
-                        entries.splice(index + 1, 0, [newColName, description]);
+                    // Adicionar apenas se a coluna de descrição ainda não existir
+                    if (colIndex > -1 && !Object.prototype.hasOwnProperty.call(row, newColName)) {
+                        entries.splice(colIndex + 1, 0, [newColName, description]);
                     }
 
                     return Object.fromEntries(entries);

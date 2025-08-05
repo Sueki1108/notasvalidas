@@ -24,29 +24,31 @@ const findDuplicates = (arr: string[]): string[] => {
 export async function processUploadedFiles(formData: FormData) {
   try {
     const dataFrames: DataFrames = {};
-    const fileEntries = formData.getAll('files');
     const textFileContents: string[] = [];
+    const fileEntries = formData.getAll('files');
 
     // Process all file entries from formData
-    for (const entry of formData.entries()) {
-        const key = entry[0];
-        const value = entry[1];
-
-        if (value instanceof File) {
-            // This is how files are sent from the client
-            const fieldName = value.name; // The original field name is stored in the file name
+    for (const entry of fileEntries) {
+        if (entry instanceof File) {
+            const fieldName = entry.name; // The original field name is stored in the file name
             if (!dataFrames[fieldName]) {
                 dataFrames[fieldName] = [];
             }
-            const buffer = await value.arrayBuffer();
+            const buffer = await entry.arrayBuffer();
             const workbook = XLSX.read(buffer, { type: 'buffer' });
-            const sheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet);
-            dataFrames[fieldName].push(...jsonData);
-        } else if (key === 'SPED TXT' && typeof value === 'string') {
-             // This handles text file content
-             textFileContents.push(value);
+            // Process all sheets in the workbook
+            for (const sheetName of workbook.SheetNames) {
+              const worksheet = workbook.Sheets[sheetName];
+              const jsonData = XLSX.utils.sheet_to_json(worksheet);
+              dataFrames[fieldName].push(...jsonData);
+            }
+        }
+    }
+
+    const spedTxtFiles = formData.getAll('SPED TXT');
+    for(const spedFile of spedTxtFiles) {
+        if(typeof spedFile === 'string') {
+            textFileContents.push(spedFile);
         }
     }
     
@@ -85,4 +87,3 @@ export async function processUploadedFiles(formData: FormData) {
     return { error: error.message || 'An unexpected error occurred during file processing.' };
   }
 }
-
