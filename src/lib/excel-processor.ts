@@ -13,7 +13,7 @@ const cleanAndToStr = (value: any): string => {
     let strValue = String(value).trim();
     
     // If it's a number ending in .0, remove the .0
-    if (strValue.endsWith('.0')) {
+    if (/^\d+\.0$/.test(strValue)) {
         strValue = strValue.substring(0, strValue.length - 2);
     }
     
@@ -96,7 +96,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         const isRowEffectivelyEmpty = Object.values(row).every(value => value === null || String(value).trim() === '');
         if (isRowEffectivelyEmpty) return false;
         return !Object.values(row).some(value => 
-            typeof value === 'string' && phrasesToRemove.some(phrase => value.toUpperCase().includes(phrase))
+            typeof value === 'string' && phrasesToRemove.some(phrase => value.toUpperCase().includes(phrase.toUpperCase()))
         );
     });
 
@@ -163,7 +163,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         processedDfs["Chaves Válidas"] = [];
     }
     
-    // Etapa 7: Criar "Imobilizados" a partir dos "Itens Válidos"
+    // Etapa 7: Criar "Imobilizados" a partir dos "Itens Válidos" (sem removê-los da origem)
     if (processedDfs["Itens Válidos"]?.length > 0 && processedDfs["Itens Válidos"][0]?.["Valor Unitário"]) {
         const imobilizadosMask = (row: any) => {
             if (!row || !row["Valor Unitário"]) return false;
