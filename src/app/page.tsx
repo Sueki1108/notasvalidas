@@ -115,26 +115,23 @@ export default function Home() {
         setProcessing(true);
         try {
             const formData = new FormData();
-            let allTextContents: string[] = [];
             
             for (const name in files) {
                 const fileList = files[name];
                 if (fileList) {
                     for (const file of fileList) {
                         if (name === 'SPED TXT') {
-                            // Read content now and append later
-                            allTextContents.push(await file.text());
+                             // Append text content directly, the server will handle multiple entries
+                            formData.append('SPED TXT', await file.text());
                         } else {
-                            // Create a new File object with a modified name to be the key
+                            // Create a new File object with the field name as its name.
+                            // The server will use this name to group files.
                             const newFile = new File([file], name, { type: file.type });
+                            // Use a generic key 'files' for all spreadsheet files
                             formData.append('files', newFile);
                         }
                     }
                 }
-            }
-
-            if (allTextContents.length > 0) {
-                formData.append('SPED TXT', allTextContents.join('\n'));
             }
 
             const resultData = await processUploadedFiles(formData);

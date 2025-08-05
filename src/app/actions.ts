@@ -24,37 +24,42 @@ const findDuplicates = (arr: string[]): string[] => {
 export async function processUploadedFiles(formData: FormData) {
   try {
     const dataFrames: DataFrames = {};
-    
-    // Group files by their form field name and read their content
     const fileEntries = formData.getAll('files');
-    
-    for (const file of fileEntries) {
-        if (file instanceof File) {
-            if (!dataFrames[file.name]) {
-                dataFrames[file.name] = [];
+    const textFileContents: string[] = [];
+
+    // Process all file entries from formData
+    for (const entry of formData.entries()) {
+        const key = entry[0];
+        const value = entry[1];
+
+        if (value instanceof File) {
+            // This is how files are sent from the client
+            const fieldName = value.name; // The original field name is stored in the file name
+            if (!dataFrames[fieldName]) {
+                dataFrames[fieldName] = [];
             }
-            const buffer = await file.arrayBuffer();
+            const buffer = await value.arrayBuffer();
             const workbook = XLSX.read(buffer, { type: 'buffer' });
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
             const jsonData = XLSX.utils.sheet_to_json(worksheet);
-            dataFrames[file.name].push(...jsonData);
+            dataFrames[fieldName].push(...jsonData);
+        } else if (key === 'SPED TXT' && typeof value === 'string') {
+             // This handles text file content
+             textFileContents.push(value);
         }
     }
     
-    const textFilesContent = (formData.get('SPED TXT') as string | null) || '';
+    const combinedTextContent = textFileContents.join('\n');
     
-    // Rename keys to match the expected format if needed
-    // This part is tricky if file.name is not what you expect for the key
-    // Assuming the client sends the correct "name" for the dataframe
     const processedData = processDataFrames(dataFrames);
 
     let keyCheckResults = null;
-    if (textFilesContent && processedData['Chaves Válidas']) {
+    if (combinedTextContent && processedData['Chaves Válidas']) {
         const spreadsheetKeysArray = processedData['Chaves Válidas'].map(row => String(row['Chave de acesso']).trim()).filter(key => key);
         const spreadsheetKeys = new Set(spreadsheetKeysArray);
         
-        const normalizedText = textFilesContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        const normalizedText = combinedTextContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         const keyPattern = /\b\d{44}\b/g;
         const allKeysInTxt = normalizedText.match(keyPattern) || [];
         const keysInTxt = new Set(allKeysInTxt);
@@ -80,3 +85,4 @@ export async function processUploadedFiles(formData: FormData) {
     return { error: error.message || 'An unexpected error occurred during file processing.' };
   }
 }
+
