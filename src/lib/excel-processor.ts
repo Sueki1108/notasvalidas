@@ -38,58 +38,12 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         }
     }
 
-    // Etapa 2: Buscar CFOP da planilha NF-Stock Itens e adicionar às planilhas de notas
-    if (processedDfs["NF-Stock Itens"]) {
-        const dfItens = processedDfs["NF-Stock Itens"];
-        if (dfItens.length > 0 && dfItens[0] && "Chave Unica" in dfItens[0] && "CFOP" in dfItens[0]) {
-            const cfopLookup = new Map<string, any>();
-            dfItens.forEach(row => {
-                if(row && row["Chave Unica"]) {
-                    cfopLookup.set(cleanAndToStr(row["Chave Unica"]), row["CFOP"]);
-                }
-            });
-
-            const targetSheets = [
-                "NF-Stock NFE",
-                "NF-Stock NFE Operação Não Realizada",
-                "NF-Stock NFE Operação Desconhecida",
-                "NF-Stock CTE Desacordo de Serviço"
-            ];
-
-            targetSheets.forEach(sheetName => {
-                if (processedDfs[sheetName] && processedDfs[sheetName].length > 0 && processedDfs[sheetName][0] && "Chave Unica" in processedDfs[sheetName][0]) {
-                    processedDfs[sheetName] = processedDfs[sheetName].map(row => {
-                         if (row && row["Chave Unica"]) {
-                            return {
-                                ...row,
-                                "CFOP_Itens": cfopLookup.get(cleanAndToStr(row["Chave Unica"]))
-                            };
-                         }
-                         return row;
-                    });
-                }
-            });
-        }
-    }
+    // Etapa 2: Unificar NFE e CTE e remover linhas de totais
+    let notasValidasTemporaria = [
+        ...(processedDfs["NF-Stock NFE"] || []),
+        ...(processedDfs["NF-Stock CTE"] || [])
+    ];
     
-    // Etapa 3: Separar todas as notas em válidas e canceladas para começar
-    let dfNfeValidas: DataFrame = [];
-    if (processedDfs["NF-Stock NFE"]?.length > 0 && processedDfs["NF-Stock NFE"][0] && "Status" in processedDfs["NF-Stock NFE"][0]) {
-        dfNfeValidas = processedDfs["NF-Stock NFE"].filter(row => row && row["Status"] !== "Canceladas");
-        processedDfs["Notas Canceladas"] = processedDfs["NF-Stock NFE"].filter(row => row && row["Status"] === "Canceladas");
-    } else {
-        processedDfs["Notas Canceladas"] = [];
-    }
-
-    let dfCteValidas: DataFrame = [];
-    if (processedDfs["NF-Stock CTE"]?.length > 0 && processedDfs["NF-Stock CTE"][0] && "Status" in processedDfs["NF-Stock CTE"][0]) {
-        dfCteValidas = processedDfs["NF-Stock CTE"].filter(row => row && row["Status"] !== "Canceladas");
-         processedDfs["Notas Canceladas"].push(...processedDfs["NF-Stock CTE"].filter(row => row && row["Status"] === "Canceladas"));
-    }
-
-    let notasValidasTemporaria = [...dfNfeValidas, ...dfCteValidas];
-
-    // Limpar linhas de resumo e vazias
     const phrasesToRemove = ["TOTAL", "Valor total das notas", "Valor Total da Prestação"];
     notasValidasTemporaria = notasValidasTemporaria.filter(row => {
         if (!row || Object.keys(row).length === 0) return false;
@@ -100,19 +54,48 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         );
     });
 
-    // Etapa 4: Coletar TODAS as chaves que devem ser removidas da lista de notas válidas
+    // Etapa 3: Identificar e separar as exceções
     const chavesUnicasARemover = new Set<string>();
 
-    // Coletar chaves de abas de exceção
-    const sourceSheetsForRemoval = [
+    // Exceção 1: Notas Canceladas
+    processedDfs["Notas Canceladas"] = notasValidasTemporaria.filter(row => row && row["Status"] === "Canceladas");
+    processedDfs["Notas Canceladas"].forEach(row => {
+        if (row && row["Chave Unica"]) {
+            chavesUnicasARemover.add(cleanAndToStr(row["Chave Unica"]));
+        }
+    });
+
+    // Exceção 2: Emissão Própria (CFOP iniciando com '1' ou '2' nos itens)
+    const chavesEmissaoPropria = new Set<string>();
+    if (processedDfs["NF-Stock Itens"]) {
+        processedDfs["NF-Stock Itens"].forEach(item => {
+            if (item && item["CFOP"]) {
+                const cfop = cleanAndToStr(item["CFOP"]);
+                if (cfop.startsWith('1') || cfop.startsWith('2')) {
+                    chavesEmissaoPropria.add(cleanAndToStr(item["Chave Unica"]));
+                }
+            }
+        });
+    }
+
+    processedDfs["Emissão Própria"] = notasValidasTemporaria.filter(row => 
+        row && row["Chave Unica"] && chavesEmissaoPropria.has(cleanAndToStr(row["Chave Unica"]))
+    );
+    processedDfs["Emissão Própria"].forEach(row => {
+        if(row && row["Chave Unica"]) {
+            chavesUnicasARemover.add(cleanAndToStr(row["Chave Unica"]));
+        }
+    });
+
+    // Exceção 3, 4, 5: Planilhas de exceção carregadas
+    const exceptionSheets = [
         "NF-Stock NFE Operação Não Realizada",
         "NF-Stock NFE Operação Desconhecida",
-        "NF-Stock CTE Desacordo de Serviço",
-        "Notas Canceladas"
+        "NF-Stock CTE Desacordo de Serviço"
     ];
     
-    sourceSheetsForRemoval.forEach(sheetName => {
-        if (processedDfs[sheetName]?.length > 0 && processedDfs[sheetName][0]?.["Chave Unica"]) {
+    exceptionSheets.forEach(sheetName => {
+        if (processedDfs[sheetName]) {
             processedDfs[sheetName].forEach(row => {
                 if (row && row["Chave Unica"]) {
                     chavesUnicasARemover.add(cleanAndToStr(row["Chave Unica"]));
@@ -120,35 +103,16 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
             });
         }
     });
-
-    // Identificar "Emissão Própria" e coletar suas chaves para remoção
-    if (notasValidasTemporaria.length > 0 && notasValidasTemporaria[0]?.["CFOP_Itens"]) {
-        const emissaoPropriaMask = (row: any) => {
-            if (!row || !row["CFOP_Itens"]) return false;
-            const cfop = cleanAndToStr(row["CFOP_Itens"]);
-            return cfop.startsWith('5') || cfop.startsWith('6') || cfop.startsWith('7');
-        };
-        
-        processedDfs["Emissão Própria"] = notasValidasTemporaria.filter(emissaoPropriaMask);
-        
-        processedDfs["Emissão Própria"].forEach(row => {
-            if(row && row["Chave Unica"]) {
-                chavesUnicasARemover.add(cleanAndToStr(row["Chave Unica"]));
-            }
-        });
-    } else {
-        processedDfs["Emissão Própria"] = [];
-    }
-
-    // Etapa 5: Filtrar a lista de notas válidas para criar a versão final
+    
+    // Etapa 4: Criar a lista final de "Notas Válidas"
     processedDfs["Notas Válidas"] = notasValidasTemporaria.filter(row => 
         row && row["Chave Unica"] && !chavesUnicasARemover.has(cleanAndToStr(row["Chave Unica"]))
     );
     
-    // Etapa 6: Criar "Itens Válidos" e "Chaves Válidas" a partir das "Notas Válidas" JÁ FILTRADAS
+    // Etapa 5: Criar "Itens Válidos" e "Chaves Válidas" a partir das "Notas Válidas" JÁ FILTRADAS
     const chavesFinaisValidas = new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave Unica"])).filter(Boolean));
 
-    if (processedDfs["NF-Stock Itens"]?.length > 0 && processedDfs["NF-Stock Itens"][0]?.["Chave Unica"]) {
+    if (processedDfs["NF-Stock Itens"]) {
         processedDfs["Itens Válidos"] = processedDfs["NF-Stock Itens"].filter(row => 
             row && row["Chave Unica"] && chavesFinaisValidas.has(cleanAndToStr(row["Chave Unica"]))
         );
@@ -156,55 +120,47 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         processedDfs["Itens Válidos"] = [];
     }
 
-    if (processedDfs["Notas Válidas"].length > 0 && processedDfs["Notas Válidas"][0]?.["Chave de acesso"]) {
-        const chavesAcessoValidas = [...new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean))];
-        processedDfs["Chaves Válidas"] = chavesAcessoValidas.map(key => ({ "Chave de acesso": key }));
-    } else {
-        processedDfs["Chaves Válidas"] = [];
-    }
+    const chavesAcessoValidas = [...new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean))];
+    processedDfs["Chaves Válidas"] = chavesAcessoValidas.map(key => ({ "Chave de acesso": key }));
     
-    // Etapa 7: Criar "Imobilizados" a partir dos "Itens Válidos" (sem removê-los da origem)
-    if (processedDfs["Itens Válidos"]?.length > 0 && processedDfs["Itens Válidos"][0]?.["Valor Unitário"]) {
-        const imobilizadosMask = (row: any) => {
+    // Etapa 6: Criar "Imobilizados" a partir dos "Itens Válidos" (sem removê-los da origem)
+    if (processedDfs["Itens Válidos"].length > 0 && processedDfs["Itens Válidos"][0]?.["Valor Unitário"]) {
+        processedDfs["Imobilizados"] = processedDfs["Itens Válidos"].filter(row => {
             if (!row || !row["Valor Unitário"]) return false;
             const valor = parseFloat(String(row["Valor Unitário"]).replace(',', '.'));
             return !isNaN(valor) && valor > 1200.00;
-        };
-        processedDfs["Imobilizados"] = processedDfs["Itens Válidos"].filter(imobilizadosMask);
+        });
     } else {
         processedDfs["Imobilizados"] = [];
     }
-    
-    // Etapa 8: Adicionar descrição do CFOP a todas as abas
+
+    // Etapa 7: Adicionar descrição do CFOP a todas as abas
     for (const sheetName in processedDfs) {
         const df = processedDfs[sheetName];
         if (!df || df.length === 0) continue;
 
-        const columnsToCheck = ["CFOP", "CFOP_Itens"];
-        columnsToCheck.forEach(colName => {
-            if (df[0] && colName in df[0]) {
-                processedDfs[sheetName] = df.map(row => {
-                    if (!row || !(colName in row)) return row;
-                    const cfopCode = parseInt(cleanAndToStr(row[colName]), 10);
-                    const description = cfopDescriptions[cfopCode] || '';
-                    const newColName = `Descricao ${colName}`;
-                    
-                    const newRow = { ...row };
-                    const entries = Object.entries(newRow);
-                    const colIndex = entries.findIndex(([key]) => key === colName);
-                    
-                    // Adicionar apenas se a coluna de descrição ainda não existir
-                    if (colIndex > -1 && !Object.prototype.hasOwnProperty.call(row, newColName)) {
-                        entries.splice(colIndex + 1, 0, [newColName, description]);
-                    }
+        const columnsToCheck = ["CFOP", "CFOP_Itens"]; // CFOP_Itens não deve existir mais, mas mantemos por segurança
+        if (df[0] && "CFOP" in df[0]) {
+             processedDfs[sheetName] = df.map(row => {
+                if (!row || !("CFOP" in row)) return row;
+                const cfopCode = parseInt(cleanAndToStr(row["CFOP"]), 10);
+                const description = cfopDescriptions[cfopCode] || '';
+                const newColName = 'Descricao CFOP';
+                
+                const newRow = { ...row };
+                const entries = Object.entries(newRow);
+                const colIndex = entries.findIndex(([key]) => key === "CFOP");
+                
+                if (colIndex > -1 && !Object.prototype.hasOwnProperty.call(row, newColName)) {
+                    entries.splice(colIndex + 1, 0, [newColName, description]);
+                }
 
-                    return Object.fromEntries(entries);
-                });
-            }
-        });
+                return Object.fromEntries(entries);
+            });
+        }
     }
 
-    // Etapa 9: Remover planilhas originais que não serão exibidas
+    // Etapa 8: Remover planilhas originais que não serão exibidas
     delete processedDfs["NF-Stock NFE"];
     delete processedDfs["NF-Stock CTE"];
     delete processedDfs["NF-Stock Itens"];
