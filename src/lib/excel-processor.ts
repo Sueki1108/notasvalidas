@@ -40,21 +40,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
 
     const originalItens = processedDfs["NF-Stock Itens"] || [];
 
-    // Step 1: Create a map of Chave Unica to CFOP from the original items sheet
-    const chaveUnicaToCfopMap = new Map<string, string>();
-    if (originalItens.length > 0) {
-        for(const item of originalItens) {
-            if (item && item["Chave Unica"] && item["CFOP"]) {
-                const chaveUnica = cleanAndToStr(item["Chave Unica"]);
-                // Only map the first CFOP found for a given key
-                if (!chaveUnicaToCfopMap.has(chaveUnica)) {
-                    chaveUnicaToCfopMap.set(chaveUnica, cleanAndToStr(item["CFOP"]));
-                }
-            }
-        }
-    }
-
-    // Step 2: Unify NFE and CTE and remove total rows
+    // Step 1: Unify NFE and CTE and remove total rows
     let notasTemporaria = [
         ...(processedDfs["NF-Stock NFE"] || []),
         ...(processedDfs["NF-Stock CTE"] || [])
@@ -70,7 +56,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         );
     });
 
-    // Step 3: Identify and separate exceptions
+    // Step 2: Identify and separate exceptions
     const chavesUnicasARemover = new Set<string>();
 
     // Exception: Canceladas
@@ -81,19 +67,19 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         }
     });
 
-    // Exception: Emissão Própria (CFOP starting with '5' or '6' in items)
+    // Exception: Emissão Própria (CFOP starting with '1' or '2')
     const chavesEmissaoPropria = new Set<string>();
     if (originalItens) {
         originalItens.forEach(item => {
             if (item && item["CFOP"]) {
                 const cfop = cleanAndToStr(item["CFOP"]);
-                if (cfop.startsWith('5') || cfop.startsWith('6')) {
+                if (cfop.startsWith('1') || cfop.startsWith('2')) {
                     chavesEmissaoPropria.add(cleanAndToStr(item["Chave Unica"]));
                 }
             }
         });
     }
-
+    
     processedDfs["Emissão Própria"] = notasTemporaria.filter(row => 
         row && row["Chave Unica"] && chavesEmissaoPropria.has(cleanAndToStr(row["Chave Unica"]))
     );
@@ -119,19 +105,23 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
                 });
             }
             processedDfs[sheetName].forEach(row => {
-                if (row && row["Chave Unica"]) {
-                    chavesUnicasARemover.add(cleanAndToStr(row["Chave Unica"]));
+                // These sheets might not have 'Chave Unica', so we create it if needed for removal logic
+                if (row && row["Número"] && row["CPF/CNPJ"]) {
+                     const chaveUnica = cleanAndToStr(row["Número"]) + cleanAndToStr(row["CPF/CNPJ"]);
+                     chavesUnicasARemover.add(chaveUnica);
+                } else if (row && row["Chave Unica"]) {
+                     chavesUnicasARemover.add(cleanAndToStr(row["Chave Unica"]));
                 }
             });
         }
     });
     
-    // Step 4: Create final "Notas Válidas"
+    // Step 3: Create final "Notas Válidas"
     processedDfs["Notas Válidas"] = notasTemporaria.filter(row => 
         row && row["Chave Unica"] && !chavesUnicasARemover.has(cleanAndToStr(row["Chave Unica"]))
     );
     
-    // Step 5: Create "Itens Válidos" and "Chaves Válidas" from the ALREADY FILTERED "Notas Válidas"
+    // Step 4: Create "Itens Válidos" and "Chaves Válidas" from "Notas Válidas"
     const chavesFinaisValidas = new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave Unica"])).filter(Boolean));
 
     if (originalItens) {
@@ -145,7 +135,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
     const chavesAcessoValidas = [...new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean))];
     processedDfs["Chaves Válidas"] = chavesAcessoValidas.map(key => ({ "Chave de acesso": key }));
     
-    // Step 6: Create "Imobilizados" from "Itens Válidos" (without removing from the source)
+    // Step 5: Create "Imobilizados" from "Itens Válidos" (without removing from the source)
     if (processedDfs["Itens Válidos"] && processedDfs["Itens Válidos"].length > 0 && processedDfs["Itens Válidos"][0]?.["Valor Unitário"]) {
         processedDfs["Imobilizados"] = processedDfs["Itens Válidos"].filter(row => {
             if (!row || !row["Valor Unitário"]) return false;
@@ -156,7 +146,21 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         processedDfs["Imobilizados"] = [];
     }
 
-    // Step 7: Add CFOP and Description to specific note sheets
+    // Step 6: Create a map of Chave Unica to CFOP from the original items sheet
+    const chaveUnicaToCfopMap = new Map<string, string>();
+    if (originalItens.length > 0) {
+        for(const item of originalItens) {
+            if (item && item["Chave Unica"] && item["CFOP"]) {
+                const chaveUnica = cleanAndToStr(item["Chave Unica"]);
+                // Only map the first CFOP found for a given key
+                if (!chaveUnicaToCfopMap.has(chaveUnica)) {
+                    chaveUnicaToCfopMap.set(chaveUnica, cleanAndToStr(item["CFOP"]));
+                }
+            }
+        }
+    }
+
+    // Step 7: Add CFOP to specific note sheets that need it
     const sheetsToAddCfopToNotes = [
         "Notas Válidas", 
         "NF-Stock NFE Operação Não Realizada", 
@@ -175,17 +179,17 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
                          return { ...row, "CFOP": cfopCodeStr };
                     }
                 }
-                return { ...row, "CFOP": "" };
+                return { ...row, "CFOP": "" }; // Add empty CFOP if not found
             });
         }
     }
-    
-    // Step 8: Final loop to add CFOP description wherever CFOP exists
+
+    // Step 8: Final loop to add CFOP description wherever CFOP exists, ensuring order
     for (const sheetName in processedDfs) {
         const df = processedDfs[sheetName];
-        if (df && df.length > 0 && "CFOP" in df[0]) {
+        if (df && df.length > 0 && df[0] && "CFOP" in df[0] && !("Descricao CFOP" in df[0])) {
             processedDfs[sheetName] = df.map(row => {
-                if (!row || !("CFOP" in row) || ("Descricao CFOP" in row)) return row;
+                if (!row || !("CFOP" in row)) return row;
 
                 const cfopCode = parseInt(cleanAndToStr(row["CFOP"]), 10);
                 const description = cfopDescriptions[cfopCode] || '';
