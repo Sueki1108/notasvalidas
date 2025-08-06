@@ -70,6 +70,9 @@ export default function ExportPage() {
                          <Button variant="ghost" asChild>
                            <a href="/key-checker">Verificador de Chaves</a>
                         </Button>
+                        <Button variant="ghost" disabled>
+                           <a href="/export">Exportar Código</a>
+                        </Button>
                     </nav>
                 </div>
             </header>
