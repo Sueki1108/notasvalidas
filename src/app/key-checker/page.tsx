@@ -9,6 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { KeyRound, FileText, Loader2, Sheet } from "lucide-react";
 import { KeyResultsDisplay } from "@/components/app/key-results-display";
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export type KeyCheckResult = {
     keysNotFoundInTxt: string[];
@@ -63,6 +64,9 @@ export default function KeyCheckerPage() {
                      <nav className="flex items-center gap-4">
                         <Button variant="ghost" asChild>
                            <a href="/">Processamento Principal</a>
+                        </Button>
+                         <Button variant="ghost" asChild>
+                           <Link href="/export">Exportar Projeto</Link>
                         </Button>
                     </nav>
                 </div>

@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect, useRef } from "react";
 import type { ChangeEvent } from "react";
 import { useRouter } from 'next/navigation';
 import * as XLSX from "xlsx";
-import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit } from "lucide-react";
+import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, ExternalLink } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import { processUploadedFiles } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import Link from "next/link";
 
 const requiredFiles = [
     "NF-Stock NFE",
@@ -250,6 +251,9 @@ export default function Home() {
                      <nav className="flex items-center gap-4">
                          <Button variant="ghost" onClick={handleNavigateToKeyChecker} disabled={isNavigating}>
                             {isNavigating ? "Navegando..." : "Verificador de Chaves"}
+                        </Button>
+                        <Button variant="ghost" asChild>
+                           <Link href="/export">Exportar Projeto</Link>
                         </Button>
                     </nav>
                 </div>
