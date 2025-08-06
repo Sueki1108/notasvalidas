@@ -96,8 +96,8 @@ async function getFilePaths(dir: string): Promise<string[]> {
         dirents.map(async (dirent) => {
             const res = path.resolve(dir, dirent.name);
             if (dirent.isDirectory()) {
-                // Ignore node_modules and .next directories
-                if (dirent.name === 'node_modules' || dirent.name === '.next') {
+                // Ignore node_modules, .next, and .git directories
+                if (dirent.name === 'node_modules' || dirent.name === '.next' || dirent.name === '.git' || dirent.name === '.idx') {
                     return [];
                 }
                 return getFilePaths(res);
@@ -110,6 +110,7 @@ async function getFilePaths(dir: string): Promise<string[]> {
 
 // Server action to get all project files as a single text block
 export async function getProjectFilesAsText(): Promise<string> {
+    const textFileExtensions = ['.ts', '.tsx', '.js', '.jsx', '.css', '.json', '.md', '.yaml', '.mjs', ''];
     try {
         const projectRoot = process.cwd();
         const allFilePaths = await getFilePaths(projectRoot);
@@ -119,12 +120,11 @@ export async function getProjectFilesAsText(): Promise<string> {
         combinedText += "============================================================\n\n";
 
         for (const filePath of allFilePaths) {
-            // We only care about files inside `src` and other root config files.
             const relativePath = path.relative(projectRoot, filePath);
             
-            // Skip files in .git or other non-essential directories
-            if (relativePath.startsWith('.git') || relativePath.includes('node_modules') || relativePath.startsWith('.next')) {
-                continue;
+             // Skip non-text files, lock files, and specific config files
+            if (path.basename(relativePath) === 'package-lock.json' || !textFileExtensions.includes(path.extname(relativePath))) {
+                 continue;
             }
 
             try {
