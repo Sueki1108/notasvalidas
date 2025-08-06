@@ -1,4 +1,3 @@
-
 // src/app/key-checker/page.tsx
 "use client";
 
@@ -110,5 +109,3 @@ export default function KeyCheckerPage() {
         </div>
     );
 }
-
-    

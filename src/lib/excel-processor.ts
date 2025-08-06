@@ -1,4 +1,3 @@
-
 import { cfopDescriptions } from './cfop';
 
 type DataFrame = any[];
@@ -146,45 +145,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         processedDfs["Imobilizados"] = [];
     }
 
-    // Step 6: Create a map of Chave Unica to CFOP from the original items sheet
-    const chaveUnicaToCfopMap = new Map<string, string>();
-    if (originalItens.length > 0) {
-        for(const item of originalItens) {
-            if (item && item["Chave Unica"] && item["CFOP"]) {
-                const chaveUnica = cleanAndToStr(item["Chave Unica"]);
-                // Only map the first CFOP found for a given key
-                if (!chaveUnicaToCfopMap.has(chaveUnica)) {
-                    chaveUnicaToCfopMap.set(chaveUnica, cleanAndToStr(item["CFOP"]));
-                }
-            }
-        }
-    }
-
-    // Step 7: Add CFOP to specific note sheets that need it
-    const sheetsToAddCfopToNotes = [
-        "Notas Válidas", 
-        "NF-Stock NFE Operação Não Realizada", 
-        "Notas Canceladas", 
-        "Emissão Própria",
-        "NF-Stock NFE Operação Desconhecida"
-    ];
-
-    for (const sheetName of sheetsToAddCfopToNotes) {
-        if (processedDfs[sheetName] && processedDfs[sheetName].length > 0) {
-            processedDfs[sheetName] = processedDfs[sheetName].map(row => {
-                if (row && row["Chave Unica"]) {
-                    const chaveUnica = cleanAndToStr(row["Chave Unica"]);
-                    const cfopCodeStr = chaveUnicaToCfopMap.get(chaveUnica);
-                    if (cfopCodeStr) {
-                         return { ...row, "CFOP": cfopCodeStr };
-                    }
-                }
-                return { ...row, "CFOP": "" }; // Add empty CFOP if not found
-            });
-        }
-    }
-
-    // Step 8: Final loop to add CFOP description wherever CFOP exists, ensuring order
+    // Step 6: Final loop to add CFOP description wherever CFOP exists, ensuring order
     for (const sheetName in processedDfs) {
         const df = processedDfs[sheetName];
         if (df && df.length > 0 && df[0] && "CFOP" in df[0] && !("Descricao CFOP" in df[0])) {
@@ -206,7 +167,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         }
     }
     
-    // Step 9: Remove original sheets that will not be displayed
+    // Step 7: Remove original sheets that will not be displayed
     delete processedDfs["NF-Stock NFE"];
     delete processedDfs["NF-Stock CTE"];
     delete processedDfs["NF-Stock Itens"];
