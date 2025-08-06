@@ -2,8 +2,6 @@
 
 import * as XLSX from 'xlsx';
 import { processDataFrames } from '@/lib/excel-processor';
-import * as fs from 'fs/promises';
-import * as path from 'path';
 
 // Type for the file data structure expected by the processor
 type DataFrames = { [key: string]: any[] };
@@ -87,57 +85,4 @@ export async function processUploadedFiles(formData: FormData) {
     // Ensure we return a serializable error object
     return { error: error.message || 'An unexpected error occurred during file processing.' };
   }
-}
-
-async function getAllFilePaths(dir: string): Promise<string[]> {
-    const dirents = await fs.readdir(dir, { withFileTypes: true });
-    const files = await Promise.all(
-        dirents.map((dirent) => {
-            const res = path.resolve(dir, dirent.name);
-            // Exclude node_modules and .next directories
-            if (dirent.isDirectory() && dirent.name !== 'node_modules' && dirent.name !== '.next') {
-                return getAllFilePaths(res);
-            }
-            // Exclude lock files and binary files that might cause issues
-            if (!res.endsWith('package-lock.json') && !res.endsWith('.DS_Store')) {
-                 return Promise.resolve(res);
-            }
-            return Promise.resolve([]);
-        })
-    );
-    return Array.prototype.concat(...files);
-}
-
-export async function getProjectFilesAsText(): Promise<string> {
-    try {
-        const projectRoot = path.join(process.cwd());
-        const allPaths = await getAllFilePaths(projectRoot);
-        
-        let combinedContent = "";
-
-        for (const filePath of allPaths) {
-            try {
-                // Ensure we only read files
-                 const stats = await fs.stat(filePath);
-                 if (stats.isFile()) {
-                    const relativePath = path.relative(projectRoot, filePath);
-                     // Skip files that might be problematic or very large
-                    if (relativePath.startsWith('public/') || relativePath.startsWith('app/') || relativePath.startsWith('components/') || relativePath.startsWith('lib/') || relativePath.startsWith('hooks/') || relativePath.startsWith('ai/') || !/[\\/]/.test(relativePath)) {
-                        const content = await fs.readFile(filePath, 'utf-8');
-                        combinedContent += `--- FILE: ${relativePath} ---\n\n`;
-                        combinedContent += content;
-                        combinedContent += "\n\n\n";
-                    }
-                 }
-            } catch (readError) {
-                 // Ignore errors for single files (e.g., permission denied)
-                 console.warn(`Could not read file: ${filePath}`, readError);
-            }
-        }
-        
-        return combinedContent;
-    } catch (error: any) {
-        console.error('Error reading project files:', error);
-        return `Error reading project files: ${error.message}`;
-    }
 }

@@ -64,9 +64,6 @@ export default function KeyCheckerPage() {
                         <Button variant="ghost" asChild>
                            <a href="/">Processamento Principal</a>
                         </Button>
-                         <Button variant="ghost" asChild>
-                           <a href="/export">Exportar Código</a>
-                        </Button>
                     </nav>
                 </div>
             </header>

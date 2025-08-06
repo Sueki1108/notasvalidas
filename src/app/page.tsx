@@ -251,9 +251,6 @@ export default function Home() {
                          <Button variant="ghost" onClick={handleNavigateToKeyChecker} disabled={isNavigating}>
                             {isNavigating ? "Navegando..." : "Verificador de Chaves"}
                         </Button>
-                        <Button variant="ghost" asChild>
-                           <a href="/export">Exportar Código</a>
-                        </Button>
                     </nav>
                 </div>
             </header>
