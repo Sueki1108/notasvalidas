@@ -32,40 +32,6 @@ if (typeof window !== 'undefined' && !(window as any).__file_cache) {
 }
 const fileCache: FileList = typeof window !== 'undefined' ? (window as any).__file_cache : {};
 
-async function extractKeysFromSpedStream(file: File): Promise<string[]> {
-    const keys = new Set<string>();
-    const keyPattern = /\b\d{44}\b/g;
-    const stream = file.stream();
-    const reader = stream.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || ''; // Keep the last, possibly incomplete line
-
-        for (const line of lines) {
-            const matches = line.match(keyPattern);
-            if (matches) {
-                matches.forEach(key => keys.add(key));
-            }
-        }
-    }
-
-    // Process any remaining buffer
-    const matches = buffer.match(keyPattern);
-    if (matches) {
-        matches.forEach(key => keys.add(key));
-    }
-    
-    return Array.from(keys);
-}
-
-
 export default function Home() {
     const [files, setFiles] = useState<FileList>(fileCache);
     const [processing, setProcessing] = useState(false);
@@ -138,7 +104,7 @@ export default function Home() {
             toast({
                 variant: "destructive",
                 title: "Nenhum arquivo carregado",
-                description: "Por favor, carregue pelo menos uma planilha para processar.",
+                description: "Por favor, carregue pelo menos um arquivo para processar.",
             });
             return;
         }
@@ -146,28 +112,16 @@ export default function Home() {
         setProcessing(true);
         try {
             const formData = new FormData();
-            let allSpedKeys: string[] = [];
 
             for (const name in files) {
                 const fileList = files[name];
                 if (fileList) {
                     for (const file of fileList) {
-                        if (name === 'SPED TXT') {
-                            const keys = await extractKeysFromSpedStream(file);
-                            allSpedKeys.push(...keys);
-                        } else {
-                            const newFile = new File([file], name, { type: file.type });
-                            formData.append('files', newFile);
-                        }
+                         const newFile = new File([file], name, { type: file.type });
+                         formData.append('files', newFile);
                     }
                 }
             }
-            
-            // Add the collected SPED keys as a single JSON string
-            if (allSpedKeys.length > 0) {
-                formData.append('spedKeys', JSON.stringify(allSpedKeys));
-            }
-
 
             const resultData = await processUploadedFiles(formData);
 

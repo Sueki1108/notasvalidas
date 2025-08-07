@@ -19,22 +19,62 @@ const findDuplicates = (arr: string[]): string[] => {
     return Array.from(duplicates);
 };
 
+async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
+    const reader = stream.getReader();
+    const chunks: Uint8Array[] = [];
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+    }
+    return Buffer.concat(chunks);
+}
+
 
 export async function processUploadedFiles(formData: FormData) {
   try {
     const dataFrames: DataFrames = {};
-    const fileEntries = formData.getAll('files');
+    const fileEntries = formData.getAll('files') as File[];
+    let allSpedKeys: string[] = [];
 
     // Process all file entries from formData
-    for (const entry of fileEntries) {
-        if (entry instanceof File) {
-            const fieldName = entry.name; // The original field name is stored in the file name
-            if (!dataFrames[fieldName]) {
+    for (const file of fileEntries) {
+        const fieldName = file.name;
+        
+        if (fieldName === 'SPED TXT') {
+             const stream = file.stream();
+             const reader = stream.getReader();
+             const decoder = new TextDecoder();
+             let buffer = '';
+             const keyPattern = /\b\d{44}\b/g;
+
+             while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    const matches = line.match(keyPattern);
+                    if (matches) {
+                        allSpedKeys.push(...matches);
+                    }
+                }
+            }
+            // Process any remaining buffer
+            const matches = buffer.match(keyPattern);
+            if (matches) {
+                allSpedKeys.push(...matches);
+            }
+
+        } else {
+             if (!dataFrames[fieldName]) {
                 dataFrames[fieldName] = [];
             }
-            const buffer = await entry.arrayBuffer();
+            const buffer = await streamToBuffer(file.stream());
             const workbook = XLSX.read(buffer, { type: 'buffer' });
-            // Process all sheets in the workbook
             for (const sheetName of workbook.SheetNames) {
               const worksheet = workbook.Sheets[sheetName];
               const jsonData = XLSX.utils.sheet_to_json(worksheet);
@@ -42,24 +82,21 @@ export async function processUploadedFiles(formData: FormData) {
             }
         }
     }
-
-    const spedKeysJson = formData.get('spedKeys');
-    const allKeysInTxt = spedKeysJson && typeof spedKeysJson === 'string' ? JSON.parse(spedKeysJson) : [];
     
     const processedData = processDataFrames(dataFrames);
 
     let keyCheckResults = null;
-    if (allKeysInTxt.length > 0 && processedData['Chaves Válidas']) {
+    if (allSpedKeys.length > 0 && processedData['Chaves Válidas']) {
         const spreadsheetKeysArray = processedData['Chaves Válidas'].map(row => String(row['Chave de acesso']).trim()).filter(key => key);
         const spreadsheetKeys = new Set(spreadsheetKeysArray);
         
-        const keysInTxt = new Set(allKeysInTxt);
+        const keysInTxt = new Set(allSpedKeys);
 
         const keysNotFoundInTxt = [...spreadsheetKeys].filter(key => !keysInTxt.has(key));
         const keysInTxtNotInSheet = [...keysInTxt].filter(key => !spreadsheetKeys.has(key));
         
         const duplicateKeysInSheet = findDuplicates(spreadsheetKeysArray);
-        const duplicateKeysInTxt = findDuplicates(allKeysInTxt);
+        const duplicateKeysInTxt = findDuplicates(allSpedKeys);
 
         keyCheckResults = { 
             keysNotFoundInTxt, 
