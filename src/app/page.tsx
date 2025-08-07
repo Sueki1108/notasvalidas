@@ -33,6 +33,39 @@ if (typeof window !== 'undefined' && !(window as any).__file_cache) {
 }
 const fileCache: FileList = typeof window !== 'undefined' ? (window as any).__file_cache : {};
 
+async function extractKeysFromSpedStream(file: File): Promise<string[]> {
+    const keys = new Set<string>();
+    const keyPattern = /\b\d{44}\b/g;
+    const stream = file.stream();
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep the last, possibly incomplete line
+
+        for (const line of lines) {
+            const matches = line.match(keyPattern);
+            if (matches) {
+                matches.forEach(key => keys.add(key));
+            }
+        }
+    }
+
+    // Process any remaining buffer
+    const matches = buffer.match(keyPattern);
+    if (matches) {
+        matches.forEach(key => keys.add(key));
+    }
+    
+    return Array.from(keys);
+}
+
 
 export default function Home() {
     const [files, setFiles] = useState<FileList>(fileCache);
@@ -100,7 +133,6 @@ export default function Home() {
 
     const handleSubmit = async () => {
         setError(null);
-        // Do not clear results immediately, allow a smoother transition
         
         const hasFiles = Object.values(files).some(fileList => fileList && fileList.length > 0);
         if (!hasFiles) {
@@ -115,24 +147,28 @@ export default function Home() {
         setProcessing(true);
         try {
             const formData = new FormData();
-            
+            let allSpedKeys: string[] = [];
+
             for (const name in files) {
                 const fileList = files[name];
                 if (fileList) {
                     for (const file of fileList) {
                         if (name === 'SPED TXT') {
-                             // Append text content directly, the server will handle multiple entries
-                            formData.append('SPED TXT', await file.text());
+                            const keys = await extractKeysFromSpedStream(file);
+                            allSpedKeys.push(...keys);
                         } else {
-                            // Create a new File object with the field name as its name.
-                            // The server will use this name to group files.
                             const newFile = new File([file], name, { type: file.type });
-                            // Use a generic key 'files' for all spreadsheet files
                             formData.append('files', newFile);
                         }
                     }
                 }
             }
+            
+            // Add the collected SPED keys as a single JSON string
+            if (allSpedKeys.length > 0) {
+                formData.append('spedKeys', JSON.stringify(allSpedKeys));
+            }
+
 
             const resultData = await processUploadedFiles(formData);
 

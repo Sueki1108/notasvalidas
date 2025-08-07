@@ -25,7 +25,6 @@ const findDuplicates = (arr: string[]): string[] => {
 export async function processUploadedFiles(formData: FormData) {
   try {
     const dataFrames: DataFrames = {};
-    const textFileContents: string[] = [];
     const fileEntries = formData.getAll('files');
 
     // Process all file entries from formData
@@ -46,25 +45,16 @@ export async function processUploadedFiles(formData: FormData) {
         }
     }
 
-    const spedTxtFiles = formData.getAll('SPED TXT');
-    for(const spedFile of spedTxtFiles) {
-        if(typeof spedFile === 'string') {
-            textFileContents.push(spedFile);
-        }
-    }
-    
-    const combinedTextContent = textFileContents.join('\n');
+    const spedKeysJson = formData.get('spedKeys');
+    const allKeysInTxt = spedKeysJson && typeof spedKeysJson === 'string' ? JSON.parse(spedKeysJson) : [];
     
     const processedData = processDataFrames(dataFrames);
 
     let keyCheckResults = null;
-    if (combinedTextContent && processedData['Chaves Válidas']) {
+    if (allKeysInTxt.length > 0 && processedData['Chaves Válidas']) {
         const spreadsheetKeysArray = processedData['Chaves Válidas'].map(row => String(row['Chave de acesso']).trim()).filter(key => key);
         const spreadsheetKeys = new Set(spreadsheetKeysArray);
         
-        const normalizedText = combinedTextContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-        const keyPattern = /\b\d{44}\b/g;
-        const allKeysInTxt = normalizedText.match(keyPattern) || [];
         const keysInTxt = new Set(allKeysInTxt);
 
         const keysNotFoundInTxt = [...spreadsheetKeys].filter(key => !keysInTxt.has(key));
