@@ -23,40 +23,38 @@ const cleanAndToStr = (value: any): string => {
 export function processDataFrames(dfs: DataFrames): DataFrames {
     const processedDfs: DataFrames = JSON.parse(JSON.stringify(dfs));
 
-    // Normalize CTE columns before any other processing
-    if (processedDfs["NF-Stock CTE"]) {
-        processedDfs["NF-Stock CTE"] = processedDfs["NF-Stock CTE"].map(row => {
-            if (!row) return row;
-            return {
-                ...row,
-                'Valor': row['Valor da Prestação'] ?? row['Valor'],
-                'CPF/CNPJ': row['Tomador CPF/CNPJ'] ?? row['CPF/CNPJ'],
-                'Chave de acesso': row['Chave de Acesso'] ?? row['Chave de acesso']
-            };
-        });
-    }
-    
-    // Create Chave Unica in all relevant sheets first
-    for (const sheetName in processedDfs) {
-        const df = processedDfs[sheetName];
-        if (df && df.length > 0 && df[0] && "Número" in df[0] && "CPF/CNPJ" in df[0]) {
-            processedDfs[sheetName] = df.map(row => {
-                if(row && row["Número"] !== undefined && row["CPF/CNPJ"] !== undefined) {
-                    const chaveUnica = cleanAndToStr(row["Número"]) + cleanAndToStr(row["CPF/CNPJ"]);
-                    return { "Chave Unica": chaveUnica, ...row };
-                }
-                return row;
-            });
-        }
-    }
-
-    const originalItens = processedDfs["NF-Stock Itens"] || [];
-
     // Step 1: Unify NFE and CTE and remove total rows
-    let notasTemporaria = [
-        ...(processedDfs["NF-Stock NFE"] || []),
-        ...(processedDfs["NF-Stock CTE"] || [])
-    ];
+    // Normalize NFE columns
+    let nfeData = (processedDfs["NF-Stock NFE"] || []).map(row => {
+        if (!row) return row;
+        return {
+            ...row,
+            'Chave de acesso': row['Chave de acesso'] ?? row['Chave de Acesso'] ?? row['Chave'],
+            'CPF/CNPJ': row['CPF/CNPJ'] ?? row['Emitente CPF/CNPJ'],
+        };
+    });
+
+    // Normalize CTE columns
+    let cteData = (processedDfs["NF-Stock CTE"] || []).map(row => {
+        if (!row) return row;
+        return {
+            ...row,
+            'Valor': row['Valor da Prestação'] ?? row['Valor'],
+            'CPF/CNPJ': row['Tomador CPF/CNPJ'] ?? row['CPF/CNPJ'],
+            'Chave de acesso': row['Chave de Acesso'] ?? row['Chave de acesso'] ?? row['Chave'],
+        };
+    });
+
+    let notasTemporaria = [...nfeData, ...cteData];
+    
+    // Create Chave Unica after unifying so all notes have it
+    notasTemporaria = notasTemporaria.map(row => {
+        if(row && row["Número"] !== undefined && row["CPF/CNPJ"] !== undefined) {
+            const chaveUnica = cleanAndToStr(row["Número"]) + cleanAndToStr(row["CPF/CNPJ"]);
+            return { "Chave Unica": chaveUnica, ...row };
+        }
+        return row;
+    });
     
     const phrasesToRemove = ["TOTAL", "Valor total das notas", "Valor Total da Prestação"];
     notasTemporaria = notasTemporaria.filter(row => {
@@ -66,6 +64,14 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         return !Object.values(row).some(value => 
             typeof value === 'string' && phrasesToRemove.some(phrase => value.toUpperCase().includes(phrase.toUpperCase()))
         );
+    });
+
+    const originalItens = (processedDfs["NF-Stock Itens"] || []).map(row => {
+        if (row && row["Número"] !== undefined && row["CPF/CNPJ"] !== undefined) {
+            const chaveUnica = cleanAndToStr(row["Número"]) + cleanAndToStr(row["CPF/CNPJ"]);
+            return { "Chave Unica": chaveUnica, ...row };
+        }
+        return row;
     });
 
     // Step 2: Identify and separate exceptions
@@ -110,21 +116,16 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
     
     exceptionSheets.forEach(sheetName => {
         if (processedDfs[sheetName]) {
-             if (processedDfs[sheetName].length > 0 && 'Chave' in processedDfs[sheetName][0]) {
+             if (processedDfs[sheetName].length > 0) {
                 processedDfs[sheetName] = processedDfs[sheetName].map(row => {
+                    const chaveUnica = (row["Número"] && row["CPF/CNPJ"]) 
+                        ? cleanAndToStr(row["Número"]) + cleanAndToStr(row["CPF/CNPJ"])
+                        : row["Chave Unica"];
+                    if (chaveUnica) chavesUnicasARemover.add(cleanAndToStr(chaveUnica));
                     const { Chave, ...rest } = row;
                     return { 'Chave de acesso': Chave, ...rest };
                 });
             }
-            processedDfs[sheetName].forEach(row => {
-                // These sheets might not have 'Chave Unica', so we create it if needed for removal logic
-                if (row && row["Número"] && row["CPF/CNPJ"]) {
-                     const chaveUnica = cleanAndToStr(row["Número"]) + cleanAndToStr(row["CPF/CNPJ"]);
-                     chavesUnicasARemover.add(chaveUnica);
-                } else if (row && row["Chave Unica"]) {
-                     chavesUnicasARemover.add(cleanAndToStr(row["Chave Unica"]));
-                }
-            });
         }
     });
     
