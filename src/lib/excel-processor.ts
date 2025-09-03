@@ -22,6 +22,19 @@ const cleanAndToStr = (value: any): string => {
 
 export function processDataFrames(dfs: DataFrames): DataFrames {
     const processedDfs: DataFrames = JSON.parse(JSON.stringify(dfs));
+
+    // Normalize CTE columns before any other processing
+    if (processedDfs["NF-Stock CTE"]) {
+        processedDfs["NF-Stock CTE"] = processedDfs["NF-Stock CTE"].map(row => {
+            if (!row) return row;
+            return {
+                ...row,
+                'Valor': row['Valor da Prestação'] ?? row['Valor'],
+                'CPF/CNPJ': row['Tomador CPF/CNPJ'] ?? row['CPF/CNPJ'],
+                'Chave de acesso': row['Chave de Acesso'] ?? row['Chave de acesso']
+            };
+        });
+    }
     
     // Create Chave Unica in all relevant sheets first
     for (const sheetName in processedDfs) {
