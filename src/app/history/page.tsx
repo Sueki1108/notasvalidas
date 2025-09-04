@@ -56,10 +56,23 @@ export default function HistoryPage() {
         fetchVerifications();
     }, []);
 
-    const formatTimestamp = (timestamp: Timestamp) => {
+    const formatDate = (timestamp: Timestamp) => {
         if (!timestamp) return 'N/A';
-        return timestamp.toDate().toLocaleString('pt-BR');
+        return timestamp.toDate().toLocaleDateString('pt-BR');
     }
+    
+    const formatTime = (timestamp: Timestamp) => {
+        if (!timestamp) return '';
+        return timestamp.toDate().toLocaleTimeString('pt-BR');
+    }
+
+    const formatCnpj = (cnpj: string) => {
+        if (!cnpj) return '';
+        // Ensures the CNPJ is only digits before formatting
+        const digitsOnly = cnpj.replace(/\D/g, '');
+        if (digitsOnly.length !== 14) return cnpj;
+        return digitsOnly.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+    };
 
     return (
         <div className="min-h-screen bg-background text-foreground">
@@ -107,6 +120,7 @@ export default function HistoryPage() {
                                             <TableHead>CNPJ</TableHead>
                                             <TableHead>Competência</TableHead>
                                             <TableHead>Data da Verificação</TableHead>
+                                            <TableHead>Hora</TableHead>
                                             <TableHead className="text-right">Ações</TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -114,9 +128,10 @@ export default function HistoryPage() {
                                         {verifications.map((v) => (
                                             <TableRow key={v.id}>
                                                 <TableCell className="font-medium">{v.companyName}</TableCell>
-                                                <TableCell>{v.cnpj}</TableCell>
+                                                <TableCell>{formatCnpj(v.cnpj)}</TableCell>
                                                 <TableCell>{v.competence}</TableCell>
-                                                <TableCell>{formatTimestamp(v.verifiedAt)}</TableCell>
+                                                <TableCell>{formatDate(v.verifiedAt)}</TableCell>
+                                                <TableCell>{formatTime(v.verifiedAt)}</TableCell>
                                                 <TableCell className="text-right">
                                                     <Button variant="outline" size="sm" onClick={() => setSelectedVerification(v)}>
                                                         <Search className="mr-2 h-4 w-4" />
@@ -153,7 +168,7 @@ export default function HistoryPage() {
                         <AlertDialogHeader>
                             <AlertDialogTitle>Chaves Válidas para {selectedVerification.companyName}</AlertDialogTitle>
                              <AlertDialogDescription>
-                                Competência: {selectedVerification.competence} | Verificado em: {formatTimestamp(selectedVerification.verifiedAt)}
+                                Competência: {selectedVerification.competence} | Verificado em: {formatDate(selectedVerification.verifiedAt)} às {formatTime(selectedVerification.verifiedAt)}
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <ScrollArea className="h-96 rounded-md border p-4">
