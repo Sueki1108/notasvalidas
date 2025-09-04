@@ -7,7 +7,7 @@ import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Sheet, History, Search } from "lucide-react";
+import { Loader2, Sheet, History, Search, ArrowLeft } from "lucide-react";
 import Link from 'next/link';
 import {
   AlertDialog,
@@ -19,6 +19,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 
 type Verification = {
@@ -98,7 +99,7 @@ export default function HistoryPage() {
                                 <div className="flex justify-center p-8">
                                     <Loader2 className="h-8 w-8 animate-spin" />
                                 </div>
-                            ) : (
+                            ) : verifications.length > 0 ? (
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
@@ -110,28 +111,36 @@ export default function HistoryPage() {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {verifications.length > 0 ? (
-                                            verifications.map((v) => (
-                                                <TableRow key={v.id}>
-                                                    <TableCell className="font-medium">{v.companyName}</TableCell>
-                                                    <TableCell>{v.cnpj}</TableCell>
-                                                    <TableCell>{v.competence}</TableCell>
-                                                    <TableCell>{formatTimestamp(v.verifiedAt)}</TableCell>
-                                                    <TableCell className="text-right">
-                                                        <Button variant="outline" size="sm" onClick={() => setSelectedVerification(v)}>
-                                                            <Search className="mr-2 h-4 w-4" />
-                                                            Ver Detalhes
-                                                        </Button>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))
-                                        ) : (
-                                            <TableRow>
-                                                <TableCell colSpan={5} className="text-center">Nenhum histórico encontrado.</TableCell>
+                                        {verifications.map((v) => (
+                                            <TableRow key={v.id}>
+                                                <TableCell className="font-medium">{v.companyName}</TableCell>
+                                                <TableCell>{v.cnpj}</TableCell>
+                                                <TableCell>{v.competence}</TableCell>
+                                                <TableCell>{formatTimestamp(v.verifiedAt)}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button variant="outline" size="sm" onClick={() => setSelectedVerification(v)}>
+                                                        <Search className="mr-2 h-4 w-4" />
+                                                        Ver Detalhes
+                                                    </Button>
+                                                </TableCell>
                                             </TableRow>
-                                        )}
+                                        ))}
                                     </TableBody>
                                 </Table>
+                            ) : (
+                                <Alert className="border-primary/50">
+                                    <History className="h-4 w-4" />
+                                    <AlertTitle>Nenhum histórico encontrado</AlertTitle>
+                                    <AlertDescription>
+                                        Ainda não há registros de verificação. Processe um arquivo SPED para começar.
+                                        <Button asChild className="mt-4">
+                                            <Link href="/">
+                                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                                Voltar para o Processamento
+                                            </Link>
+                                        </Button>
+                                    </AlertDescription>
+                                </Alert>
                             )}
                         </CardContent>
                     </Card>
@@ -145,7 +154,7 @@ export default function HistoryPage() {
                             <AlertDialogTitle>Chaves Válidas para {selectedVerification.companyName}</AlertDialogTitle>
                              <AlertDialogDescription>
                                 Competência: {selectedVerification.competence} | Verificado em: {formatTimestamp(selectedVerification.verifiedAt)}
-                            </AlertDialogDescription>
+                            </Aler tDialogDescription>
                         </AlertDialogHeader>
                         <ScrollArea className="h-96 rounded-md border p-4">
                             <ul className="space-y-1 font-mono text-sm">
