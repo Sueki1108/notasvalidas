@@ -1,3 +1,4 @@
+
 // src/app/history/page.tsx
 "use client";
 
@@ -187,7 +188,7 @@ export default function HistoryPage() {
                             <ScrollArea className="h-96 rounded-md border p-4">
                                 <ul className="space-y-2">
                                      <TooltipProvider>
-                                    {selectedVerification.keys.map((item, index) => (
+                                    {selectedVerification.keys && selectedVerification.keys.map((item, index) => (
                                         <li key={index} className="flex items-center justify-between gap-4 rounded-md bg-secondary/50 p-2 font-mono text-sm">
                                             <div className="flex items-center gap-2">
                                                 {item.foundInSped ? (
