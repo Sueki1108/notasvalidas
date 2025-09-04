@@ -1,0 +1,12 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow client-side read access to the verifications collection for the history page.
+    // Writes are only allowed from the server-side, which bypasses these rules.
+    match /verifications/{verificationId} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}
