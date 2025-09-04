@@ -1,3 +1,4 @@
+// src/app/actions.ts
 'use server';
 
 import * as XLSX from 'xlsx';
@@ -72,14 +73,13 @@ export async function processUploadedFiles(formData: FormData) {
     let spedInfo: SpedInfo | null = null;
     let firstSpedLine = '';
 
-    // Process all file entries from formData
     for (const file of fileEntries) {
         const fieldName = file.name;
         
         if (fieldName === 'SPED TXT') {
              const stream = file.stream();
              const reader = stream.getReader();
-             const decoder = new TextDecoder();
+             const decoder = new TextDecoder('iso-8859-1'); // Use a common encoding for SPED
              let buffer = '';
              const keyPattern = /\b\d{44}\b/g;
              let isFirstLine = true;
@@ -90,26 +90,36 @@ export async function processUploadedFiles(formData: FormData) {
 
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n');
-                buffer = lines.pop() || '';
+                
+                // The last line might be incomplete, so we keep it in the buffer
+                buffer = lines.pop() || ''; 
 
                 for (const line of lines) {
-                    if (isFirstLine && line.trim()) {
-                        firstSpedLine = line.trim();
+                     const trimmedLine = line.trim();
+                    if (isFirstLine && trimmedLine) {
+                        firstSpedLine = trimmedLine;
                         isFirstLine = false;
                     }
-                    const matches = line.match(keyPattern);
+                    const matches = trimmedLine.match(keyPattern);
                     if (matches) {
                         allSpedKeys.push(...matches);
                     }
                 }
             }
+            // Process any remaining data in the buffer after the loop finishes
+            if (buffer) {
+                const trimmedLine = buffer.trim();
+                if (isFirstLine && trimmedLine) {
+                     firstSpedLine = trimmedLine;
+                }
+                const matches = trimmedLine.match(keyPattern);
+                if (matches) {
+                    allSpedKeys.push(...matches);
+                }
+            }
+            
             if (firstSpedLine) {
                  spedInfo = parseSpedInfo(firstSpedLine);
-            }
-            // Process any remaining buffer
-            const matches = buffer.match(keyPattern);
-            if (matches) {
-                allSpedKeys.push(...matches);
             }
 
         } else {
@@ -156,14 +166,12 @@ export async function processUploadedFiles(formData: FormData) {
         validKeys,
         verifiedAt: serverTimestamp(),
       };
-      // Use CNPJ as the document ID to upsert data
       await setDoc(doc(db, "verifications", spedInfo.cnpj), verificationData);
     }
 
     return { data: processedData, keyCheckResults };
   } catch (error: any) {
     console.error('Error processing files:', error);
-    // Ensure we return a serializable error object
     return { error: error.message || 'An unexpected error occurred during file processing.' };
   }
 }
