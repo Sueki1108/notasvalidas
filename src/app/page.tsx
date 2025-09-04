@@ -60,6 +60,8 @@ export default function Home() {
         } catch (e) {
             console.error("Failed to parse state from sessionStorage", e);
             sessionStorage.removeItem('processedData');
+            sessionStorage.removeItem('keyCheckResults');
+            sessionStorage.removeItem('spedInfo');
         }
     }, []);
 
@@ -146,6 +148,12 @@ export default function Home() {
             } else {
                  sessionStorage.removeItem('keyCheckResults');
             }
+            if (resultData.spedInfo) {
+                sessionStorage.setItem('spedInfo', JSON.stringify(resultData.spedInfo));
+            } else {
+                sessionStorage.removeItem('spedInfo');
+            }
+
 
             toast({
                 title: "Processamento Concluído",
@@ -172,6 +180,7 @@ export default function Home() {
         
         sessionStorage.removeItem('processedData');
         sessionStorage.removeItem('keyCheckResults');
+        sessionStorage.removeItem('spedInfo');
 
         for (const key in fileCache) {
             delete fileCache[key];

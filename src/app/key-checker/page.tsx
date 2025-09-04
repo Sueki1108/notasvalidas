@@ -20,6 +20,7 @@ export type KeyCheckResult = {
 
 export default function KeyCheckerPage() {
     const [results, setResults] = useState<KeyCheckResult | null>(null);
+    const [spedInfo, setSpedInfo] = useState<{ cnpj: string, competence: string } | null>(null);
     const [loading, setLoading] = useState(true);
     const { toast } = useToast();
     const router = useRouter();
@@ -27,6 +28,8 @@ export default function KeyCheckerPage() {
     useEffect(() => {
         try {
             const storedResults = sessionStorage.getItem('keyCheckResults');
+            const storedSpedInfo = sessionStorage.getItem('spedInfo');
+
             if (storedResults && storedResults !== 'null') {
                 const parsedResults = JSON.parse(storedResults);
                 setResults(parsedResults);
@@ -36,9 +39,20 @@ export default function KeyCheckerPage() {
                     title: "Nenhum resultado encontrado",
                     description: "Por favor, processe os arquivos na página inicial primeiro.",
                 });
-                // Redirect back to home if no data is found
                 router.push('/');
+                return;
             }
+
+            if (storedSpedInfo && storedSpedInfo !== 'null') {
+                setSpedInfo(JSON.parse(storedSpedInfo));
+            } else {
+                // Not a fatal error, comments will be disabled.
+                 toast({
+                    title: "Informações SPED ausentes",
+                    description: "A funcionalidade de comentários estará desabilitada.",
+                });
+            }
+
         } catch (error) {
             toast({
                 variant: "destructive",
@@ -90,8 +104,10 @@ export default function KeyCheckerPage() {
                                     <Loader2 className="mr-2 h-8 w-8 animate-spin" />
                                     <p>Carregando resultados...</p>
                                 </div>
+                            ) : results && spedInfo ? (
+                                <KeyResultsDisplay results={results} cnpj={spedInfo.cnpj} />
                             ) : results ? (
-                                <KeyResultsDisplay results={results} />
+                                <KeyResultsDisplay results={results} cnpj={null} />
                             ) : (
                                 <Alert>
                                     <FileText className="h-4 w-4" />

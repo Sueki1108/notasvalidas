@@ -7,7 +7,7 @@ import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Sheet, History, Search, ArrowLeft } from "lucide-react";
+import { Loader2, Sheet, History, Search, ArrowLeft, CheckCircle, XCircle, MessageSquare } from "lucide-react";
 import Link from 'next/link';
 import {
   AlertDialog,
@@ -20,7 +20,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
+type VerificationKey = {
+  key: string;
+  foundInSped: boolean;
+  comment?: string;
+};
 
 type Verification = {
   id: string;
@@ -28,7 +34,7 @@ type Verification = {
   cnpj: string;
   competence: string;
   verifiedAt: Timestamp;
-  validKeys: string[];
+  keys: VerificationKey[];
 };
 
 export default function HistoryPage() {
@@ -147,7 +153,7 @@ export default function HistoryPage() {
                                     </TableBody>
                                 </Table>
                             ) : (
-                                <Alert className="border-primary/50">
+                                 <Alert className="border-primary/50">
                                     <History className="h-4 w-4" />
                                     <AlertTitle>Nenhum histórico encontrado</AlertTitle>
                                     <AlertDescription>
@@ -168,7 +174,7 @@ export default function HistoryPage() {
 
             {selectedVerification && (
                 <AlertDialog open={!!selectedVerification} onOpenChange={handleCloseModal}>
-                    <AlertDialogContent className="max-w-2xl">
+                    <AlertDialogContent className="max-w-4xl">
                         <AlertDialogHeader>
                             <AlertDialogTitle>Detalhes da Verificação para {selectedVerification.companyName}</AlertDialogTitle>
                              <AlertDialogDescription>
@@ -176,13 +182,48 @@ export default function HistoryPage() {
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         
-                        <div className="space-y-4">
+                         <div className="space-y-4">
                             <p className="text-sm font-medium">Lista de Chaves Válidas da Planilha</p>
-                            <ScrollArea className="h-80 rounded-md border p-4">
-                                <ul className="space-y-1 font-mono text-sm">
-                                    {selectedVerification.validKeys.map((key, index) => (
-                                        <li key={index}>{key}</li>
+                            <ScrollArea className="h-96 rounded-md border p-4">
+                                <ul className="space-y-2">
+                                     <TooltipProvider>
+                                    {selectedVerification.keys.map((item, index) => (
+                                        <li key={index} className="flex items-center justify-between gap-4 rounded-md bg-secondary/50 p-2 font-mono text-sm">
+                                            <div className="flex items-center gap-2">
+                                                {item.foundInSped ? (
+                                                    <Tooltip>
+                                                        <TooltipTrigger>
+                                                            <CheckCircle className="h-5 w-5 text-green-600" />
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p>Encontrada no SPED</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                ) : (
+                                                     <Tooltip>
+                                                        <TooltipTrigger>
+                                                            <XCircle className="h-5 w-5 text-red-600" />
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p>Não encontrada no SPED</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                )}
+                                                <span>{item.key}</span>
+                                            </div>
+                                            {item.comment && (
+                                                <Tooltip>
+                                                    <TooltipTrigger>
+                                                        <MessageSquare className="h-5 w-5 text-blue-600" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>{item.comment}</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            )}
+                                        </li>
                                     ))}
+                                    </TooltipProvider>
                                 </ul>
                             </ScrollArea>
                         </div>

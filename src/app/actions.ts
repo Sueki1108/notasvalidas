@@ -4,7 +4,7 @@
 import * as XLSX from 'xlsx';
 import { processDataFrames } from '@/lib/excel-processor';
 import { db } from '@/lib/firebase';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 
 // Type for the file data structure expected by the processor
 type DataFrames = { [key: string]: any[] };
@@ -105,12 +105,11 @@ export async function processUploadedFiles(formData: FormData) {
     const processedData = processDataFrames(dataFrames);
 
     let keyCheckResults = null;
-    if (allSpedKeys.length > 0 && processedData['Chaves Válidas']) {
+    const keysInTxt = new Set(allSpedKeys);
+    if (processedData['Chaves Válidas']) {
         const spreadsheetKeysArray = processedData['Chaves Válidas'].map(row => String(row['Chave de acesso']).trim()).filter(key => key);
         const spreadsheetKeys = new Set(spreadsheetKeysArray);
         
-        const keysInTxt = new Set(allSpedKeys);
-
         const keysNotFoundInTxt = [...spreadsheetKeys].filter(key => !keysInTxt.has(key));
         const keysInTxtNotInSheet = [...keysInTxt].filter(key => !spreadsheetKeys.has(key));
         
@@ -126,19 +125,62 @@ export async function processUploadedFiles(formData: FormData) {
     }
     
     if (spedInfo && spedInfo.cnpj) {
-      const validKeys = processedData['Chaves Válidas']?.map(row => row['Chave de acesso']) || [];
+      const allProcessedKeys = processedData['Chaves Válidas']?.map(row => row['Chave de acesso']) || [];
+      const keysNotFoundInSpedSet = new Set((keyCheckResults as any)?.keysNotFoundInTxt || []);
+
+      const verificationKeys = allProcessedKeys.map(key => ({
+        key: key,
+        foundInSped: !keysNotFoundInSpedSet.has(key),
+        comment: ''
+      }));
+
       const verificationData = {
         ...spedInfo,
-        validKeys,
+        keys: verificationKeys,
         verifiedAt: serverTimestamp(),
       };
-      // Use the CNPJ as the document ID for easy updates (upsert)
+
       await setDoc(doc(db, "verifications", spedInfo.cnpj), verificationData, { merge: true });
     }
 
-    return { data: processedData, keyCheckResults };
+    return { data: processedData, keyCheckResults, spedInfo };
   } catch (error: any) {
     console.error('Error processing files:', error);
     return { error: error.message || 'An unexpected error occurred during file processing.' };
   }
+}
+
+export async function addOrUpdateKeyComment(cnpj: string, key: string, comment: string) {
+    if (!cnpj || !key) {
+        return { error: "CNPJ e Chave são obrigatórios." };
+    }
+
+    try {
+        const verificationRef = doc(db, "verifications", cnpj);
+        const docSnap = await getDoc(verificationRef);
+
+        if (!docSnap.exists()) {
+            return { error: "Verificação não encontrada para este CNPJ." };
+        }
+
+        const data = docSnap.data();
+        const keys = data.keys || [];
+
+        const keyIndex = keys.findIndex((k: any) => k.key === key);
+
+        if (keyIndex === -1) {
+             return { error: "Chave não encontrada no histórico de verificação." };
+        }
+        
+        const updatedKeys = [...keys];
+        updatedKeys[keyIndex] = { ...updatedKeys[keyIndex], comment: comment };
+        
+        await updateDoc(verificationRef, { keys: updatedKeys });
+        
+        return { success: true, message: "Comentário salvo com sucesso!" };
+
+    } catch (error: any) {
+        console.error("Erro ao salvar comentário:", error);
+        return { error: error.message || "Ocorreu um erro ao salvar o comentário." };
+    }
 }
