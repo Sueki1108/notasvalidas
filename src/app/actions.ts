@@ -105,13 +105,14 @@ export async function processUploadedFiles(formData: FormData) {
     const processedData = processDataFrames(dataFrames);
 
     let keyCheckResults = null;
+    let keysNotFoundInTxt: string[] = [];
     if (allSpedKeys.length > 0 && processedData['Chaves Válidas']) {
         const spreadsheetKeysArray = processedData['Chaves Válidas'].map(row => String(row['Chave de acesso']).trim()).filter(key => key);
         const spreadsheetKeys = new Set(spreadsheetKeysArray);
         
         const keysInTxt = new Set(allSpedKeys);
 
-        const keysNotFoundInTxt = [...spreadsheetKeys].filter(key => !keysInTxt.has(key));
+        keysNotFoundInTxt = [...spreadsheetKeys].filter(key => !keysInTxt.has(key));
         const keysInTxtNotInSheet = [...keysInTxt].filter(key => !spreadsheetKeys.has(key));
         
         const duplicateKeysInSheet = findDuplicates(spreadsheetKeysArray);
@@ -130,10 +131,11 @@ export async function processUploadedFiles(formData: FormData) {
       const verificationData = {
         ...spedInfo,
         validKeys,
+        keysNotFoundInSped: keysNotFoundInTxt, // Storing the missing keys
         verifiedAt: serverTimestamp(),
       };
       // Use the CNPJ as the document ID for easy updates (upsert)
-      await setDoc(doc(db, "verifications", spedInfo.cnpj), verificationData);
+      await setDoc(doc(db, "verifications", spedInfo.cnpj), verificationData, { merge: true });
     }
 
     return { data: processedData, keyCheckResults };
