@@ -2,9 +2,17 @@
 
 import * as XLSX from 'xlsx';
 import { processDataFrames } from '@/lib/excel-processor';
+import { db } from '@/lib/firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 // Type for the file data structure expected by the processor
 type DataFrames = { [key: string]: any[] };
+
+type SpedInfo = {
+    cnpj: string;
+    companyName: string;
+    competence: string;
+}
 
 const findDuplicates = (arr: string[]): string[] => {
     const seen = new Set<string>();
@@ -30,12 +38,39 @@ async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffe
     return Buffer.concat(chunks);
 }
 
+const parseSpedInfo = (spedLine: string): SpedInfo | null => {    
+    if (!spedLine || !spedLine.startsWith('|0000|')) {
+        return null;
+    }
+    
+    const parts = spedLine.split('|');
+    if (parts.length < 10) {
+        return null;
+    }
+    
+    const startDate = parts[4];
+    const companyName = parts[6];
+    const cnpj = parts[7];
+
+    if (!startDate || !companyName || !cnpj || startDate.length !== 8) {
+        return null;
+    }
+
+    const month = startDate.substring(2, 4);
+    const year = startDate.substring(4, 8);
+    const competence = `${month}/${year}`;
+
+    return { cnpj, companyName, competence };
+};
+
 
 export async function processUploadedFiles(formData: FormData) {
   try {
     const dataFrames: DataFrames = {};
     const fileEntries = formData.getAll('files') as File[];
     let allSpedKeys: string[] = [];
+    let spedInfo: SpedInfo | null = null;
+    let firstSpedLine = '';
 
     // Process all file entries from formData
     for (const file of fileEntries) {
@@ -47,6 +82,7 @@ export async function processUploadedFiles(formData: FormData) {
              const decoder = new TextDecoder();
              let buffer = '';
              const keyPattern = /\b\d{44}\b/g;
+             let isFirstLine = true;
 
              while (true) {
                 const { done, value } = await reader.read();
@@ -57,11 +93,18 @@ export async function processUploadedFiles(formData: FormData) {
                 buffer = lines.pop() || '';
 
                 for (const line of lines) {
+                    if (isFirstLine && line.trim()) {
+                        firstSpedLine = line.trim();
+                        isFirstLine = false;
+                    }
                     const matches = line.match(keyPattern);
                     if (matches) {
                         allSpedKeys.push(...matches);
                     }
                 }
+            }
+            if (firstSpedLine) {
+                 spedInfo = parseSpedInfo(firstSpedLine);
             }
             // Process any remaining buffer
             const matches = buffer.match(keyPattern);
@@ -104,6 +147,17 @@ export async function processUploadedFiles(formData: FormData) {
             duplicateKeysInSheet,
             duplicateKeysInTxt,
         };
+    }
+    
+    if (spedInfo && spedInfo.cnpj) {
+      const validKeys = processedData['Chaves Válidas']?.map(row => row['Chave de acesso']) || [];
+      const verificationData = {
+        ...spedInfo,
+        validKeys,
+        verifiedAt: serverTimestamp(),
+      };
+      // Use CNPJ as the document ID to upsert data
+      await setDoc(doc(db, "verifications", spedInfo.cnpj), verificationData);
     }
 
     return { data: processedData, keyCheckResults };

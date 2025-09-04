@@ -5,7 +5,7 @@ import { useState, useTransition, useEffect, useRef } from "react";
 import type { ChangeEvent } from "react";
 import { useRouter } from 'next/navigation';
 import * as XLSX from "xlsx";
-import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, ExternalLink, Trash2 } from "lucide-react";
+import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, ExternalLink, Trash2, History } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -149,7 +149,7 @@ export default function Home() {
 
             toast({
                 title: "Processamento Concluído",
-                description: "Os arquivos foram processados com sucesso.",
+                description: "Os arquivos foram processados e o histórico foi atualizado.",
             });
         } catch (err: any) {
             const errorMessage = err.message || "Ocorreu um erro desconhecido.";
@@ -266,6 +266,9 @@ export default function Home() {
                      <nav className="flex items-center gap-4">
                          <Button variant="ghost" onClick={handleNavigateToKeyChecker} disabled={isNavigating}>
                             {isNavigating ? "Navegando..." : "Verificador de Chaves"}
+                        </Button>
+                         <Button variant="ghost" asChild>
+                           <Link href="/history">Histórico</Link>
                         </Button>
                     </nav>
                 </div>
