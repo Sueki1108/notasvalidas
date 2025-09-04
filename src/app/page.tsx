@@ -1,3 +1,4 @@
+// src/app/page.tsx
 "use client";
 
 import { useState, useTransition, useEffect, useRef } from "react";
@@ -14,11 +15,14 @@ import { processUploadedFiles } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import Link from "next/link";
 
 const requiredFiles = [
     "NF-Stock NFE",
     "NF-Stock CTE",
     "NF-Stock Itens",
+    "NF-Stock Emitidas",
+    "NF-Stock Emitidas Itens",
     "NF-Stock NFE Operação Não Realizada",
     "NF-Stock NFE Operação Desconhecida",
     "NF-Stock CTE Desacordo de Serviço",
@@ -31,6 +35,7 @@ if (typeof window !== 'undefined' && !(window as any).__file_cache) {
     (window as any).__file_cache = {};
 }
 const fileCache: FileList = typeof window !== 'undefined' ? (window as any).__file_cache : {};
+
 
 export default function Home() {
     const [files, setFiles] = useState<FileList>(fileCache);

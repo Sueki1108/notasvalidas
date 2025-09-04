@@ -145,8 +145,21 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         processedDfs["Itens Válidos"] = [];
     }
 
-    const chavesAcessoValidas = [...new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean))];
-    processedDfs["Chaves Válidas"] = chavesAcessoValidas.map(key => ({ "Chave de acesso": key }));
+    const chavesRecebidasValidas = new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));
+    
+    // New logic for "NF-Stock Emitidas"
+    const notasEmitidas = processedDfs["NF-Stock Emitidas"] || [];
+    const chavesEmitidasValidas = new Set<string>();
+    if (notasEmitidas.length > 0) {
+        notasEmitidas.forEach(row => {
+            if (row && row["Status"] !== "Canceladas" && row["Chave de acesso"]) {
+                chavesEmitidasValidas.add(cleanAndToStr(row["Chave de acesso"]));
+            }
+        });
+    }
+
+    const combinedChavesValidas = new Set([...chavesRecebidasValidas, ...chavesEmitidasValidas]);
+    processedDfs["Chaves Válidas"] = Array.from(combinedChavesValidas).map(key => ({ "Chave de acesso": key }));
     
     // Step 5: Create "Imobilizados" from "Itens Válidos" (without removing from the source)
     if (processedDfs["Itens Válidos"] && processedDfs["Itens Válidos"].length > 0 && processedDfs["Itens Válidos"][0]?.["Valor Unitário"]) {
@@ -185,6 +198,8 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
     delete processedDfs["NF-Stock NFE"];
     delete processedDfs["NF-Stock CTE"];
     delete processedDfs["NF-Stock Itens"];
+    delete processedDfs["NF-Stock Emitidas"];
+    delete processedDfs["NF-Stock Emitidas Itens"];
 
     return processedDfs;
 }
