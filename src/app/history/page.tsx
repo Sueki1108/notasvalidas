@@ -154,7 +154,7 @@ export default function HistoryPage() {
                             <AlertDialogTitle>Chaves Válidas para {selectedVerification.companyName}</AlertDialogTitle>
                              <AlertDialogDescription>
                                 Competência: {selectedVerification.competence} | Verificado em: {formatTimestamp(selectedVerification.verifiedAt)}
-                            </Aler tDialogDescription>
+                            </AlertDialogDescription>
                         </AlertDialogHeader>
                         <ScrollArea className="h-96 rounded-md border p-4">
                             <ul className="space-y-1 font-mono text-sm">
