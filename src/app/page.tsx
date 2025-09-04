@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect, useRef } from "react";
 import type { ChangeEvent } from "react";
 import { useRouter } from 'next/navigation';
 import * as XLSX from "xlsx";
-import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, ExternalLink } from "lucide-react";
+import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, ExternalLink, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -159,6 +159,27 @@ export default function Home() {
             setProcessing(false);
         }
     };
+
+    const handleClearData = () => {
+        setFiles({});
+        setResults(null);
+        setError(null);
+        
+        sessionStorage.removeItem('processedData');
+        sessionStorage.removeItem('keyCheckResults');
+
+        for (const key in fileCache) {
+            delete fileCache[key];
+        }
+
+        const inputs = document.querySelectorAll<HTMLInputElement>('input[type="file"]');
+        inputs.forEach(input => input.value = "");
+
+        toast({
+            title: "Dados Limpos",
+            description: "Todos os arquivos carregados e resultados foram removidos.",
+        });
+    };
     
     const handleNavigateToKeyChecker = () => {
         const keyResults = sessionStorage.getItem('keyCheckResults');
@@ -278,9 +299,13 @@ export default function Home() {
                                 </div>
                             </div>
                         </CardHeader>
-                        <CardContent>
-                            <Button onClick={handleSubmit} disabled={isProcessButtonDisabled} className="w-full">
+                        <CardContent className="flex flex-col gap-2 sm:flex-row">
+                            <Button onClick={handleSubmit} disabled={isProcessButtonDisabled} className="flex-grow">
                                 {processing ? "Processando..." : "Processar Arquivos"}
+                            </Button>
+                            <Button onClick={handleClearData} variant="destructive" className="flex-shrink-0">
+                               <Trash2 className="mr-2 h-4 w-4" />
+                                Limpar Dados
                             </Button>
                         </CardContent>
                     </Card>
