@@ -38,7 +38,10 @@ const parseSpedInfo = (spedLine: string): SpedInfo | null => {
         return null;
     }
     
-    const startDate = parts[4];
+    // Indices based on the provided pattern:
+    // |0000|019|0|01082025|31082025|PNEUZAO COMERCIO LTDA|44591157000457||SP|...
+    //   0    1  2    3        4             5                  6         7  8
+    const startDate = parts[4]; // Using start date for competence
     const companyName = parts[6];
     const cnpj = parts[7];
 
@@ -59,29 +62,15 @@ export async function processUploadedFiles(formData: FormData) {
     const dataFrames: DataFrames = {};
     let allSpedKeys: string[] = [];
     let spedInfo: SpedInfo | null = null;
+    let spedFileContent = '';
 
     const fileEntries = formData.getAll('files') as File[];
 
     for (const file of fileEntries) {
-        const fieldName = file.name;
+        const fieldName = file.name; // Name assigned on client
         
         if (fieldName === 'SPED TXT') {
-             const fileContent = await file.text();
-             const lines = fileContent.split('\n');
-             const keyPattern = /\b\d{44}\b/g;
-             let isFirstLine = true;
-             
-             for (const line of lines) {
-                const trimmedLine = line.trim();
-                if (isFirstLine && trimmedLine) {
-                    spedInfo = parseSpedInfo(trimmedLine);
-                    isFirstLine = false;
-                }
-                const matches = trimmedLine.match(keyPattern);
-                if (matches) {
-                    allSpedKeys.push(...matches);
-                }
-            }
+            spedFileContent = await file.text();
         } else {
              if (!dataFrames[fieldName]) {
                 dataFrames[fieldName] = [];
@@ -92,6 +81,23 @@ export async function processUploadedFiles(formData: FormData) {
               const worksheet = workbook.Sheets[sheetName];
               const jsonData = XLSX.utils.sheet_to_json(worksheet);
               dataFrames[fieldName].push(...jsonData);
+            }
+        }
+    }
+
+    if (spedFileContent) {
+        const lines = spedFileContent.split('\n');
+        const keyPattern = /\b\d{44}\b/g;
+        
+        if (lines.length > 0 && lines[0]) {
+            spedInfo = parseSpedInfo(lines[0].trim());
+        }
+        
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            const matches = trimmedLine.match(keyPattern);
+            if (matches) {
+                allSpedKeys.push(...matches);
             }
         }
     }
@@ -126,6 +132,7 @@ export async function processUploadedFiles(formData: FormData) {
         validKeys,
         verifiedAt: serverTimestamp(),
       };
+      // Use the CNPJ as the document ID for easy updates (upsert)
       await setDoc(doc(db, "verifications", spedInfo.cnpj), verificationData);
     }
 
