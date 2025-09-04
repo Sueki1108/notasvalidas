@@ -3,12 +3,13 @@ import { initializeApp, getApps } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  projectId: "excel-workflow-automator",
-  appId: "1:1077410102272:web:47e317f3639bb0437b6ce5",
-  storageBucket: "excel-workflow-automator.firebasestorage.app",
-  apiKey: "AIzaSyCz9MBebPtDRBulAVMVUyIug4WkuOTW__Q",
-  authDomain: "excel-workflow-automator.firebaseapp.com",
-  messagingSenderId: "1077410102272",
+  apiKey: "AIzaSyCVdXuRyIWyFhMCzW1gNTVSLTUKWPUbONQ",
+  authDomain: "notas-validas.firebaseapp.com",
+  projectId: "notas-validas",
+  storageBucket: "notas-validas.firebasestorage.app",
+  messagingSenderId: "1062251427316",
+  appId: "1:1062251427316:web:fc7552f815d2fb2e7bf5a1",
+  measurementId: "G-NKCFQMHHLR"
 };
 
 // Initialize Firebase
