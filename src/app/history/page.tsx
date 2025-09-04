@@ -7,7 +7,7 @@ import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Sheet, History, Search, ArrowLeft, CheckCircle, XCircle, HelpCircle } from "lucide-react";
+import { Loader2, Sheet, History, Search, ArrowLeft } from "lucide-react";
 import Link from 'next/link';
 import {
   AlertDialog,
@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Input } from "@/components/ui/input";
 
 
 type Verification = {
@@ -30,17 +29,12 @@ type Verification = {
   competence: string;
   verifiedAt: Timestamp;
   validKeys: string[];
-  keysNotFoundInSped?: string[];
 };
-
-type KeyStatus = 'found' | 'not_found' | 'not_in_list' | 'idle';
 
 export default function HistoryPage() {
     const [verifications, setVerifications] = useState<Verification[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedVerification, setSelectedVerification] = useState<Verification | null>(null);
-    const [searchKey, setSearchKey] = useState("");
-    const [keyStatus, setKeyStatus] = useState<KeyStatus>('idle');
 
     useEffect(() => {
         const fetchVerifications = async () => {
@@ -61,29 +55,9 @@ export default function HistoryPage() {
 
         fetchVerifications();
     }, []);
-    
-    useEffect(() => {
-        if (!selectedVerification || searchKey.length !== 44) {
-            setKeyStatus('idle');
-            return;
-        }
-
-        const trimmedKey = searchKey.trim();
-        
-        if (selectedVerification.validKeys.includes(trimmedKey)) {
-            setKeyStatus('found');
-        } else if (selectedVerification.keysNotFoundInSped?.includes(trimmedKey)) {
-            setKeyStatus('not_found');
-        } else {
-            setKeyStatus('not_in_list');
-        }
-
-    }, [searchKey, selectedVerification]);
 
     const handleCloseModal = () => {
         setSelectedVerification(null);
-        setSearchKey("");
-        setKeyStatus("idle");
     }
 
     const formatDate = (timestamp: Timestamp) => {
@@ -102,42 +76,6 @@ export default function HistoryPage() {
         if (digitsOnly.length !== 14) return cnpj;
         return digitsOnly.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
     };
-
-    const KeyStatusIndicator = () => {
-        if (keyStatus === 'idle' || searchKey.length !== 44) {
-            return (
-                 <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-                    <HelpCircle className="h-4 w-4" />
-                    <span>Digite uma chave de 44 dígitos para verificar.</span>
-                </div>
-            );
-        }
-        if (keyStatus === 'found') {
-            return (
-                <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-green-600">
-                    <CheckCircle className="h-5 w-5" />
-                    <span>Chave Válida e ENCONTRADA no arquivo SPED.</span>
-                </div>
-            );
-        }
-        if (keyStatus === 'not_found') {
-            return (
-                 <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-red-600">
-                    <XCircle className="h-5 w-5" />
-                    <span>Chave Válida, mas NÃO ENCONTRADA no arquivo SPED.</span>
-                </div>
-            );
-        }
-         if (keyStatus === 'not_in_list') {
-            return (
-                 <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-amber-600">
-                    <HelpCircle className="h-5 w-5" />
-                    <span>Chave não pertence a esta competência.</span>
-                </div>
-            );
-        }
-        return null;
-    }
 
 
     return (
@@ -239,18 +177,6 @@ export default function HistoryPage() {
                         </AlertDialogHeader>
                         
                         <div className="space-y-4">
-                            <div>
-                                <label htmlFor="key-search" className="text-sm font-medium">Verificar Chave de Acesso no SPED</label>
-                                <Input 
-                                    id="key-search"
-                                    placeholder="Cole a chave de acesso aqui..."
-                                    value={searchKey}
-                                    onChange={(e) => setSearchKey(e.target.value)}
-                                    className="mt-1"
-                                />
-                               <KeyStatusIndicator />
-                            </div>
-
                             <p className="text-sm font-medium">Lista de Chaves Válidas da Planilha</p>
                             <ScrollArea className="h-80 rounded-md border p-4">
                                 <ul className="space-y-1 font-mono text-sm">
