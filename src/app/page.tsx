@@ -16,6 +16,15 @@ import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
+import { formatCnpj } from "@/lib/utils";
+
+
+type SpedInfo = {
+    companyName: string;
+    cnpj: string;
+    competence: string;
+}
+
 
 const requiredFiles = [
     "NF-Stock NFE",
@@ -45,6 +54,7 @@ export default function Home() {
     const { toast } = useToast();
     const router = useRouter();
     const [isNavigating, startTransition] = useTransition();
+    const [spedInfo, setSpedInfo] = useState<SpedInfo | null>(null);
 
     useEffect(() => {
         // Restore state from sessionStorage on component mount
@@ -52,6 +62,11 @@ export default function Home() {
             const storedResults = sessionStorage.getItem('processedData');
             if (storedResults) {
                 setResults(JSON.parse(storedResults));
+            }
+            
+            const storedSpedInfo = sessionStorage.getItem('spedInfo');
+            if (storedSpedInfo) {
+                setSpedInfo(JSON.parse(storedSpedInfo));
             }
             
             // Files are now managed in the global `fileCache`
@@ -149,8 +164,10 @@ export default function Home() {
                  sessionStorage.removeItem('keyCheckResults');
             }
             if (resultData.spedInfo) {
+                setSpedInfo(resultData.spedInfo as SpedInfo);
                 sessionStorage.setItem('spedInfo', JSON.stringify(resultData.spedInfo));
             } else {
+                setSpedInfo(null);
                 sessionStorage.removeItem('spedInfo');
             }
 
@@ -177,6 +194,7 @@ export default function Home() {
         setFiles({});
         setResults(null);
         setError(null);
+        setSpedInfo(null);
         
         sessionStorage.removeItem('processedData');
         sessionStorage.removeItem('keyCheckResults');
@@ -269,7 +287,13 @@ export default function Home() {
                     <div className="flex items-center gap-2">
                          <a href="/" className="flex items-center gap-2">
                             <Sheet className="h-6 w-6 text-primary" />
-                            <h1 className="text-xl font-bold font-headline">Excel Workflow Automator</h1>
+                            {spedInfo ? (
+                                <h1 className="text-sm font-bold md:text-xl font-headline">
+                                    {spedInfo.companyName} - {formatCnpj(spedInfo.cnpj)}
+                                </h1>
+                            ) : (
+                                <h1 className="text-xl font-bold font-headline">Excel Workflow Automator</h1>
+                            )}
                         </a>
                     </div>
                      <nav className="flex items-center gap-4">
@@ -385,3 +409,4 @@ export default function Home() {
         </div>
     );
 }
+    

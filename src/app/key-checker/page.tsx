@@ -10,6 +10,7 @@ import { KeyRound, FileText, Loader2, Sheet } from "lucide-react";
 import { KeyResultsDisplay } from "@/components/app/key-results-display";
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { formatCnpj } from "@/lib/utils";
 
 export type KeyCheckResult = {
     keysNotFoundInTxt: string[];
@@ -18,9 +19,16 @@ export type KeyCheckResult = {
     duplicateKeysInTxt: string[];
 };
 
+type SpedInfo = {
+    companyName: string;
+    cnpj: string;
+    competence: string;
+}
+
+
 export default function KeyCheckerPage() {
     const [results, setResults] = useState<KeyCheckResult | null>(null);
-    const [spedInfo, setSpedInfo] = useState<{ cnpj: string, competence: string } | null>(null);
+    const [spedInfo, setSpedInfo] = useState<SpedInfo | null>(null);
     const [loading, setLoading] = useState(true);
     const { toast } = useToast();
     const router = useRouter();
@@ -69,10 +77,16 @@ export default function KeyCheckerPage() {
         <div className="min-h-screen bg-background text-foreground">
              <header className="sticky top-0 z-10 w-full border-b bg-background/80 backdrop-blur-sm">
                 <div className="container mx-auto flex h-16 items-center justify-between px-4">
-                    <div className="flex items-center gap-2">
-                        <a href="/" className="flex items-center gap-2">
-                             <Sheet className="h-6 w-6 text-primary" />
-                             <h1 className="text-xl font-bold font-headline">Excel Workflow Automator</h1>
+                     <div className="flex items-center gap-2">
+                         <a href="/" className="flex items-center gap-2">
+                            <Sheet className="h-6 w-6 text-primary" />
+                             {spedInfo ? (
+                                <h1 className="text-sm font-bold md:text-xl font-headline">
+                                    {spedInfo.companyName} - {formatCnpj(spedInfo.cnpj)}
+                                </h1>
+                            ) : (
+                                <h1 className="text-xl font-bold font-headline">Excel Workflow Automator</h1>
+                            )}
                         </a>
                     </div>
                      <nav className="flex items-center gap-4">
@@ -129,3 +143,4 @@ export default function KeyCheckerPage() {
         </div>
     );
 }
+    

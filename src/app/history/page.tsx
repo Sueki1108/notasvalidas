@@ -22,6 +22,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { formatCnpj } from "@/lib/utils";
 
 type VerificationKey = {
   key: string;
@@ -76,14 +77,6 @@ export default function HistoryPage() {
         if (!timestamp) return '';
         return timestamp.toDate().toLocaleTimeString('pt-BR');
     }
-
-    const formatCnpj = (cnpj: string) => {
-        if (!cnpj) return '';
-        const digitsOnly = cnpj.replace(/\D/g, '');
-        if (digitsOnly.length !== 14) return cnpj;
-        return digitsOnly.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
-    };
-
 
     return (
         <div className="min-h-screen bg-background text-foreground">
@@ -244,3 +237,4 @@ export default function HistoryPage() {
         </div>
     );
 }
+    
