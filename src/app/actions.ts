@@ -4,7 +4,8 @@
 import * as XLSX from 'xlsx';
 import { processDataFrames } from '@/lib/excel-processor';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, serverTimestamp, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { XMLParser } from 'fast-xml-parser';
 
 // Type for the file data structure expected by the processor
 type DataFrames = { [key: string]: any[] };
@@ -38,10 +39,7 @@ const parseSpedInfo = (spedLine: string): SpedInfo | null => {
         return null;
     }
     
-    // Indices based on the provided pattern:
-    // |0000|019|0|01082025|31082025|PNEUZAO COMERCIO LTDA|44591157000457||SP|...
-    //   0    1  2    3        4             5                  6         7  8
-    const startDate = parts[4]; // Using start date for competence
+    const startDate = parts[4]; 
     const companyName = parts[6];
     const cnpj = parts[7];
 
@@ -56,35 +54,120 @@ const parseSpedInfo = (spedLine: string): SpedInfo | null => {
     return { cnpj, companyName, competence };
 };
 
+const xmlParser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: "@_",
+    textNodeName: "#text",
+    parseAttributeValue: true,
+    allowBooleanAttributes: true
+});
+
 
 export async function processUploadedFiles(formData: FormData) {
   try {
     const dataFrames: DataFrames = {};
-    let allSpedKeys: string[] = [];
+    const xmlsContent: { name: string, content: string }[] = [];
     let spedInfo: SpedInfo | null = null;
     let spedFileContent = '';
 
     const fileEntries = formData.getAll('files') as File[];
 
     for (const file of fileEntries) {
-        const fieldName = file.name; // Name assigned on client
-        
-        if (fieldName === 'SPED TXT') {
-            spedFileContent = await file.text();
-        } else {
-             if (!dataFrames[fieldName]) {
-                dataFrames[fieldName] = [];
+        const fileContent = await file.text();
+        const fileName = file.name;
+
+        if (file.type === 'text/xml' || fileName.endsWith('.xml')) {
+            xmlsContent.push({ name: fileName, content: fileContent });
+        } else if (fileName === 'SPED TXT') {
+            spedFileContent = fileContent;
+        } else { // Assumes it's an excel file for exceptions
+            if (!dataFrames[fileName]) {
+                dataFrames[fileName] = [];
             }
             const buffer = await file.arrayBuffer();
             const workbook = XLSX.read(buffer, { type: 'buffer' });
             for (const sheetName of workbook.SheetNames) {
               const worksheet = workbook.Sheets[sheetName];
               const jsonData = XLSX.utils.sheet_to_json(worksheet);
-              dataFrames[fieldName].push(...jsonData);
+              dataFrames[fileName].push(...jsonData);
             }
         }
     }
+    
+    // Process XMLs
+    const nfeData: any[] = [];
+    const nfeItensData: any[] = [];
+    const cteData: any[] = [];
+    const emitidasData: any[] = [];
+    const emitidasItensData: any[] = [];
+    
+    for (const xml of xmlsContent) {
+        const jsonObj = xmlParser.parse(xml.content);
+        
+        if (jsonObj.nfeProc) { // NFe
+            const nfe = jsonObj.nfeProc.NFe.infNFe;
+            const prot = jsonObj.nfeProc.protNFe.infProt;
+            const chave = `NFe${prot.chNFe}`;
 
+            const isEmitida = nfe.ide.tpNF === 1; // 1 = Saída
+
+            const nota = {
+                'Chave de acesso': chave,
+                'Número': nfe.ide.nNF,
+                'Data de Emissão': nfe.ide.dhEmi,
+                'Valor': nfe.total.ICMSTot.vNF,
+                'Status': prot.cStat === 100 ? 'Autorizadas' : 'Outro Status',
+                'Emitente CPF/CNPJ': nfe.emit.CNPJ,
+                'Emitente': nfe.emit.xNome,
+                'Destinatário CPF/CNPJ': nfe.dest.CNPJ,
+                'Destinatário': nfe.dest.xNome
+            };
+            
+            const itens = Array.isArray(nfe.det) ? nfe.det : [nfe.det];
+            const notaItens = itens.map((item: any) => ({
+                'Chave de acesso': chave,
+                'Número': nfe.ide.nNF,
+                'CPF/CNPJ': isEmitida ? nfe.dest.CNPJ : nfe.emit.CNPJ,
+                'CFOP': item.prod.CFOP,
+                'Código': item.prod.cProd,
+                'Descrição': item.prod.xProd,
+                'NCM': item.prod.NCM,
+                'Quantidade': item.prod.qCom,
+                'Valor Unitário': item.prod.vUnCom,
+                'Valor Total': item.prod.vProd,
+            }));
+
+            if (isEmitida) {
+                emitidasData.push(nota);
+                emitidasItensData.push(...notaItens);
+            } else {
+                nfeData.push(nota);
+                nfeItensData.push(...notaItens);
+            }
+        } else if (jsonObj.cteProc) { // CTe
+            const cte = jsonObj.cteProc.CTe.infCte;
+            const prot = jsonObj.cteProc.protCTe.infProt;
+             const chave = `CTe${prot.chCTe}`;
+
+            cteData.push({
+                'Chave de acesso': chave,
+                'Número': cte.ide.nCT,
+                'Data de Emissão': cte.ide.dhEmi,
+                'Valor da Prestação': cte.vPrest.vTPrest,
+                'Status': prot.cStat === 100 ? 'Autorizadas' : 'Outro Status',
+                'Tomador CPF/CNPJ': cte.toma.CNPJ,
+                'Tomador': cte.toma.xNome,
+            });
+        }
+    }
+    
+    dataFrames['NF-Stock NFE'] = nfeData;
+    dataFrames['NF-Stock Itens'] = nfeItensData;
+    dataFrames['NF-Stock CTE'] = cteData;
+    dataFrames['NF-Stock Emitidas'] = emitidasData;
+    dataFrames['NF-Stock Emitidas Itens'] = emitidasItensData;
+
+    let allSpedKeys: string[] = [];
     if (spedFileContent) {
         const lines = spedFileContent.split('\n');
         const keyPattern = /\b\d{44}\b/g;
@@ -124,47 +207,33 @@ export async function processUploadedFiles(formData: FormData) {
         };
     }
     
-    if (spedInfo && spedInfo.cnpj && keyCheckResults) {
-      const { keysNotFoundInTxt, keysInTxtNotInSheet } = keyCheckResults;
-      
-      // Keys from spreadsheet that are valid but not in SPED
-      const sheetKeys = keysNotFoundInTxt.map(key => ({
-        key: key,
-        foundInSped: false,
-        origin: 'planilha',
-        comment: ''
-      }));
+    if (spedInfo && spedInfo.cnpj) {
+        const allProcessedKeys = processedData['Chaves Válidas']?.map(row => row['Chave de acesso']) || [];
+        const keysInSpedButNotSheet = new Set((keyCheckResults as any)?.keysInTxtNotInSheet || []);
+        
+        const keysFromSheet = allProcessedKeys.map(key => ({
+            key: key,
+            foundInSped: !keysInSpedButNotSheet.has(key),
+            origin: 'planilha',
+            comment: ''
+        }));
+        
+        const keysOnlyInSped = Array.from(keysInSpedButNotSheet).map(key => ({
+            key: key,
+            foundInSped: true,
+            origin: 'sped',
+            comment: ''
+        }));
 
-      // Keys from SPED not in spreadsheet
-       const spedKeys = keysInTxtNotInSheet.map(key => ({
-        key: key,
-        foundInSheet: false,
-        origin: 'sped',
-        comment: ''
-      }));
+        const verificationKeys = [...keysFromSheet, ...keysOnlyInSped];
 
-      // Combine all keys that will be part of the history
-      const allSheetKeys = new Set(processedData['Chaves Válidas']?.map(row => row['Chave de acesso']) || []);
-      const keysFoundInBoth = [...allSheetKeys].filter(key => !keysNotFoundInTxt.includes(key));
-      
-      const foundKeys = keysFoundInBoth.map(key => ({
-          key: key,
-          foundInSped: true,
-          foundInSheet: true,
-          origin: 'ambos',
-          comment: ''
-      }));
+        const verificationData = {
+            ...spedInfo,
+            keys: verificationKeys,
+            verifiedAt: serverTimestamp(),
+        };
 
-      const verificationKeys = [...foundKeys, ...sheetKeys, ...spedKeys];
-
-
-      const verificationData = {
-        ...spedInfo,
-        keys: verificationKeys,
-        verifiedAt: serverTimestamp(),
-      };
-
-      await setDoc(doc(db, "verifications", spedInfo.cnpj), verificationData, { merge: true });
+        await setDoc(doc(db, "verifications", spedInfo.cnpj), verificationData, { merge: true });
     }
 
     return { data: processedData, keyCheckResults, spedInfo };
@@ -214,7 +283,6 @@ export async function mergeExcelFiles(formData: FormData) {
         const fileEntries = formData.getAll('files') as File[];
         const mergedWorkbook = XLSX.utils.book_new();
         
-        // Group data by sheet name
         const sheetsData: { [sheetName: string]: any[] } = {};
 
         for (const file of fileEntries) {
@@ -235,7 +303,6 @@ export async function mergeExcelFiles(formData: FormData) {
             return { error: "Nenhuma planilha encontrada nos arquivos carregados." };
         }
 
-        // Create a new sheet for each unique sheet name with merged data
         for (const sheetName in sheetsData) {
             if (sheetsData[sheetName].length > 0) {
                 const worksheet = XLSX.utils.json_to_sheet(sheetsData[sheetName]);

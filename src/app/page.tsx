@@ -1,11 +1,11 @@
 // src/app/page.tsx
 "use client";
 
-import { useState, useTransition, useEffect, useRef } from "react";
+import { useState, useTransition, useEffect } from "react";
 import type { ChangeEvent } from "react";
 import { useRouter } from 'next/navigation';
 import * as XLSX from "xlsx";
-import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, ExternalLink, Trash2, History, Group } from "lucide-react";
+import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,21 +25,15 @@ type SpedInfo = {
     competence: string;
 }
 
-
 const requiredFiles = [
-    "NF-Stock NFE",
-    "NF-Stock CTE",
-    "NF-Stock Itens",
-    "NF-Stock Emitidas",
-    "NF-Stock Emitidas Itens",
+    "XMLs de NFE e CTE",
+    "SPED TXT",
     "NF-Stock NFE Operação Não Realizada",
     "NF-Stock NFE Operação Desconhecida",
     "NF-Stock CTE Desacordo de Serviço",
-    "SPED TXT"
 ];
 
 // This is a global in-memory cache for files.
-// It's a workaround for the fact that we can't store File objects in sessionStorage directly.
 if (typeof window !== 'undefined' && !(window as any).__file_cache) {
     (window as any).__file_cache = {};
 }
@@ -69,7 +63,6 @@ export default function Home() {
                 setSpedInfo(JSON.parse(storedSpedInfo));
             }
             
-            // Files are now managed in the global `fileCache`
             setFiles(fileCache);
 
         } catch (e) {
@@ -318,7 +311,7 @@ export default function Home() {
                                 <UploadCloud className="h-8 w-8 text-primary" />
                                 <div>
                                     <CardTitle className="font-headline text-2xl">1. Carregar Arquivos</CardTitle>
-                                    <CardDescription>Faça o upload das planilhas e do arquivo SPED TXT para o processamento.</CardDescription>
+                                    <CardDescription>Faça o upload dos arquivos XML, do SPED TXT e das planilhas de exceção.</CardDescription>
                                 </div>
                             </div>
                         </CardHeader>
@@ -328,7 +321,6 @@ export default function Home() {
                                 files={files}
                                 onFileChange={handleFileChange}
                                 onClearFile={handleClearFile}
-                                isOptional={true}
                             />
                         </CardContent>
                     </Card>
@@ -412,4 +404,3 @@ export default function Home() {
         </div>
     );
 }
-    

@@ -1,7 +1,7 @@
 "use client"
 
 import type { ChangeEvent } from "react";
-import { Upload, File, X, FileCheck } from "lucide-react";
+import { Upload, FileCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export type FileList = Record<string, File[] | null>;
@@ -11,22 +11,27 @@ interface FileUploadFormProps {
     files: FileList;
     onFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearFile: (fileName: string) => void;
-    isOptional?: boolean;
 }
 
-export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile, isOptional=false }: FileUploadFormProps) {
+export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile }: FileUploadFormProps) {
     const getFileAcceptType = (fileName: string) => {
         if (fileName.toLowerCase().includes('txt')) {
             return '.txt';
+        }
+        if (fileName.toLowerCase().includes('xml')) {
+            return '.xml';
         }
         return ".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel";
     }
 
     const getDisplayName = (fileName: string) => {
-        if (fileName.toLowerCase().includes('txt')) {
-            return fileName;
-        }
+        if (fileName.toLowerCase().includes('xml')) return "XMLs de NFE e CTE";
+        if (fileName.toLowerCase().includes('txt')) return fileName;
         return `${fileName}.xlsx`;
+    }
+    
+    const isMultiple = (fileName: string) => {
+         return !fileName.toLowerCase().includes('sped txt');
     }
 
     return (
@@ -37,12 +42,13 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
                         <>
                             <div className="absolute right-1 top-1">
                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onClearFile(name)}>
-                                    <X className="h-4 w-4" />
+                                    <span className="sr-only">Limpar</span>
+                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                                 </Button>
                             </div>
                             <div className="flex flex-col items-center gap-2 text-center">
                                 <FileCheck className="h-10 w-10 text-primary" />
-                                <p className="font-semibold">{files[name]?.[0]?.name || getDisplayName(name)}</p>
+                                <p className="font-semibold">{getDisplayName(name)}</p>
                                 <p className="text-xs text-muted-foreground">
                                     {files[name]?.length} arquivo(s) carregado(s)
                                 </p>
@@ -54,7 +60,7 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
                                 <Upload className="h-10 w-10 text-muted-foreground" />
                                 <p className="mt-2 font-semibold">{getDisplayName(name)}</p>
                                 <p className="text-sm text-muted-foreground">
-                                    Clique para carregar {isOptional && <span className="text-xs">(Opcional)</span>}
+                                    Clique para carregar
                                 </p>
                             </label>
                             <input
@@ -64,7 +70,7 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
                                 accept={getFileAcceptType(name)}
                                 className="sr-only"
                                 onChange={onFileChange}
-                                multiple={true}
+                                multiple={isMultiple(name)}
                             />
                         </>
                     )}
