@@ -1,6 +1,7 @@
 // src/app/merger/page.tsx
 "use client";
 
+import * as React from "react";
 import { useState, type ChangeEvent } from "react";
 import Link from 'next/link';
 import { Sheet, UploadCloud, Group, Download, Trash2, File, Loader2 } from "lucide-react";
