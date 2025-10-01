@@ -214,44 +214,33 @@ export async function mergeExcelFiles(formData: FormData) {
         const fileEntries = formData.getAll('files') as File[];
         const mergedWorkbook = XLSX.utils.book_new();
         
-        const allSheets: { file: string, sheetName: string, data: any[] }[] = [];
-        const sheetNameCounts: { [key: string]: number } = {};
+        // Group data by sheet name
+        const sheetsData: { [sheetName: string]: any[] } = {};
 
         for (const file of fileEntries) {
             const buffer = await file.arrayBuffer();
             const workbook = XLSX.read(buffer, { type: 'buffer' });
             
             for (const sheetName of workbook.SheetNames) {
+                if (!sheetsData[sheetName]) {
+                    sheetsData[sheetName] = [];
+                }
                 const worksheet = workbook.Sheets[sheetName];
                 const jsonData = XLSX.utils.sheet_to_json(worksheet);
-                allSheets.push({ file: file.name, sheetName, data: jsonData });
-                sheetNameCounts[sheetName] = (sheetNameCounts[sheetName] || 0) + 1;
+                sheetsData[sheetName].push(...jsonData);
             }
         }
         
-        if (allSheets.length === 0) {
+        if (Object.keys(sheetsData).length === 0) {
             return { error: "Nenhuma planilha encontrada nos arquivos carregados." };
         }
 
-        const consolidatedData: any[] = [];
-        const duplicateSheetNames = new Set(Object.keys(sheetNameCounts).filter(name => sheetNameCounts[name] > 1));
-
-        // Adicionar planilhas duplicadas como abas separadas
-        let sheetCount = 0;
-        for (const sheetInfo of allSheets) {
-            if (duplicateSheetNames.has(sheetInfo.sheetName)) {
-                 const newSheetName = `${sheetInfo.sheetName}_${sheetCount++}`;
-                 const worksheet = XLSX.utils.json_to_sheet(sheetInfo.data);
-                 XLSX.utils.book_append_sheet(mergedWorkbook, worksheet, newSheetName);
-            } else {
-                consolidatedData.push(...sheetInfo.data);
+        // Create a new sheet for each unique sheet name with merged data
+        for (const sheetName in sheetsData) {
+            if (sheetsData[sheetName].length > 0) {
+                const worksheet = XLSX.utils.json_to_sheet(sheetsData[sheetName]);
+                XLSX.utils.book_append_sheet(mergedWorkbook, worksheet, sheetName);
             }
-        }
-        
-        // Adicionar dados consolidados se houver
-        if (consolidatedData.length > 0) {
-            const consolidatedWorksheet = XLSX.utils.json_to_sheet(consolidatedData);
-            XLSX.utils.book_append_sheet(mergedWorkbook, consolidatedWorksheet, "Dados Consolidados");
         }
 
         if (mergedWorkbook.SheetNames.length === 0) {
