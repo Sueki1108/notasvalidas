@@ -5,7 +5,6 @@ import * as XLSX from 'xlsx';
 import { processDataFrames } from '@/lib/excel-processor';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { XMLParser } from 'fast-xml-parser';
 
 // Type for the file data structure expected by the processor
 type DataFrames = { [key: string]: any[] };
@@ -54,21 +53,99 @@ const parseSpedInfo = (spedLine: string): SpedInfo | null => {
     return { cnpj, companyName, competence };
 };
 
-const xmlParser = new XMLParser({
-    ignoreAttributes: false,
-    attributeNamePrefix: "@_",
-    textNodeName: "#text",
-    parseAttributeValue: true,
-    allowBooleanAttributes: true
-});
+const extractNfeDataFromXml = (xmlContent: string) => {
+    // This is a simplified parser for specific XML structures (NFE/CTE)
+    // It is not a general-purpose XML parser.
+    const getValue = (tag: string) => (xmlContent.split(`<${tag}>`)[1] || '').split(`</${tag}>`)[0];
+    const getNestedValue = (parentTag: string, childTag: string) => {
+        const parentContent = xmlContent.split(`<${parentTag}>`)[1] || '';
+        return (parentContent.split(`<${childTag}>`)[1] || '').split(`</${childTag}>`)[0];
+    };
+    
+    const chNFe = getValue('chNFe');
+    const chCTe = getValue('chCTe');
+
+    if (chNFe) { // It's an NFe
+        const nNF = getValue('nNF');
+        const dhEmi = getValue('dhEmi');
+        const vNF = getValue('vNF');
+        const cStat = getValue('cStat');
+        const emitCNPJ = getNestedValue('emit', 'CNPJ');
+        const emitXNome = getNestedValue('emit', 'xNome');
+        const destCNPJ = getNestedValue('dest', 'CNPJ');
+        const destXNome = getNestedValue('dest', 'xNome');
+        const tpNF = getValue('tpNF');
+
+        const nota = {
+            'Chave de acesso': `NFe${chNFe}`,
+            'Número': nNF,
+            'Data de Emissão': dhEmi,
+            'Valor': parseFloat(vNF),
+            'Status': parseInt(cStat) === 100 ? 'Autorizadas' : (parseInt(cStat) === 101 ? 'Canceladas' : 'Outro Status'),
+            'Emitente CPF/CNPJ': emitCNPJ,
+            'Emitente': emitXNome,
+            'Destinatário CPF/CNPJ': destCNPJ,
+            'Destinatário': destXNome
+        };
+        
+        const isEmitida = tpNF === '1';
+
+        const detSection = xmlContent.split('<det ');
+        const itens = detSection.slice(1).map(section => {
+            const prodSection = (section.split('<prod>')[1] || '').split('</prod>')[0];
+            const getProdValue = (tag: string) => (prodSection.split(`<${tag}>`)[1] || '').split(`</${tag}>`)[0];
+            return {
+                'Chave de acesso': `NFe${chNFe}`,
+                'Número': nNF,
+                'CPF/CNPJ': isEmitida ? destCNPJ : emitCNPJ,
+                'CFOP': getProdValue('CFOP'),
+                'Código': getProdValue('cProd'),
+                'Descrição': getProdValue('xProd'),
+                'NCM': getProdValue('NCM'),
+                'Quantidade': parseFloat(getProdValue('qCom')),
+                'Valor Unitário': parseFloat(getProdValue('vUnCom')),
+                'Valor Total': parseFloat(getProdValue('vProd')),
+            };
+        });
+        
+        return { nota, itens, isEmitida };
+
+    } else if (chCTe) { // It's a CTe
+        const nCT = getValue('nCT');
+        const dhEmi = getValue('dhEmi');
+        const vTPrest = getValue('vTPrest');
+        const cStat = getValue('cStat');
+        const tomaCNPJ = getNestedValue('toma', 'CNPJ');
+        const tomaXNome = getNestedValue('toma', 'xNome');
+        
+        const nota = {
+            'Chave de acesso': `CTe${chCTe}`,
+            'Número': nCT,
+            'Data de Emissão': dhEmi,
+            'Valor da Prestação': parseFloat(vTPrest),
+            'Status': parseInt(cStat) === 100 ? 'Autorizadas' : 'Outro Status',
+            'Tomador CPF/CNPJ': tomaCNPJ,
+            'Tomador': tomaXNome,
+        };
+        
+        return { nota, itens: [], isEmitida: false }; // CTe is always "entrada" in this context
+    }
+    
+    return null;
+}
 
 
 export async function processUploadedFiles(formData: FormData) {
   try {
     const dataFrames: DataFrames = {};
-    const xmlsContent: { name: string, content: string }[] = [];
     let spedInfo: SpedInfo | null = null;
     let spedFileContent = '';
+    
+    const nfeData: any[] = [];
+    const nfeItensData: any[] = [];
+    const cteData: any[] = [];
+    const emitidasData: any[] = [];
+    const emitidasItensData: any[] = [];
 
     const fileEntries = formData.getAll('files') as File[];
 
@@ -77,7 +154,20 @@ export async function processUploadedFiles(formData: FormData) {
         const fileName = file.name;
 
         if (file.type === 'text/xml' || fileName.endsWith('.xml')) {
-            xmlsContent.push({ name: fileName, content: fileContent });
+            const xmlData = extractNfeDataFromXml(fileContent);
+            if (xmlData) {
+                if (xmlData.nota['Chave de acesso'].startsWith('CTe')) {
+                    cteData.push(xmlData.nota);
+                } else {
+                    if (xmlData.isEmitida) {
+                        emitidasData.push(xmlData.nota);
+                        emitidasItensData.push(...xmlData.itens);
+                    } else {
+                        nfeData.push(xmlData.nota);
+                        nfeItensData.push(...xmlData.itens);
+                    }
+                }
+            }
         } else if (fileName === 'SPED TXT') {
             spedFileContent = fileContent;
         } else { // Assumes it's an excel file for exceptions
@@ -91,73 +181,6 @@ export async function processUploadedFiles(formData: FormData) {
               const jsonData = XLSX.utils.sheet_to_json(worksheet);
               dataFrames[fileName].push(...jsonData);
             }
-        }
-    }
-    
-    // Process XMLs
-    const nfeData: any[] = [];
-    const nfeItensData: any[] = [];
-    const cteData: any[] = [];
-    const emitidasData: any[] = [];
-    const emitidasItensData: any[] = [];
-    
-    for (const xml of xmlsContent) {
-        const jsonObj = xmlParser.parse(xml.content);
-        
-        if (jsonObj.nfeProc) { // NFe
-            const nfe = jsonObj.nfeProc.NFe.infNFe;
-            const prot = jsonObj.nfeProc.protNFe.infProt;
-            const chave = `NFe${prot.chNFe}`;
-
-            const isEmitida = nfe.ide.tpNF === 1; // 1 = Saída
-
-            const nota = {
-                'Chave de acesso': chave,
-                'Número': nfe.ide.nNF,
-                'Data de Emissão': nfe.ide.dhEmi,
-                'Valor': nfe.total.ICMSTot.vNF,
-                'Status': prot.cStat === 100 ? 'Autorizadas' : 'Outro Status',
-                'Emitente CPF/CNPJ': nfe.emit.CNPJ,
-                'Emitente': nfe.emit.xNome,
-                'Destinatário CPF/CNPJ': nfe.dest.CNPJ,
-                'Destinatário': nfe.dest.xNome
-            };
-            
-            const itens = Array.isArray(nfe.det) ? nfe.det : [nfe.det];
-            const notaItens = itens.map((item: any) => ({
-                'Chave de acesso': chave,
-                'Número': nfe.ide.nNF,
-                'CPF/CNPJ': isEmitida ? nfe.dest.CNPJ : nfe.emit.CNPJ,
-                'CFOP': item.prod.CFOP,
-                'Código': item.prod.cProd,
-                'Descrição': item.prod.xProd,
-                'NCM': item.prod.NCM,
-                'Quantidade': item.prod.qCom,
-                'Valor Unitário': item.prod.vUnCom,
-                'Valor Total': item.prod.vProd,
-            }));
-
-            if (isEmitida) {
-                emitidasData.push(nota);
-                emitidasItensData.push(...notaItens);
-            } else {
-                nfeData.push(nota);
-                nfeItensData.push(...notaItens);
-            }
-        } else if (jsonObj.cteProc) { // CTe
-            const cte = jsonObj.cteProc.CTe.infCte;
-            const prot = jsonObj.cteProc.protCTe.infProt;
-             const chave = `CTe${prot.chCTe}`;
-
-            cteData.push({
-                'Chave de acesso': chave,
-                'Número': cte.ide.nCT,
-                'Data de Emissão': cte.ide.dhEmi,
-                'Valor da Prestação': cte.vPrest.vTPrest,
-                'Status': prot.cStat === 100 ? 'Autorizadas' : 'Outro Status',
-                'Tomador CPF/CNPJ': cte.toma.CNPJ,
-                'Tomador': cte.toma.xNome,
-            });
         }
     }
     
