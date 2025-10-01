@@ -18,6 +18,10 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  experimental: {
+    // Permite que o Firebase Studio acesse o servidor de desenvolvimento
+    allowedDevOrigins: ['**.cloudworkstations.dev'],
+  },
 };
 
 export default nextConfig;
