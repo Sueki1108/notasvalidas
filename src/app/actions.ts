@@ -189,27 +189,53 @@ export async function mergeExcelFiles(formData: FormData) {
     try {
         const fileEntries = formData.getAll('files') as File[];
         const mergedWorkbook = XLSX.utils.book_new();
-        let sheetCount = 0;
+        
+        const allSheets: { file: string, sheetName: string, data: any[] }[] = [];
+        const sheetNameCounts: { [key: string]: number } = {};
 
         for (const file of fileEntries) {
             const buffer = await file.arrayBuffer();
             const workbook = XLSX.read(buffer, { type: 'buffer' });
             
             for (const sheetName of workbook.SheetNames) {
-                // To avoid sheet name conflicts, append a unique identifier
-                const newSheetName = `${sheetName}_${sheetCount++}`;
                 const worksheet = workbook.Sheets[sheetName];
-                XLSX.utils.book_append_sheet(mergedWorkbook, worksheet, newSheetName);
+                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                allSheets.push({ file: file.name, sheetName, data: jsonData });
+                sheetNameCounts[sheetName] = (sheetNameCounts[sheetName] || 0) + 1;
             }
         }
-
-        if (mergedWorkbook.SheetNames.length === 0) {
+        
+        if (allSheets.length === 0) {
             return { error: "Nenhuma planilha encontrada nos arquivos carregados." };
         }
 
+        const consolidatedData: any[] = [];
+        const duplicateSheetNames = new Set(Object.keys(sheetNameCounts).filter(name => sheetNameCounts[name] > 1));
+
+        // Adicionar planilhas duplicadas como abas separadas
+        let sheetCount = 0;
+        for (const sheetInfo of allSheets) {
+            if (duplicateSheetNames.has(sheetInfo.sheetName)) {
+                 const newSheetName = `${sheetInfo.sheetName}_${sheetCount++}`;
+                 const worksheet = XLSX.utils.json_to_sheet(sheetInfo.data);
+                 XLSX.utils.book_append_sheet(mergedWorkbook, worksheet, newSheetName);
+            } else {
+                consolidatedData.push(...sheetInfo.data);
+            }
+        }
+        
+        // Adicionar dados consolidados se houver
+        if (consolidatedData.length > 0) {
+            const consolidatedWorksheet = XLSX.utils.json_to_sheet(consolidatedData);
+            XLSX.utils.book_append_sheet(mergedWorkbook, consolidatedWorksheet, "Dados Consolidados");
+        }
+
+        if (mergedWorkbook.SheetNames.length === 0) {
+            return { error: "Nenhum dado válido encontrado para agrupar." };
+        }
+        
         const buffer = XLSX.write(mergedWorkbook, { bookType: 'xlsx', type: 'array' });
         
-        // Convert buffer to base64 to send it to the client
         const base64 = Buffer.from(buffer).toString('base64');
         
         return { base64Data: base64 };
