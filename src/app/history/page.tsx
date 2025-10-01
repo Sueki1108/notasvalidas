@@ -8,7 +8,7 @@ import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Sheet, History, Search, ArrowLeft, CheckCircle, XCircle, MessageSquare, Group } from "lucide-react";
+import { Loader2, Sheet, History, Search, ArrowLeft, CheckCircle, XCircle, MessageSquare, Group, HelpCircle, File as FileIcon } from "lucide-react";
 import Link from 'next/link';
 import {
   AlertDialog,
@@ -26,7 +26,9 @@ import { formatCnpj } from "@/lib/utils";
 
 type VerificationKey = {
   key: string;
-  foundInSped: boolean;
+  foundInSped?: boolean;
+  foundInSheet?: boolean;
+  origin: 'planilha' | 'sped' | 'ambos';
   comment?: string;
 };
 
@@ -77,6 +79,56 @@ export default function HistoryPage() {
         if (!timestamp) return '';
         return timestamp.toDate().toLocaleTimeString('pt-BR');
     }
+
+    const getStatusIcon = (item: VerificationKey) => {
+        if (item.origin === 'ambos') {
+            return (
+                 <Tooltip>
+                    <TooltipTrigger>
+                        <CheckCircle className="h-5 w-5 text-green-600" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Encontrada na Planilha e no SPED</p>
+                    </TooltipContent>
+                </Tooltip>
+            );
+        }
+        if (item.origin === 'planilha') {
+            return (
+                 <Tooltip>
+                    <TooltipTrigger>
+                        <XCircle className="h-5 w-5 text-red-600" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Encontrada na Planilha, mas não no SPED</p>
+                    </TooltipContent>
+                </Tooltip>
+            );
+        }
+        if (item.origin === 'sped') {
+             return (
+                 <Tooltip>
+                    <TooltipTrigger>
+                        <FileIcon className="h-5 w-5 text-blue-600" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Encontrada no SPED, mas não na Planilha</p>
+                    </TooltipContent>
+                </Tooltip>
+            );
+        }
+        return (
+             <Tooltip>
+                <TooltipTrigger>
+                    <HelpCircle className="h-5 w-5 text-gray-500" />
+                </TooltipTrigger>
+                <TooltipContent>
+                    <p>Status desconhecido</p>
+                </TooltipContent>
+            </Tooltip>
+        );
+    }
+
 
     return (
         <div className="min-h-screen bg-background text-foreground">
@@ -180,32 +232,14 @@ export default function HistoryPage() {
                         </AlertDialogHeader>
                         
                          <div className="space-y-4">
-                            <p className="text-sm font-medium">Lista de Chaves Válidas da Planilha</p>
+                            <p className="text-sm font-medium">Lista de Chaves</p>
                             <ScrollArea className="h-96 rounded-md border p-4">
                                 <ul className="space-y-2">
                                      <TooltipProvider>
                                     {selectedVerification.keys && selectedVerification.keys.map((item, index) => (
                                         <li key={index} className="flex items-center justify-between gap-4 rounded-md bg-secondary/50 p-2 font-mono text-sm">
                                             <div className="flex items-center gap-2">
-                                                {item.foundInSped ? (
-                                                    <Tooltip>
-                                                        <TooltipTrigger>
-                                                            <CheckCircle className="h-5 w-5 text-green-600" />
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
-                                                            <p>Encontrada no SPED</p>
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                ) : (
-                                                     <Tooltip>
-                                                        <TooltipTrigger>
-                                                            <XCircle className="h-5 w-5 text-red-600" />
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
-                                                            <p>Não encontrada no SPED</p>
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                )}
+                                                {getStatusIcon(item)}
                                                 <span>{item.key}</span>
                                             </div>
                                             {item.comment && (

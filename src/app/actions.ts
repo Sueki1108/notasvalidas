@@ -124,15 +124,39 @@ export async function processUploadedFiles(formData: FormData) {
         };
     }
     
-    if (spedInfo && spedInfo.cnpj) {
-      const allProcessedKeys = processedData['Chaves Válidas']?.map(row => row['Chave de acesso']) || [];
-      const keysNotFoundInSpedSet = new Set((keyCheckResults as any)?.keysNotFoundInTxt || []);
-
-      const verificationKeys = allProcessedKeys.map(key => ({
+    if (spedInfo && spedInfo.cnpj && keyCheckResults) {
+      const { keysNotFoundInTxt, keysInTxtNotInSheet } = keyCheckResults;
+      
+      // Keys from spreadsheet that are valid but not in SPED
+      const sheetKeys = keysNotFoundInTxt.map(key => ({
         key: key,
-        foundInSped: !keysNotFoundInSpedSet.has(key),
+        foundInSped: false,
+        origin: 'planilha',
         comment: ''
       }));
+
+      // Keys from SPED not in spreadsheet
+       const spedKeys = keysInTxtNotInSheet.map(key => ({
+        key: key,
+        foundInSheet: false,
+        origin: 'sped',
+        comment: ''
+      }));
+
+      // Combine all keys that will be part of the history
+      const allSheetKeys = new Set(processedData['Chaves Válidas']?.map(row => row['Chave de acesso']) || []);
+      const keysFoundInBoth = [...allSheetKeys].filter(key => !keysNotFoundInTxt.includes(key));
+      
+      const foundKeys = keysFoundInBoth.map(key => ({
+          key: key,
+          foundInSped: true,
+          foundInSheet: true,
+          origin: 'ambos',
+          comment: ''
+      }));
+
+      const verificationKeys = [...foundKeys, ...sheetKeys, ...spedKeys];
+
 
       const verificationData = {
         ...spedInfo,
