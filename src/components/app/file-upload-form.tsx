@@ -25,7 +25,7 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
     }
 
     const getDisplayName = (fileName: string) => {
-        if (fileName.toLowerCase().includes('xml')) return "XMLs de NFE e CTE";
+        if (fileName.toLowerCase().includes('xml')) return fileName;
         if (fileName.toLowerCase().includes('txt')) return fileName;
         return `${fileName}.xlsx`;
     }

@@ -54,8 +54,6 @@ const parseSpedInfo = (spedLine: string): SpedInfo | null => {
 };
 
 const extractNfeDataFromXml = (xmlContent: string) => {
-    // This is a simplified parser for specific XML structures (NFE/CTE)
-    // It is not a general-purpose XML parser.
     const getValue = (tag: string) => (xmlContent.split(`<${tag}>`)[1] || '').split(`</${tag}>`)[0];
     const getNestedValue = (parentTag: string, childTag: string) => {
         const parentContent = xmlContent.split(`<${parentTag}>`)[1] || '';
@@ -63,75 +61,78 @@ const extractNfeDataFromXml = (xmlContent: string) => {
     };
     
     const chNFe = getValue('chNFe');
-    const chCTe = getValue('chCTe');
+    
+    const nNF = getValue('nNF');
+    const dhEmi = getValue('dhEmi');
+    const vNF = getValue('vNF');
+    const cStat = getValue('cStat');
+    const emitCNPJ = getNestedValue('emit', 'CNPJ');
+    const emitXNome = getNestedValue('emit', 'xNome');
+    const destCNPJ = getNestedValue('dest', 'CNPJ');
+    const destXNome = getNestedValue('dest', 'xNome');
+    const tpNF = getValue('tpNF'); // 0 for entry, 1 for exit
 
-    if (chNFe) { // It's an NFe
-        const nNF = getValue('nNF');
-        const dhEmi = getValue('dhEmi');
-        const vNF = getValue('vNF');
-        const cStat = getValue('cStat');
-        const emitCNPJ = getNestedValue('emit', 'CNPJ');
-        const emitXNome = getNestedValue('emit', 'xNome');
-        const destCNPJ = getNestedValue('dest', 'CNPJ');
-        const destXNome = getNestedValue('dest', 'xNome');
-        const tpNF = getValue('tpNF');
+    const nota = {
+        'Chave de acesso': `NFe${chNFe}`,
+        'Número': nNF,
+        'Data de Emissão': dhEmi,
+        'Valor': parseFloat(vNF),
+        'Status': parseInt(cStat) === 100 ? 'Autorizadas' : (parseInt(cStat) === 101 ? 'Canceladas' : 'Outro Status'),
+        'Emitente CPF/CNPJ': emitCNPJ,
+        'Emitente': emitXNome,
+        'Destinatário CPF/CNPJ': destCNPJ,
+        'Destinatário': destXNome
+    };
+    
+    const isSaida = tpNF === '1';
 
-        const nota = {
+    const detSection = xmlContent.split('<det ');
+    const itens = detSection.slice(1).map(section => {
+        const prodSection = (section.split('<prod>')[1] || '').split('</prod>')[0];
+        const getProdValue = (tag: string) => (prodSection.split(`<${tag}>`)[1] || '').split(`</${tag}>`)[0];
+        return {
             'Chave de acesso': `NFe${chNFe}`,
             'Número': nNF,
-            'Data de Emissão': dhEmi,
-            'Valor': parseFloat(vNF),
-            'Status': parseInt(cStat) === 100 ? 'Autorizadas' : (parseInt(cStat) === 101 ? 'Canceladas' : 'Outro Status'),
-            'Emitente CPF/CNPJ': emitCNPJ,
-            'Emitente': emitXNome,
-            'Destinatário CPF/CNPJ': destCNPJ,
-            'Destinatário': destXNome
+            'CPF/CNPJ': isSaida ? destCNPJ : emitCNPJ,
+            'CFOP': getProdValue('CFOP'),
+            'Código': getProdValue('cProd'),
+            'Descrição': getProdValue('xProd'),
+            'NCM': getProdValue('NCM'),
+            'Quantidade': parseFloat(getProdValue('qCom')),
+            'Valor Unitário': parseFloat(getProdValue('vUnCom')),
+            'Valor Total': parseFloat(getProdValue('vProd')),
         };
-        
-        const isEmitida = tpNF === '1';
-
-        const detSection = xmlContent.split('<det ');
-        const itens = detSection.slice(1).map(section => {
-            const prodSection = (section.split('<prod>')[1] || '').split('</prod>')[0];
-            const getProdValue = (tag: string) => (prodSection.split(`<${tag}>`)[1] || '').split(`</${tag}>`)[0];
-            return {
-                'Chave de acesso': `NFe${chNFe}`,
-                'Número': nNF,
-                'CPF/CNPJ': isEmitida ? destCNPJ : emitCNPJ,
-                'CFOP': getProdValue('CFOP'),
-                'Código': getProdValue('cProd'),
-                'Descrição': getProdValue('xProd'),
-                'NCM': getProdValue('NCM'),
-                'Quantidade': parseFloat(getProdValue('qCom')),
-                'Valor Unitário': parseFloat(getProdValue('vUnCom')),
-                'Valor Total': parseFloat(getProdValue('vProd')),
-            };
-        });
-        
-        return { nota, itens, isEmitida };
-
-    } else if (chCTe) { // It's a CTe
-        const nCT = getValue('nCT');
-        const dhEmi = getValue('dhEmi');
-        const vTPrest = getValue('vTPrest');
-        const cStat = getValue('cStat');
-        const tomaCNPJ = getNestedValue('toma', 'CNPJ');
-        const tomaXNome = getNestedValue('toma', 'xNome');
-        
-        const nota = {
-            'Chave de acesso': `CTe${chCTe}`,
-            'Número': nCT,
-            'Data de Emissão': dhEmi,
-            'Valor da Prestação': parseFloat(vTPrest),
-            'Status': parseInt(cStat) === 100 ? 'Autorizadas' : 'Outro Status',
-            'Tomador CPF/CNPJ': tomaCNPJ,
-            'Tomador': tomaXNome,
-        };
-        
-        return { nota, itens: [], isEmitida: false }; // CTe is always "entrada" in this context
-    }
+    });
     
-    return null;
+    return { nota, itens, isSaida };
+}
+
+const extractCteDataFromXml = (xmlContent: string) => {
+    const getValue = (tag: string) => (xmlContent.split(`<${tag}>`)[1] || '').split(`</${tag}>`)[0];
+    const getNestedValue = (parentTag: string, childTag: string) => {
+        const parentContent = xmlContent.split(`<${parentTag}>`)[1] || '';
+        return (parentContent.split(`<${childTag}>`)[1] || '').split(`</${childTag}>`)[0];
+    };
+    
+    const chCTe = getValue('chCTe');
+    const nCT = getValue('nCT');
+    const dhEmi = getValue('dhEmi');
+    const vTPrest = getValue('vTPrest');
+    const cStat = getValue('cStat');
+    const tomaCNPJ = getNestedValue('toma', 'CNPJ') || getNestedValue('toma', 'CPF');
+    const tomaXNome = getNestedValue('toma', 'xNome');
+    
+    const nota = {
+        'Chave de acesso': `CTe${chCTe}`,
+        'Número': nCT,
+        'Data de Emissão': dhEmi,
+        'Valor da Prestação': parseFloat(vTPrest),
+        'Status': parseInt(cStat) === 100 ? 'Autorizadas' : 'Outro Status',
+        'Tomador CPF/CNPJ': tomaCNPJ,
+        'Tomador': tomaXNome,
+    };
+    
+    return { nota, isSaida: false }; // CTe is always "entrada" in this context
 }
 
 
@@ -141,54 +142,53 @@ export async function processUploadedFiles(formData: FormData) {
     let spedInfo: SpedInfo | null = null;
     let spedFileContent = '';
     
-    const nfeData: any[] = [];
-    const nfeItensData: any[] = [];
-    const cteData: any[] = [];
-    const emitidasData: any[] = [];
-    const emitidasItensData: any[] = [];
+    const nfeEntrada: any[] = [];
+    const nfeItensEntrada: any[] = [];
+    const cteEntrada: any[] = [];
+    const nfeSaida: any[] = [];
+    const nfeItensSaida: any[] = [];
+    
+    // Read all files from FormData
+    for (const [category, file] of formData.entries()) {
+        const fileContent = await (file as File).text();
 
-    const fileEntries = formData.getAll('files') as File[];
-
-    for (const file of fileEntries) {
-        const fileContent = await file.text();
-        const fileName = file.name;
-
-        if (file.type === 'text/xml' || fileName.endsWith('.xml')) {
+        if (category === "XMLs de Entrada (NFe)") {
             const xmlData = extractNfeDataFromXml(fileContent);
-            if (xmlData) {
-                if (xmlData.nota['Chave de acesso'].startsWith('CTe')) {
-                    cteData.push(xmlData.nota);
-                } else {
-                    if (xmlData.isEmitida) {
-                        emitidasData.push(xmlData.nota);
-                        emitidasItensData.push(...xmlData.itens);
-                    } else {
-                        nfeData.push(xmlData.nota);
-                        nfeItensData.push(...xmlData.itens);
-                    }
-                }
+            if(xmlData) {
+                nfeEntrada.push(xmlData.nota);
+                nfeItensEntrada.push(...xmlData.itens);
             }
-        } else if (fileName === 'SPED TXT') {
+        } else if (category === "XMLs de Entrada (CTe)") {
+            const xmlData = extractCteDataFromXml(fileContent);
+            if(xmlData) {
+                cteEntrada.push(xmlData.nota);
+            }
+        } else if (category === "XMLs de Saída") {
+            const xmlData = extractNfeDataFromXml(fileContent);
+            if(xmlData) {
+                nfeSaida.push(xmlData.nota);
+                nfeItensSaida.push(...xmlData.itens);
+            }
+        } else if (category === 'SPED TXT') {
             spedFileContent = fileContent;
-        } else { // Assumes it's an excel file for exceptions
-            if (!dataFrames[fileName]) {
-                dataFrames[fileName] = [];
-            }
-            const buffer = await file.arrayBuffer();
+        } else { // Exception spreadsheets
+            const sheetName = category; // The key is the sheet name
+            if (!dataFrames[sheetName]) dataFrames[sheetName] = [];
+            const buffer = await (file as File).arrayBuffer();
             const workbook = XLSX.read(buffer, { type: 'buffer' });
-            for (const sheetName of workbook.SheetNames) {
-              const worksheet = workbook.Sheets[sheetName];
+            for (const wsName of workbook.SheetNames) {
+              const worksheet = workbook.Sheets[wsName];
               const jsonData = XLSX.utils.sheet_to_json(worksheet);
-              dataFrames[fileName].push(...jsonData);
+              dataFrames[sheetName].push(...jsonData);
             }
         }
     }
     
-    dataFrames['NF-Stock NFE'] = nfeData;
-    dataFrames['NF-Stock Itens'] = nfeItensData;
-    dataFrames['NF-Stock CTE'] = cteData;
-    dataFrames['NF-Stock Emitidas'] = emitidasData;
-    dataFrames['NF-Stock Emitidas Itens'] = emitidasItensData;
+    dataFrames['NF-Stock NFE'] = nfeEntrada;
+    dataFrames['NF-Stock Itens'] = nfeItensEntrada;
+    dataFrames['NF-Stock CTE'] = cteEntrada;
+    dataFrames['NF-Stock Emitidas'] = nfeSaida;
+    dataFrames['NF-Stock Emitidas Itens'] = nfeItensSaida;
 
     let allSpedKeys: string[] = [];
     if (spedFileContent) {
@@ -203,7 +203,7 @@ export async function processUploadedFiles(formData: FormData) {
             const trimmedLine = line.trim();
             const matches = trimmedLine.match(keyPattern);
             if (matches) {
-                allSpedKeys.push(...matches);
+                allSpedKeys.push(...matches.map(key => key.startsWith('NFe') ? key.substring(3) : (key.startsWith('CTe') ? key.substring(3) : key)));
             }
         }
     }
@@ -213,7 +213,10 @@ export async function processUploadedFiles(formData: FormData) {
     let keyCheckResults = null;
     const keysInTxt = new Set(allSpedKeys);
     if (processedData['Chaves Válidas']) {
-        const spreadsheetKeysArray = processedData['Chaves Válidas'].map(row => String(row['Chave de acesso']).trim()).filter(key => key);
+        const spreadsheetKeysArray = processedData['Chaves Válidas'].map(row => {
+            const key = String(row['Chave de acesso']).trim();
+            return key.startsWith('NFe') ? key.substring(3) : (key.startsWith('CTe') ? key.substring(3) : key);
+        }).filter(key => key);
         const spreadsheetKeys = new Set(spreadsheetKeysArray);
         
         const keysNotFoundInTxt = [...spreadsheetKeys].filter(key => !keysInTxt.has(key));
@@ -232,16 +235,16 @@ export async function processUploadedFiles(formData: FormData) {
     
     if (spedInfo && spedInfo.cnpj) {
         const allProcessedKeys = processedData['Chaves Válidas']?.map(row => row['Chave de acesso']) || [];
-        const keysInSpedButNotSheet = new Set((keyCheckResults as any)?.keysInTxtNotInSheet || []);
+        const keysNotFoundInSpedSet = new Set((keyCheckResults as any)?.keysNotFoundInTxt || []);
         
         const keysFromSheet = allProcessedKeys.map(key => ({
             key: key,
-            foundInSped: !keysInSpedButNotSheet.has(key),
+            foundInSped: !keysNotFoundInSpedSet.has(key),
             origin: 'planilha',
             comment: ''
         }));
         
-        const keysOnlyInSped = Array.from(keysInSpedButNotSheet).map(key => ({
+        const keysOnlyInSped = ((keyCheckResults as any)?.keysInTxtNotInSheet || []).map((key: string) => ({
             key: key,
             foundInSped: true,
             origin: 'sped',

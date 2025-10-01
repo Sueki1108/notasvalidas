@@ -25,7 +25,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         return {
             ...row,
             'Chave de acesso': row['Chave de acesso'] ?? row['Chave'],
-            'CPF/CNPJ': row['CPF/CNPJ'] ?? row['Emitente CPF/CNPJ'],
+            'CPF/CNPJ': row['Emitente CPF/CNPJ'] ?? row['Destinatário CPF/CNPJ'],
         };
     });
 
@@ -39,25 +39,15 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         };
     });
 
-    let notasTemporaria = [...nfeData, ...cteData];
+    let notasEntradaTemporaria = [...nfeData, ...cteData];
     
-    // Create Chave Unica
-    notasTemporaria = notasTemporaria.map(row => {
+    // Create Chave Unica for entry notes
+    notasEntradaTemporaria = notasEntradaTemporaria.map(row => {
         if(row && row["Número"] !== undefined && row["CPF/CNPJ"] !== undefined) {
             const chaveUnica = cleanAndToStr(row["Número"]) + cleanAndToStr(row["CPF/CNPJ"]);
             return { "Chave Unica": chaveUnica, ...row };
         }
         return row;
-    });
-    
-    const phrasesToRemove = ["TOTAL", "Valor total das notas", "Valor Total da Prestação"];
-    notasTemporaria = notasTemporaria.filter(row => {
-        if (!row || Object.keys(row).length === 0) return false;
-        const isRowEffectivelyEmpty = Object.values(row).every(value => value === null || String(value).trim() === '');
-        if (isRowEffectivelyEmpty) return false;
-        return !Object.values(row).some(value => 
-            typeof value === 'string' && phrasesToRemove.some(phrase => value.toUpperCase().includes(phrase.toUpperCase()))
-        );
     });
 
     const originalItens = (processedDfs["NF-Stock Itens"] || []).map(row => {
@@ -67,36 +57,26 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         }
         return row;
     });
+    
+    // Filter out total rows
+    const phrasesToRemove = ["TOTAL", "Valor total das notas", "Valor Total da Prestação"];
+    const filterRows = (data: DataFrame) => data.filter(row => {
+        if (!row || Object.keys(row).length === 0) return false;
+        const isRowEffectivelyEmpty = Object.values(row).every(value => value === null || String(value).trim() === '');
+        if (isRowEffectivelyEmpty) return false;
+        return !Object.values(row).some(value => 
+            typeof value === 'string' && phrasesToRemove.some(phrase => value.toUpperCase().includes(phrase.toUpperCase()))
+        );
+    });
 
+    notasEntradaTemporaria = filterRows(notasEntradaTemporaria);
+    
     // Step 2: Identify and separate exceptions
     const chavesUnicasARemover = new Set<string>();
 
-    processedDfs["Notas Canceladas"] = notasTemporaria.filter(row => row && row["Status"] === "Canceladas");
+    processedDfs["Notas Canceladas"] = notasEntradaTemporaria.filter(row => row && row["Status"] === "Canceladas");
     processedDfs["Notas Canceladas"].forEach(row => {
-        if (row && row["Chave Unica"]) {
-            chavesUnicasARemover.add(cleanAndToStr(row["Chave Unica"]));
-        }
-    });
-
-    const chavesEmissaoPropria = new Set<string>();
-    if (originalItens) {
-        originalItens.forEach(item => {
-            if (item && item["CFOP"]) {
-                const cfop = cleanAndToStr(item["CFOP"]);
-                if (cfop.startsWith('1') || cfop.startsWith('2')) {
-                    chavesEmissaoPropria.add(cleanAndToStr(item["Chave Unica"]));
-                }
-            }
-        });
-    }
-    
-    processedDfs["Emissão Própria"] = notasTemporaria.filter(row => 
-        row && row["Chave Unica"] && chavesEmissaoPropria.has(cleanAndToStr(row["Chave Unica"]))
-    );
-    processedDfs["Emissão Própria"].forEach(row => {
-        if(row && row["Chave Unica"]) {
-            chavesUnicasARemover.add(cleanAndToStr(row["Chave Unica"]));
-        }
+        if (row && row["Chave Unica"]) chavesUnicasARemover.add(cleanAndToStr(row["Chave Unica"]));
     });
     
     const exceptionSheets = [
@@ -109,8 +89,8 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         if (processedDfs[sheetName]) {
              if (processedDfs[sheetName].length > 0) {
                 processedDfs[sheetName] = processedDfs[sheetName].map(row => {
-                    const chaveUnica = (row["Número"] && row["CPF/CNPJ"]) 
-                        ? cleanAndToStr(row["Número"]) + cleanAndToStr(row["CPF/CNPJ"])
+                    const chaveUnica = (row["Número"] && (row["CPF/CNPJ"] || row["Emitente CPF/CNPJ"])) 
+                        ? cleanAndToStr(row["Número"]) + cleanAndToStr(row["CPF/CNPJ"] || row["Emitente CPF/CNPJ"])
                         : row["Chave Unica"];
                     if (chaveUnica) chavesUnicasARemover.add(cleanAndToStr(chaveUnica));
                     const { Chave, ...rest } = row;
@@ -120,35 +100,28 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         }
     });
     
-    processedDfs["Notas Válidas"] = notasTemporaria.filter(row => 
+    // Final valid entry notes
+    processedDfs["Notas Válidas"] = notasEntradaTemporaria.filter(row => 
         row && row["Chave Unica"] && !chavesUnicasARemover.has(cleanAndToStr(row["Chave Unica"]))
     );
     
     const chavesFinaisValidas = new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave Unica"])).filter(Boolean));
 
-    if (originalItens) {
-        processedDfs["Itens Válidos"] = originalItens.filter(row => 
-            row && row["Chave Unica"] && chavesFinaisValidas.has(cleanAndToStr(row["Chave Unica"]))
-        );
-    } else {
-        processedDfs["Itens Válidos"] = [];
-    }
+    processedDfs["Itens Válidos"] = originalItens.filter(row => 
+        row && row["Chave Unica"] && chavesFinaisValidas.has(cleanAndToStr(row["Chave Unica"]))
+    );
+
+    // Handle outgoing notes ("Emissão Própria")
+    const notasSaida = processedDfs["NF-Stock Emitidas"] || [];
+    processedDfs["Emissão Própria"] = filterRows(notasSaida).filter(row => row && row['Status'] !== 'Canceladas');
 
     const chavesRecebidasValidas = new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));
-    
-    const notasEmitidas = processedDfs["NF-Stock Emitidas"] || [];
-    const chavesEmitidasValidas = new Set<string>();
-    if (notasEmitidas.length > 0) {
-        notasEmitidas.forEach(row => {
-            if (row && row["Status"] !== "Canceladas" && row["Chave de acesso"]) {
-                chavesEmitidasValidas.add(cleanAndToStr(row["Chave de acesso"]));
-            }
-        });
-    }
+    const chavesEmitidasValidas = new Set(processedDfs["Emissão Própria"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));
 
     const combinedChavesValidas = new Set([...chavesRecebidasValidas, ...chavesEmitidasValidas]);
     processedDfs["Chaves Válidas"] = Array.from(combinedChavesValidas).map(key => ({ "Chave de acesso": key }));
     
+    // Immobilized assets
     if (processedDfs["Itens Válidos"] && processedDfs["Itens Válidos"].length > 0 && processedDfs["Itens Válidos"][0]?.["Valor Unitário"]) {
         processedDfs["Imobilizados"] = processedDfs["Itens Válidos"].filter(row => {
             if (!row || !row["Valor Unitário"]) return false;
@@ -159,6 +132,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         processedDfs["Imobilizados"] = [];
     }
 
+    // Add CFOP Descriptions
     for (const sheetName in processedDfs) {
         const df = processedDfs[sheetName];
         if (df && df.length > 0 && df[0] && "CFOP" in df[0] && !("Descricao CFOP" in df[0])) {
@@ -180,6 +154,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         }
     }
     
+    // Cleanup temporary dataframes
     delete processedDfs["NF-Stock NFE"];
     delete processedDfs["NF-Stock CTE"];
     delete processedDfs["NF-Stock Itens"];
