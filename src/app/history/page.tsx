@@ -222,7 +222,7 @@ export default function HistoryPage() {
                                                 </TableCell>
                                                 <TableCell className="text-center">{totalKeys}</TableCell>
                                                 <TableCell className="text-center">
-                                                    <Badge variant={discrepancies > 0 ? "destructive" : "default"} className="bg-green-600">
+                                                    <Badge variant={discrepancies > 0 ? "destructive" : "default"} className={discrepancies > 0 ? "" : "bg-green-600"}>
                                                         {discrepancies}
                                                     </Badge>
                                                 </TableCell>
