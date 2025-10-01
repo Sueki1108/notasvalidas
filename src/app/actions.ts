@@ -184,3 +184,38 @@ export async function addOrUpdateKeyComment(cnpj: string, key: string, comment: 
         return { error: error.message || "Ocorreu um erro ao salvar o comentário." };
     }
 }
+
+export async function mergeExcelFiles(formData: FormData) {
+    try {
+        const fileEntries = formData.getAll('files') as File[];
+        const mergedWorkbook = XLSX.utils.book_new();
+        let sheetCount = 0;
+
+        for (const file of fileEntries) {
+            const buffer = await file.arrayBuffer();
+            const workbook = XLSX.read(buffer, { type: 'buffer' });
+            
+            for (const sheetName of workbook.SheetNames) {
+                // To avoid sheet name conflicts, append a unique identifier
+                const newSheetName = `${sheetName}_${sheetCount++}`;
+                const worksheet = workbook.Sheets[sheetName];
+                XLSX.utils.book_append_sheet(mergedWorkbook, worksheet, newSheetName);
+            }
+        }
+
+        if (mergedWorkbook.SheetNames.length === 0) {
+            return { error: "Nenhuma planilha encontrada nos arquivos carregados." };
+        }
+
+        const buffer = XLSX.write(mergedWorkbook, { bookType: 'xlsx', type: 'array' });
+        
+        // Convert buffer to base64 to send it to the client
+        const base64 = Buffer.from(buffer).toString('base64');
+        
+        return { base64Data: base64 };
+
+    } catch (error: any) {
+        console.error("Erro ao agrupar planilhas:", error);
+        return { error: error.message || "Ocorreu um erro ao agrupar as planilhas." };
+    }
+}

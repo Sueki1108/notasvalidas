@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { KeyRound, FileText, Loader2, Sheet } from "lucide-react";
+import { KeyRound, FileText, Loader2, Sheet, Group } from "lucide-react";
 import { KeyResultsDisplay } from "@/components/app/key-results-display";
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -95,6 +95,9 @@ export default function KeyCheckerPage() {
                         </Button>
                          <Button variant="ghost" asChild>
                            <Link href="/history">Histórico</Link>
+                        </Button>
+                        <Button variant="ghost" asChild>
+                           <Link href="/merger" className="flex items-center gap-2"><Group />Agrupador</Link>
                         </Button>
                     </nav>
                 </div>
