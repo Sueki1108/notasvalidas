@@ -253,9 +253,19 @@ export async function processUploadedFiles(formData: FormData) {
 
         const verificationKeys = [...keysFromSheet, ...keysOnlyInSped];
 
+        // Stats calculation
+        const stats = {
+            totalSheetKeys: allProcessedKeys.length,
+            totalSpedKeys: allSpedKeys.length,
+            foundInBoth: keysFromSheet.filter(k => k.foundInSped).length,
+            onlyInSheet: keysFromSheet.filter(k => !k.foundInSped).length,
+            onlyInSped: keysOnlyInSped.length,
+        };
+
         const verificationData = {
             ...spedInfo,
             keys: verificationKeys,
+            stats: stats,
             verifiedAt: serverTimestamp(),
         };
 

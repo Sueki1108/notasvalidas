@@ -1,14 +1,13 @@
-
 // src/app/history/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { collection, getDocs, orderBy, query, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Sheet, History, Search, ArrowLeft, CheckCircle, XCircle, MessageSquare, Group, HelpCircle, File as FileIcon } from "lucide-react";
+import { Loader2, Sheet, History, Search, ArrowLeft, CheckCircle, XCircle, MessageSquare, Group, HelpCircle, File as FileIcon, AlertCircle } from "lucide-react";
 import Link from 'next/link';
 import {
   AlertDialog,
@@ -23,13 +22,23 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatCnpj } from "@/lib/utils";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
+
 
 type VerificationKey = {
   key: string;
   foundInSped?: boolean;
-  foundInSheet?: boolean;
   origin: 'planilha' | 'sped' | 'ambos';
   comment?: string;
+};
+
+type VerificationStats = {
+    totalSheetKeys: number;
+    totalSpedKeys: number;
+    foundInBoth: number;
+    onlyInSheet: number;
+    onlyInSped: number;
 };
 
 type Verification = {
@@ -39,12 +48,24 @@ type Verification = {
   competence: string;
   verifiedAt: Timestamp;
   keys: VerificationKey[];
+  stats: VerificationStats;
 };
 
 export default function HistoryPage() {
     const [verifications, setVerifications] = useState<Verification[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedVerification, setSelectedVerification] = useState<Verification | null>(null);
+
+    const groupedKeys = useMemo(() => {
+        if (!selectedVerification || !selectedVerification.keys) {
+            return { foundInBoth: [], onlyInSheet: [], onlyInSped: [] };
+        }
+        return {
+            foundInBoth: selectedVerification.keys.filter(k => k.origin === 'ambos' || (k.origin === 'planilha' && k.foundInSped)),
+            onlyInSheet: selectedVerification.keys.filter(k => k.origin === 'planilha' && !k.foundInSped),
+            onlyInSped: selectedVerification.keys.filter(k => k.origin === 'sped'),
+        };
+    }, [selectedVerification]);
 
     useEffect(() => {
         const fetchVerifications = async () => {
@@ -81,7 +102,7 @@ export default function HistoryPage() {
     }
 
     const getStatusIcon = (item: VerificationKey) => {
-        if (item.origin === 'ambos') {
+        if (item.origin === 'ambos' || (item.origin === 'planilha' && item.foundInSped)) {
             return (
                  <Tooltip>
                     <TooltipTrigger>
@@ -93,7 +114,7 @@ export default function HistoryPage() {
                 </Tooltip>
             );
         }
-        if (item.origin === 'planilha') {
+        if (item.origin === 'planilha' && !item.foundInSped) {
             return (
                  <Tooltip>
                     <TooltipTrigger>
@@ -178,19 +199,33 @@ export default function HistoryPage() {
                                             <TableHead>Empresa</TableHead>
                                             <TableHead>CNPJ</TableHead>
                                             <TableHead>Competência</TableHead>
-                                            <TableHead>Data da Verificação</TableHead>
-                                            <TableHead>Hora</TableHead>
+                                            <TableHead>Verificação</TableHead>
+                                            <TableHead className="text-center">Chaves</TableHead>
+                                            <TableHead className="text-center">Divergências</TableHead>
                                             <TableHead className="text-right">Ações</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {verifications.map((v) => (
+                                        {verifications.map((v) => {
+                                            const totalKeys = v.stats?.totalSheetKeys || v.keys?.length || 0;
+                                            const discrepancies = (v.stats?.onlyInSheet || 0) + (v.stats?.onlyInSped || 0);
+                                            return (
                                             <TableRow key={v.id}>
                                                 <TableCell className="font-medium">{v.companyName}</TableCell>
                                                 <TableCell>{formatCnpj(v.cnpj)}</TableCell>
                                                 <TableCell>{v.competence}</TableCell>
-                                                <TableCell>{formatDate(v.verifiedAt)}</TableCell>
-                                                <TableCell>{formatTime(v.verifiedAt)}</TableCell>
+                                                <TableCell>
+                                                    <div className="flex flex-col">
+                                                        <span>{formatDate(v.verifiedAt)}</span>
+                                                        <span className="text-xs text-muted-foreground">{formatTime(v.verifiedAt)}</span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-center">{totalKeys}</TableCell>
+                                                <TableCell className="text-center">
+                                                    <Badge variant={discrepancies > 0 ? "destructive" : "default"} className="bg-green-600">
+                                                        {discrepancies}
+                                                    </Badge>
+                                                </TableCell>
                                                 <TableCell className="text-right">
                                                     <Button variant="outline" size="sm" onClick={() => setSelectedVerification(v)}>
                                                         <Search className="mr-2 h-4 w-4" />
@@ -198,7 +233,7 @@ export default function HistoryPage() {
                                                     </Button>
                                                 </TableCell>
                                             </TableRow>
-                                        ))}
+                                        )})}
                                     </TableBody>
                                 </Table>
                             ) : (
@@ -225,37 +260,91 @@ export default function HistoryPage() {
                 <AlertDialog open={!!selectedVerification} onOpenChange={handleCloseModal}>
                     <AlertDialogContent className="max-w-4xl">
                         <AlertDialogHeader>
-                            <AlertDialogTitle>Detalhes da Verificação para {selectedVerification.companyName}</AlertDialogTitle>
+                            <AlertDialogTitle>Detalhes da Verificação: {selectedVerification.companyName}</AlertDialogTitle>
                              <AlertDialogDescription>
                                 Competência: {selectedVerification.competence} | Verificado em: {formatDate(selectedVerification.verifiedAt)} às {formatTime(selectedVerification.verifiedAt)}
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         
                          <div className="space-y-4">
-                            <p className="text-sm font-medium">Lista de Chaves</p>
-                            <ScrollArea className="h-96 rounded-md border p-4">
-                                <ul className="space-y-2">
-                                     <TooltipProvider>
-                                    {selectedVerification.keys && selectedVerification.keys.map((item, index) => (
-                                        <li key={index} className="flex items-center justify-between gap-4 rounded-md bg-secondary/50 p-2 font-mono text-sm">
+                            <ScrollArea className="h-96 w-full pr-4">
+                                <Accordion type="single" collapsible defaultValue="item-1">
+                                    <AccordionItem value="item-1">
+                                        <AccordionTrigger className="font-semibold">
                                             <div className="flex items-center gap-2">
-                                                {getStatusIcon(item)}
-                                                <span>{item.key}</span>
+                                                <CheckCircle className="text-green-600" />
+                                                Encontradas em Ambos ({groupedKeys.foundInBoth.length})
                                             </div>
-                                            {item.comment && (
-                                                <Tooltip>
-                                                    <TooltipTrigger>
-                                                        <MessageSquare className="h-5 w-5 text-blue-600" />
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                        <p>{item.comment}</p>
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            )}
-                                        </li>
-                                    ))}
-                                    </TooltipProvider>
-                                </ul>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <ul className="space-y-2 pt-2">
+                                                <TooltipProvider>
+                                                {groupedKeys.foundInBoth.map((item, index) => (
+                                                    <li key={index} className="flex items-center justify-between gap-4 rounded-md bg-secondary/50 p-2 font-mono text-sm">
+                                                        <span>{item.key}</span>
+                                                        {item.comment && (
+                                                            <Tooltip>
+                                                                <TooltipTrigger><MessageSquare className="h-5 w-5 text-blue-600" /></TooltipTrigger>
+                                                                <TooltipContent><p>{item.comment}</p></TooltipContent>
+                                                            </Tooltip>
+                                                        )}
+                                                    </li>
+                                                ))}
+                                                </TooltipProvider>
+                                            </ul>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                     <AccordionItem value="item-2">
+                                        <AccordionTrigger className="font-semibold">
+                                            <div className="flex items-center gap-2">
+                                                <XCircle className="text-red-600" />
+                                                Apenas na Planilha ({groupedKeys.onlyInSheet.length})
+                                            </div>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                             <ul className="space-y-2 pt-2">
+                                                <TooltipProvider>
+                                                {groupedKeys.onlyInSheet.map((item, index) => (
+                                                    <li key={index} className="flex items-center justify-between gap-4 rounded-md bg-secondary/50 p-2 font-mono text-sm">
+                                                        <span>{item.key}</span>
+                                                        {item.comment && (
+                                                            <Tooltip>
+                                                                <TooltipTrigger><MessageSquare className="h-5 w-5 text-blue-600" /></TooltipTrigger>
+                                                                <TooltipContent><p>{item.comment}</p></TooltipContent>
+                                                            </Tooltip>
+                                                        )}
+                                                    </li>
+                                                ))}
+                                                </TooltipProvider>
+                                            </ul>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                     <AccordionItem value="item-3">
+                                        <AccordionTrigger className="font-semibold">
+                                             <div className="flex items-center gap-2">
+                                                <FileIcon className="text-blue-600" />
+                                                Apenas no SPED ({groupedKeys.onlyInSped.length})
+                                            </div>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                             <ul className="space-y-2 pt-2">
+                                                <TooltipProvider>
+                                                {groupedKeys.onlyInSped.map((item, index) => (
+                                                     <li key={index} className="flex items-center justify-between gap-4 rounded-md bg-secondary/50 p-2 font-mono text-sm">
+                                                        <span>{item.key}</span>
+                                                        {item.comment && (
+                                                            <Tooltip>
+                                                                <TooltipTrigger><MessageSquare className="h-5 w-5 text-blue-600" /></TooltipTrigger>
+                                                                <TooltipContent><p>{item.comment}</p></TooltipContent>
+                                                            </Tooltip>
+                                                        )}
+                                                    </li>
+                                                ))}
+                                                </TooltipProvider>
+                                            </ul>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                </Accordion>
                             </ScrollArea>
                         </div>
                         
