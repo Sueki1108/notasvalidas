@@ -1,7 +1,7 @@
 // src/app/page.tsx
 "use client";
 
-import { useState, useTransition, useEffect, ChangeEvent, useRef } from "react";
+import { useState, useEffect, ChangeEvent } from "react";
 import { useRouter } from 'next/navigation';
 import * as XLSX from "xlsx";
 import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, KeyRound } from "lucide-react";
@@ -10,14 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileUploadForm, type FileList } from "@/components/app/file-upload-form";
 import { ResultsDisplay } from "@/components/app/results-display";
-import { KeyResultsDisplay } from "@/components/app/key-results-display";
 import { processUploadedFiles } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
 import { formatCnpj } from "@/lib/utils";
-import type { KeyCheckResult } from "@/components/app/key-results-display";
+import type { KeyCheckResult } from "@/app/key-checker/page";
 
 type SpedInfo = {
     companyName: string;
@@ -49,7 +48,6 @@ export default function Home() {
     const [error, setError] = useState<string | null>(null);
     const { toast } = useToast();
     const router = useRouter();
-    const [isNavigating, startTransition] = useTransition();
     const [spedInfo, setSpedInfo] = useState<SpedInfo | null>(null);
 
     useEffect(() => {
@@ -130,7 +128,7 @@ export default function Home() {
             setKeyCheckResults(resultData.keyCheckResults || null);
             setSpedInfo(resultData.spedInfo || null);
 
-            toast({ title: "Processamento Concluído", description: "Os arquivos foram processados e validados com sucesso." });
+            toast({ title: "Processamento Concluído", description: "Os arquivos foram processados com sucesso." });
         } catch (err: any) {
             setError(err.message || "Ocorreu um erro desconhecido.");
             setResults(null);
@@ -185,7 +183,8 @@ export default function Home() {
             toast({ variant: "destructive", title: "Erro no Download", description: "Não foi possível gerar o arquivo Excel." });
         }
     };
-
+    
+    const hasKeyCheckResults = keyCheckResults && (keyCheckResults.keysInTxtNotInSheet.length > 0 || keyCheckResults.keysNotFoundInTxt.length > 0);
     const isProcessButtonDisabled = processing || Object.keys(files).length === 0;
 
     return (
@@ -207,6 +206,9 @@ export default function Home() {
                     <nav className="flex items-center gap-4">
                         <Button variant="ghost" asChild>
                             <Link href="/merger" className="flex items-center gap-2"><Group />Agrupador</Link>
+                        </Button>
+                         <Button variant="ghost" asChild>
+                           <Link href="/key-checker">Verificador de Chaves</Link>
                         </Button>
                         <Button variant="ghost" asChild>
                             <Link href="/history">Histórico</Link>
@@ -242,8 +244,8 @@ export default function Home() {
                             <div className="flex items-center gap-3">
                                 <Cpu className="h-8 w-8 text-primary" />
                                 <div>
-                                    <CardTitle className="font-headline text-2xl">2. Processar e Validar</CardTitle>
-                                    <CardDescription>Inicie a automação, o processamento dos dados e a validação contra o SPED.</CardDescription>
+                                    <CardTitle className="font-headline text-2xl">2. Processar</CardTitle>
+                                    <CardDescription>Inicie a automação e o processamento dos dados dos arquivos carregados.</CardDescription>
                                 </div>
                             </div>
                         </CardHeader>
@@ -265,7 +267,7 @@ export default function Home() {
                                     <BrainCircuit className="h-8 w-8 text-primary animate-pulse" />
                                     <div>
                                         <CardTitle className="font-headline text-2xl">Processando...</CardTitle>
-                                        <CardDescription>Aguarde enquanto os dados são analisados e validados.</CardDescription>
+                                        <CardDescription>Aguarde enquanto os dados são analisados.</CardDescription>
                                     </div>
                                 </div>
                             </CardHeader>
@@ -284,40 +286,34 @@ export default function Home() {
                         </Alert>
                     )}
 
-                    {(results || keyCheckResults) && (
+                    {results && (
                         <Card className="shadow-lg">
                             <CardHeader>
                                  <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
                                     <div className="flex items-center gap-3">
                                         <FileText className="h-8 w-8 text-primary" />
                                         <div>
-                                            <CardTitle className="font-headline text-2xl">3. Resultados</CardTitle>
-                                            <CardDescription>Visualize a validação do SPED e os dados processados.</CardDescription>
+                                            <CardTitle className="font-headline text-2xl">3. Dados Processados</CardTitle>
+                                            <CardDescription>Visualize e baixe os dados processados.</CardDescription>
                                         </div>
                                     </div>
-                                    <Button onClick={handleDownload} disabled={!results}>
-                                        Baixar Planilha (.xlsx)
-                                    </Button>
+                                     <div className="flex gap-2">
+                                        {hasKeyCheckResults && (
+                                            <Button asChild variant="outline">
+                                                <Link href="/key-checker">
+                                                    <KeyRound className="mr-2 h-4 w-4" />
+                                                    Verificar Divergências
+                                                </Link>
+                                            </Button>
+                                        )}
+                                        <Button onClick={handleDownload} disabled={!results}>
+                                            Baixar Planilha (.xlsx)
+                                        </Button>
+                                    </div>
                                 </div>
                             </CardHeader>
                             <CardContent className="space-y-8">
-                                {keyCheckResults && (
-                                     <Card>
-                                        <CardHeader>
-                                            <div className="flex items-center gap-3">
-                                                <KeyRound className="h-6 w-6 text-primary" />
-                                                <div>
-                                                    <CardTitle className="font-headline text-xl">Validação de Chaves vs. SPED</CardTitle>
-                                                    <CardDescription>Comparação entre as chaves processadas e o arquivo SPED TXT.</CardDescription>
-                                                </div>
-                                            </div>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <KeyResultsDisplay results={keyCheckResults} cnpj={spedInfo?.cnpj ?? null} />
-                                        </CardContent>
-                                    </Card>
-                                )}
-                                {results && <ResultsDisplay results={results} />}
+                                <ResultsDisplay results={results} />
                             </CardContent>
                         </Card>
                     )}

@@ -47,8 +47,6 @@ const KeyItem = ({ nfeKey, isDuplicate, cnpj, origin }: KeyItemProps) => {
         }
         setIsSaving(true);
         try {
-            // Adjust the key based on origin to match how it's stored in Firestore
-            const keyToSave = origin === 'txt' ? nfeKey : `NFe${nfeKey}`;
             const result = await addOrUpdateKeyComment(cnpj, nfeKey, comment);
             if (result.error) {
                 throw new Error(result.error);
