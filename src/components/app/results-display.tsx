@@ -24,8 +24,10 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
     const { toast } = useToast();
 
     const orderedSheetNames = [
-        "Notas Válidas", "Itens Válidos", "Chaves Válidas",
-        ...Object.keys(results).filter(name => !["Notas Válidas", "Itens Válidos", "Chaves Válidas"].includes(name))
+        "Notas Válidas", "Itens Válidos", "Emissão Própria", "Itens de Saída", "Chaves Válidas", "Imobilizados",
+        ...Object.keys(results).filter(name => ![
+            "Notas Válidas", "Itens Válidos", "Emissão Própria", "Itens de Saída", "Chaves Válidas", "Imobilizados"
+        ].includes(name))
     ];
     
     useEffect(() => {

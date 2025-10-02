@@ -50,7 +50,7 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
         return row;
     });
 
-    const originalItens = (processedDfs["NF-Stock Itens"] || []).map(row => {
+    const originalItensEntrada = (processedDfs["NF-Stock Itens"] || []).map(row => {
         if (row && row["Número"] !== undefined && row["CPF/CNPJ"] !== undefined) {
             const chaveUnica = cleanAndToStr(row["Número"]) + cleanAndToStr(row["CPF/CNPJ"]);
             return { "Chave Unica": chaveUnica, ...row };
@@ -107,13 +107,15 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
     
     const chavesFinaisValidas = new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave Unica"])).filter(Boolean));
 
-    processedDfs["Itens Válidos"] = originalItens.filter(row => 
+    processedDfs["Itens Válidos"] = originalItensEntrada.filter(row => 
         row && row["Chave Unica"] && chavesFinaisValidas.has(cleanAndToStr(row["Chave Unica"]))
     );
 
     // Handle outgoing notes ("Emissão Própria")
     const notasSaida = processedDfs["NF-Stock Emitidas"] || [];
     processedDfs["Emissão Própria"] = filterRows(notasSaida).filter(row => row && row['Status'] !== 'Canceladas');
+    processedDfs["Itens de Saída"] = processedDfs["NF-Stock Emitidas Itens"] || [];
+
 
     const chavesRecebidasValidas = new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));
     const chavesEmitidasValidas = new Set(processedDfs["Emissão Própria"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));
@@ -121,8 +123,8 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
     const combinedChavesValidas = new Set([...chavesRecebidasValidas, ...chavesEmitidasValidas]);
     processedDfs["Chaves Válidas"] = Array.from(combinedChavesValidas).map(key => ({ "Chave de acesso": key }));
     
-    // Immobilized assets
-    if (processedDfs["Itens Válidos"] && processedDfs["Itens Válidos"].length > 0 && processedDfs["Itens Válidos"][0]?.["Valor Unitário"]) {
+    // Immobilized assets - based on valid input items
+    if (processedDfs["Itens Válidos"] && processedDfs["Itens Válidos"].length > 0) {
         processedDfs["Imobilizados"] = processedDfs["Itens Válidos"].filter(row => {
             if (!row || !row["Valor Unitário"]) return false;
             const valor = parseFloat(String(row["Valor Unitário"]).replace(',', '.'));
@@ -140,13 +142,15 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
                 if (!row || !("CFOP" in row)) return row;
 
                 const cfopCode = parseInt(cleanAndToStr(row["CFOP"]), 10);
-                const description = cfopDescriptions[cfopCode] || '';
+                const description = cfopDescriptions[cfopCode] || 'Descrição não encontrada';
                 
                 const newRow: { [key: string]: any } = {};
+                let cfopPlaced = false;
                 for (const key in row) {
                     newRow[key] = row[key];
-                    if (key === "CFOP") {
+                    if (key === "CFOP" && !cfopPlaced) {
                         newRow["Descricao CFOP"] = description;
+                        cfopPlaced = true;
                     }
                 }
                 return newRow;

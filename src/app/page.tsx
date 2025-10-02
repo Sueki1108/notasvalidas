@@ -37,85 +37,87 @@ const fileCache: FileList = typeof window !== 'undefined' ? (window as any).__fi
 type DataFrames = { [key: string]: any[] };
 
 const extractNfeDataFromXml = (xmlContent: string) => {
-    const getValue = (tag: string) => (xmlContent.split(`<${tag}>`)[1] || '').split(`</${tag}>`)[0];
-    const getNestedValue = (parentTag: string, childTag: string) => {
-        const parentContent = xmlContent.split(`<${parentTag}>`)[1] || '';
-        return (parentContent.split(`<${childTag}>`)[1] || '').split(`</${childTag}>`)[0];
-    };
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlContent, "application/xml");
     
-    const chNFe = getValue('chNFe');
+    const getValue = (tag: string, context: Document | Element = xmlDoc) => context.getElementsByTagName(tag)[0]?.textContent || '';
     
-    const nNF = getValue('nNF');
-    const dhEmi = getValue('dhEmi');
-    const vNF = getValue('vNF');
-    const cStat = getValue('cStat');
-    const emitCNPJ = getNestedValue('emit', 'CNPJ');
-    const emitXNome = getNestedValue('emit', 'xNome');
-    const destCNPJ = getNestedValue('dest', 'CNPJ');
-    const destXNome = getNestedValue('dest', 'xNome');
-    const tpNF = getValue('tpNF'); // 0 for entry, 1 for exit
+    const ide = xmlDoc.getElementsByTagName('ide')[0];
+    const emit = xmlDoc.getElementsByTagName('emit')[0];
+    const dest = xmlDoc.getElementsByTagName('dest')[0];
+    const total = xmlDoc.getElementsByTagName('ICMSTot')[0];
+    const protNFe = xmlDoc.getElementsByTagName('protNFe')[0];
+    
+    if (!ide || !emit || !dest || !total || !protNFe) return null;
+
+    const chNFe = protNFe.getElementsByTagName('chNFe')[0]?.textContent || '';
+    const cStat = protNFe.getElementsByTagName('cStat')[0]?.textContent || '';
 
     const nota = {
         'Chave de acesso': `NFe${chNFe}`,
-        'Número': nNF,
-        'Data de Emissão': dhEmi,
-        'Valor': parseFloat(vNF),
-        'Status': parseInt(cStat) === 100 ? 'Autorizadas' : (parseInt(cStat) === 101 ? 'Canceladas' : 'Outro Status'),
-        'Emitente CPF/CNPJ': emitCNPJ,
-        'Emitente': emitXNome,
-        'Destinatário CPF/CNPJ': destCNPJ,
-        'Destinatário': destXNome
+        'Número': getValue('nNF', ide),
+        'Data de Emissão': getValue('dhEmi', ide),
+        'Valor': getValue('vNF', total),
+        'Status': parseInt(cStat) === 100 ? 'Autorizadas' : (parseInt(cStat) === 101 ? 'Canceladas' : `Status ${cStat}`),
+        'Emitente CPF/CNPJ': getValue('CNPJ', emit) || getValue('CPF', emit),
+        'Emitente': getValue('xNome', emit),
+        'Destinatário CPF/CNPJ': getValue('CNPJ', dest) || getValue('CPF', dest),
+        'Destinatário': getValue('xNome', dest)
     };
     
-    const isSaida = tpNF === '1';
+    const isSaida = getValue('tpNF', ide) === '1';
 
-    const detSection = xmlContent.split('<det ');
-    const itens = detSection.slice(1).map(section => {
-        const prodSection = (section.split('<prod>')[1] || '').split('</prod>')[0];
-        const getProdValue = (tag: string) => (prodSection.split(`<${tag}>`)[1] || '').split(`</${tag}>`)[0];
-        return {
-            'Chave de acesso': `NFe${chNFe}`,
-            'Número': nNF,
-            'CPF/CNPJ': isSaida ? destCNPJ : emitCNPJ,
-            'CFOP': getProdValue('CFOP'),
-            'Código': getProdValue('cProd'),
-            'Descrição': getProdValue('xProd'),
-            'NCM': getProdValue('NCM'),
-            'Quantidade': parseFloat(getProdValue('qCom')),
-            'Valor Unitário': parseFloat(getProdValue('vUnCom')),
-            'Valor Total': parseFloat(getProdValue('vProd')),
-        };
-    });
+    const itens: any[] = [];
+    const detElements = xmlDoc.getElementsByTagName('det');
+    for (let i = 0; i < detElements.length; i++) {
+        const det = detElements[i];
+        const prod = det.getElementsByTagName('prod')[0];
+        if (prod) {
+            itens.push({
+                'Chave de acesso': `NFe${chNFe}`,
+                'Número': getValue('nNF', ide),
+                'CPF/CNPJ': isSaida ? (getValue('CNPJ', dest) || getValue('CPF', dest)) : (getValue('CNPJ', emit) || getValue('CPF', emit)),
+                'CFOP': getValue('CFOP', prod),
+                'Código': getValue('cProd', prod),
+                'Descrição': getValue('xProd', prod),
+                'NCM': getValue('NCM', prod),
+                'Quantidade': parseFloat(getValue('qCom', prod)),
+                'Valor Unitário': parseFloat(getValue('vUnCom', prod)),
+                'Valor Total': parseFloat(getValue('vProd', prod)),
+            });
+        }
+    }
     
-    return { nota, itens, isSaida };
+    return { nota, itens };
 }
 
 const extractCteDataFromXml = (xmlContent: string) => {
-    const getValue = (tag: string) => (xmlContent.split(`<${tag}>`)[1] || '').split(`</${tag}>`)[0];
-    const getNestedValue = (parentTag: string, childTag: string) => {
-        const parentContent = xmlContent.split(`<${parentTag}>`)[1] || '';
-        return (parentContent.split(`<${childTag}>`)[1] || '').split(`</${childTag}>`)[0];
-    };
-    
-    const chCTe = getValue('chCTe');
-    const nCT = getValue('nCT');
-    const dhEmi = getValue('dhEmi');
-    const vTPrest = getValue('vTPrest');
-    const cStat = getValue('cStat');
-    const tomaCNPJ = getNestedValue('toma', 'CNPJ') || getNestedValue('toma', 'CPF');
-    const tomaXNome = getNestedValue('toma', 'xNome');
-    
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlContent, "application/xml");
+
+    const getValue = (tag: string, context: Document | Element = xmlDoc) => context.getElementsByTagName(tag)[0]?.textContent || '';
+
+    const ide = xmlDoc.getElementsByTagName('ide')[0];
+    const vPrest = xmlDoc.getElementsByTagName('vPrest')[0];
+    const protCTe = xmlDoc.getElementsByTagName('protCTe')[0];
+    const toma = xmlDoc.getElementsByTagName('toma')[0];
+
+    if(!ide || !vPrest || !protCTe) return null;
+
+    const chCTe = protCTe.getElementsByTagName('chCTe')[0]?.textContent || '';
+    const cStat = protCTe.getElementsByTagName('cStat')[0]?.textContent || '';
+
     const nota = {
         'Chave de acesso': `CTe${chCTe}`,
-        'Número': nCT,
-        'Data de Emissão': dhEmi,
-        'Valor da Prestação': parseFloat(vTPrest),
-        'Status': parseInt(cStat) === 100 ? 'Autorizadas' : 'Outro Status',
-        'Tomador CPF/CNPJ': tomaCNPJ,
-        'Tomador': tomaXNome,
+        'Número': getValue('nCT', ide),
+        'Data de Emissão': getValue('dhEmi', ide),
+        'Valor da Prestação': parseFloat(getValue('vTPrest', vPrest)),
+        'Status': parseInt(cStat) === 100 ? 'Autorizadas' : `Status ${cStat}`,
+        'Tomador CPF/CNPJ': toma ? (getValue('CNPJ', toma) || getValue('CPF', toma)) : '',
+        'Tomador': toma ? getValue('xNome', toma) : '',
     };
     
-    return { nota, isSaida: false }; // CTe is always "entrada" in this context
+    return { nota };
 }
 
 export default function Home() {
@@ -218,32 +220,46 @@ export default function Home() {
             const nfeSaida: any[] = [];
             const nfeItensSaida: any[] = [];
 
+            // Process XMLs
+            const processXmls = async (fileList: File[], type: 'NFe-Entrada' | 'CTe-Entrada' | 'Saida') => {
+                 for (const file of fileList) {
+                    const fileContent = await file.text();
+                    if (type === 'NFe-Entrada') {
+                        const xmlData = extractNfeDataFromXml(fileContent);
+                        if (xmlData) {
+                            nfeEntrada.push(xmlData.nota);
+                            nfeItensEntrada.push(...xmlData.itens);
+                        }
+                    } else if (type === 'CTe-Entrada') {
+                         const xmlData = extractCteDataFromXml(fileContent);
+                         if (xmlData) cteEntrada.push(xmlData.nota);
+                    } else if (type === 'Saida') {
+                        const xmlData = extractNfeDataFromXml(fileContent);
+                        if(xmlData) {
+                            nfeSaida.push(xmlData.nota);
+                            nfeItensSaida.push(...xmlData.itens);
+                        }
+                    }
+                }
+            };
+            
+            if (files["XMLs de Entrada (NFe)"]) await processXmls(files["XMLs de Entrada (NFe)"]!, 'NFe-Entrada');
+            if (files["XMLs de Entrada (CTe)"]) await processXmls(files["XMLs de Entrada (CTe)"]!, 'CTe-Entrada');
+            if (files["XMLs de Saída"]) await processXmls(files["XMLs de Saída"]!, 'Saida');
+            
+            dataFrames['NF-Stock NFE'] = nfeEntrada;
+            dataFrames['NF-Stock CTE'] = cteEntrada;
+            dataFrames['NF-Stock Itens'] = nfeItensEntrada;
+            dataFrames['NF-Stock Emitidas'] = nfeSaida;
+            dataFrames['NF-Stock Emitidas Itens'] = nfeItensSaida;
+            
+            // Process Exception Spreadsheets
             for (const category in files) {
                 const fileList = files[category];
-                if (!fileList) continue;
-
+                if (!fileList || category.includes('XML')) continue;
+                
                 for (const file of fileList) {
-                    if (file.name.toLowerCase().endsWith('.xml')) {
-                        const fileContent = await file.text();
-                         if (category === "XMLs de Entrada (NFe)") {
-                            const xmlData = extractNfeDataFromXml(fileContent);
-                            if(xmlData) {
-                                nfeEntrada.push(xmlData.nota);
-                                nfeItensEntrada.push(...xmlData.itens);
-                            }
-                        } else if (category === "XMLs de Entrada (CTe)") {
-                            const xmlData = extractCteDataFromXml(fileContent);
-                            if(xmlData) {
-                                cteEntrada.push(xmlData.nota);
-                            }
-                        } else if (category === "XMLs de Saída") {
-                            const xmlData = extractNfeDataFromXml(fileContent);
-                            if(xmlData) {
-                                nfeSaida.push(xmlData.nota);
-                                nfeItensSaida.push(...xmlData.itens);
-                            }
-                        }
-                    } else if (file.name.toLowerCase().endsWith('.xlsx')) {
+                    if (file.name.toLowerCase().endsWith('.xlsx')) {
                          const sheetName = category;
                         if (!dataFrames[sheetName]) dataFrames[sheetName] = [];
                         const buffer = await file.arrayBuffer();
@@ -256,12 +272,6 @@ export default function Home() {
                     }
                 }
             }
-
-            dataFrames['NF-Stock NFE'] = nfeEntrada;
-            dataFrames['NF-Stock Itens'] = nfeItensEntrada;
-            dataFrames['NF-Stock CTE'] = cteEntrada;
-            dataFrames['NF-Stock Emitidas'] = nfeSaida;
-            dataFrames['NF-Stock Emitidas Itens'] = nfeItensSaida;
             
             const processedData = processDataFrames(dataFrames);
 
@@ -342,10 +352,16 @@ export default function Home() {
                 "Emissão Própria": "Emissao Propria",
                 "Notas Canceladas": "Notas Canceladas",
                 "Itens Válidos": "Itens Validos",
+                "Itens de Saída": "Itens de Saida",
                 "Imobilizados": "Imobilizados",
                 "Chaves Válidas": "Chaves Validas",
             };
-            const orderedSheetNames = ["Notas Válidas", "Itens Válidos", "Chaves Válidas", ...Object.keys(results).filter(name => !["Notas Válidas", "Itens Válidos", "Chaves Válidas"].includes(name))];
+            const orderedSheetNames = [
+                "Notas Válidas", "Itens Válidos", "Emissão Própria", "Itens de Saída", "Chaves Válidas", "Imobilizados",
+                ...Object.keys(results).filter(name => ![
+                    "Notas Válidas", "Itens Válidos", "Emissão Própria", "Itens de Saída", "Chaves Válidas", "Imobilizados"
+                ].includes(name))
+            ];
             orderedSheetNames.forEach(sheetName => {
                 if (results[sheetName] && results[sheetName].length > 0) {
                     const worksheet = XLSX.utils.json_to_sheet(results[sheetName]);
