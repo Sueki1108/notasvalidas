@@ -19,7 +19,7 @@ const cleanAndToStr = (value: any): string => {
 export function processDataFrames(dfs: DataFrames): DataFrames {
     const processedDfs: DataFrames = JSON.parse(JSON.stringify(dfs));
 
-    // Step 1: Unify NFE and CTE
+    // Step 1: Unify NFE and CTE for entries
     let nfeData = (processedDfs["NF-Stock NFE"] || []).map(row => {
         if (!row) return row;
         return {
