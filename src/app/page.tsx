@@ -97,13 +97,13 @@ const extractNfeDataFromXml = (xmlContent: string) => {
                 'Chave de acesso': `NFe${chNFe}`,
                 'Número': getValue('nNF', ide),
                 'CPF/CNPJ': isSaida ? (getValue('CNPJ', dest) || getValue('CPF', dest)) : (getValue('CNPJ', emit) || getValue('CPF', emit)),
-                'CFOP': getValue('CFOP', prod),
-                'Código': getValue('cProd', prod),
-                'Descrição': getValue('xProd', prod),
-                'NCM': getValue('NCM', prod),
-                'Quantidade': parseFloat(getValue('qCom', prod)),
-                'Valor Unitário': parseFloat(getValue('vUnCom', prod)),
-                'Valor Total': parseFloat(getValue('vProd', prod)),
+                'CFOP': prod.getElementsByTagName('CFOP')[0]?.textContent || '',
+                'Código': prod.getElementsByTagName('cProd')[0]?.textContent || '',
+                'Descrição': prod.getElementsByTagName('xProd')[0]?.textContent || '',
+                'NCM': prod.getElementsByTagName('NCM')[0]?.textContent || '',
+                'Quantidade': parseFloat(prod.getElementsByTagName('qCom')[0]?.textContent || '0'),
+                'Valor Unitário': parseFloat(prod.getElementsByTagName('vUnCom')[0]?.textContent || '0'),
+                'Valor Total': parseFloat(prod.getElementsByTagName('vProd')[0]?.textContent || '0'),
             });
         }
     }
