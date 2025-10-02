@@ -1,3 +1,4 @@
+
 // src/app/actions.ts
 'use server';
 
@@ -97,6 +98,10 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
     try {
         let spedInfo: SpedInfo | null = null;
         const allSpedKeys = new Map<string, Partial<KeyInfo>>();
+        const allNotesMap = new Map(allNotesFromXmls.map(note => [
+            (note['Chave de acesso'] || '').replace(/^NFe|^CTe/, ''), 
+            note
+        ]));
 
         const lines = spedFileContent.split('\n');
         if (lines.length > 0 && lines[0]) {
@@ -122,11 +127,6 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             }).filter(key => key);
             const spreadsheetKeys = new Set(spreadsheetKeysArray);
 
-            const allNotesMap = new Map(allNotesFromXmls.map(note => [
-                (note['Chave de acesso'] || '').replace(/^NFe|^CTe/, ''), 
-                note
-            ]));
-            
             const keysNotFoundInTxt = [...spreadsheetKeys]
                 .filter(key => !keysInTxt.has(key))
                 .map(key => {
@@ -300,3 +300,5 @@ export async function mergeExcelFiles(files: { name: string, content: ArrayBuffe
         return { error: error.message || "Ocorreu um erro ao agrupar as planilhas." };
     }
 }
+
+    
