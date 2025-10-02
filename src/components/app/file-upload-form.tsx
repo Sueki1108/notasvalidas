@@ -11,9 +11,10 @@ interface FileUploadFormProps {
     files: FileList;
     onFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     onClearFile: (fileName: string) => void;
+    disabled?: boolean;
 }
 
-export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile }: FileUploadFormProps) {
+export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile, disabled = false }: FileUploadFormProps) {
     const getFileAcceptType = (fileName: string) => {
         if (fileName.toLowerCase().includes('txt')) {
             return '.txt';
@@ -37,15 +38,17 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
     return (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {requiredFiles.map((name) => (
-                <div key={name} className="relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-secondary/50 p-4 transition-all min-h-[160px]">
+                <div key={name} className={`relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-secondary/50 p-4 transition-all min-h-[160px] ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
                     {files[name] && files[name]!.length > 0 ? (
                         <>
-                            <div className="absolute right-1 top-1">
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onClearFile(name)}>
-                                    <span className="sr-only">Limpar</span>
-                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                </Button>
-                            </div>
+                            {!disabled && (
+                                <div className="absolute right-1 top-1">
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onClearFile(name)}>
+                                        <span className="sr-only">Limpar</span>
+                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                    </Button>
+                                </div>
+                            )}
                             <div className="flex flex-col items-center gap-2 text-center">
                                 <FileCheck className="h-10 w-10 text-primary" />
                                 <p className="font-semibold">{getDisplayName(name)}</p>
@@ -56,7 +59,7 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
                         </>
                     ) : (
                          <>
-                            <label htmlFor={name} className="flex h-full w-full cursor-pointer flex-col items-center justify-center text-center">
+                            <label htmlFor={name} className={`flex h-full w-full flex-col items-center justify-center text-center ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                                 <Upload className="h-10 w-10 text-muted-foreground" />
                                 <p className="mt-2 font-semibold">{getDisplayName(name)}</p>
                                 <p className="text-sm text-muted-foreground">
@@ -71,6 +74,7 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
                                 className="sr-only"
                                 onChange={onFileChange}
                                 multiple={isMultiple(name)}
+                                disabled={disabled}
                             />
                         </>
                     )}
@@ -79,3 +83,5 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
         </div>
     );
 }
+
+    

@@ -11,13 +11,7 @@ import { addOrUpdateKeyComment } from "@/app/actions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-
-export type KeyCheckResult = {
-    keysNotFoundInTxt: string[];
-    keysInTxtNotInSheet: string[];
-    duplicateKeysInSheet: string[];
-    duplicateKeysInTxt: string[];
-};
+import type { KeyCheckResult } from "@/app/actions";
 
 interface KeyItemProps {
     nfeKey: string;
@@ -62,15 +56,17 @@ const KeyItem = ({ nfeKey, isDuplicate, cnpj, origin }: KeyItemProps) => {
 
 
     const extractInvoiceNumber = (key: string): string => {
-        if (key.length === 44 && /^\d+$/.test(key.substring(25, 34))) {
-            return String(parseInt(key.substring(25, 34), 10));
+        const cleanKey = key.replace(/^NFe|^CTe/, '');
+        if (cleanKey.length === 44 && /^\d+$/.test(cleanKey.substring(25, 34))) {
+            return String(parseInt(cleanKey.substring(25, 34), 10));
         }
         return "N/A";
     };
 
     const identifyInvoiceModel = (key: string): 'NFE' | 'CTE' | '?' => {
-        if (key.length === 44 && /^\d+$/.test(key.substring(20, 22))) {
-            const modelCode = key.substring(20, 22);
+        const cleanKey = key.replace(/^NFe|^CTe/, '');
+        if (cleanKey.length === 44 && /^\d+$/.test(cleanKey.substring(20, 22))) {
+            const modelCode = cleanKey.substring(20, 22);
             if (modelCode === '55') return 'NFE';
             if (modelCode === '57') return 'CTE';
         }
@@ -176,8 +172,8 @@ export function KeyResultsDisplay({ results, cnpj }: KeyResultsDisplayProps) {
                 <CardHeader>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div>
-                            <CardTitle className="font-headline text-xl text-red-700">Chaves da Planilha NÃO ENCONTRADAS no SPED</CardTitle>
-                            <CardDescription>Estas chaves estavam em suas planilhas/XMLs mas não no arquivo SPED TXT.</CardDescription>
+                            <CardTitle className="font-headline text-xl text-red-700">Chaves da Planilha/XML NÃO ENCONTRADAS no SPED</CardTitle>
+                            <CardDescription>Estas chaves estavam em seus arquivos mas não no SPED TXT.</CardDescription>
                         </div>
                         <Button onClick={() => handleDownload(results.keysNotFoundInTxt, "chaves_nao_encontradas_no_sped.xlsx")} disabled={!results.keysNotFoundInTxt || results.keysNotFoundInTxt.length === 0}>
                             <Download className="mr-2 h-4 w-4" />
@@ -198,8 +194,8 @@ export function KeyResultsDisplay({ results, cnpj }: KeyResultsDisplayProps) {
                  <CardHeader>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div>
-                            <CardTitle className="font-headline text-xl text-blue-700">Chaves do SPED NÃO ENCONTRADAS na Planilha</CardTitle>
-                            <CardDescription>Estas chaves estavam no seu arquivo SPED TXT mas não nas planilhas/XMLs.</CardDescription>
+                            <CardTitle className="font-headline text-xl text-blue-700">Chaves do SPED NÃO ENCONTRADAS na Planilha/XML</CardTitle>
+                            <CardDescription>Estas chaves estavam no seu arquivo SPED TXT mas não nos arquivos primários.</CardDescription>
                         </div>
                         <Button onClick={() => handleDownload(results.keysInTxtNotInSheet, "chaves_apenas_no_sped.xlsx")} disabled={!results.keysInTxtNotInSheet || results.keysInTxtNotInSheet.length === 0}>
                             <Download className="mr-2 h-4 w-4" />
@@ -218,3 +214,5 @@ export function KeyResultsDisplay({ results, cnpj }: KeyResultsDisplayProps) {
         </div>
     );
 }
+
+    

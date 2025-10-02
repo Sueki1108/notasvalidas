@@ -37,6 +37,7 @@ type VerificationStats = {
     totalSheetKeys: number;
     totalSpedKeys: number;
     foundInBoth: number;
+
     onlyInSheet: number;
     onlyInSped: number;
 };
@@ -117,9 +118,6 @@ export default function HistoryPage() {
                         </Button>
                          <Button variant="ghost" asChild>
                            <Link href="/merger" className="flex items-center gap-2"><Group />Agrupador</Link>
-                        </Button>
-                        <Button variant="ghost" asChild>
-                           <Link href="/key-checker">Verificador de Chaves</Link>
                         </Button>
                     </nav>
                 </div>
@@ -315,3 +313,5 @@ export default function HistoryPage() {
         </div>
     );
 }
+
+    

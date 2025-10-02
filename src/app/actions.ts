@@ -9,11 +9,18 @@ import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firest
 // Type for the file data structure expected by the processor
 type DataFrames = { [key: string]: any[] };
 
-type SpedInfo = {
+export type SpedInfo = {
     cnpj: string;
     companyName: string;
     competence: string;
 }
+
+export type KeyCheckResult = {
+    keysNotFoundInTxt: string[];
+    keysInTxtNotInSheet: string[];
+    duplicateKeysInSheet: string[];
+    duplicateKeysInTxt: string[];
+};
 
 const findDuplicates = (arr: string[]): string[] => {
     const seen = new Set<string>();
@@ -135,12 +142,9 @@ const extractCteDataFromXml = (xmlContent: string) => {
     return { nota, isSaida: false }; // CTe is always "entrada" in this context
 }
 
-
-export async function processUploadedFiles(formData: FormData) {
+export async function processPrimaryFiles(formData: FormData) {
   try {
     const dataFrames: DataFrames = {};
-    let spedInfo: SpedInfo | null = null;
-    let spedFileContent = '';
     
     const nfeEntrada: any[] = [];
     const nfeItensEntrada: any[] = [];
@@ -148,7 +152,6 @@ export async function processUploadedFiles(formData: FormData) {
     const nfeSaida: any[] = [];
     const nfeItensSaida: any[] = [];
     
-    // Read all files from FormData
     for (const [category, file] of formData.entries()) {
         const fileContent = await (file as File).text();
 
@@ -169,10 +172,8 @@ export async function processUploadedFiles(formData: FormData) {
                 nfeSaida.push(xmlData.nota);
                 nfeItensSaida.push(...xmlData.itens);
             }
-        } else if (category === 'SPED TXT') {
-            spedFileContent = fileContent;
         } else { // Exception spreadsheets
-            const sheetName = category; // The key is the sheet name
+            const sheetName = category;
             if (!dataFrames[sheetName]) dataFrames[sheetName] = [];
             const buffer = await (file as File).arrayBuffer();
             const workbook = XLSX.read(buffer, { type: 'buffer' });
@@ -189,95 +190,107 @@ export async function processUploadedFiles(formData: FormData) {
     dataFrames['NF-Stock CTE'] = cteEntrada;
     dataFrames['NF-Stock Emitidas'] = nfeSaida;
     dataFrames['NF-Stock Emitidas Itens'] = nfeItensSaida;
-
-    let allSpedKeys: string[] = [];
-    if (spedFileContent) {
-        const lines = spedFileContent.split('\n');
-        const keyPattern = /\b\d{44}\b/g;
-        
-        if (lines.length > 0 && lines[0]) {
-            spedInfo = parseSpedInfo(lines[0].trim());
-        }
-        
-        for (const line of lines) {
-            const trimmedLine = line.trim();
-            const matches = trimmedLine.match(keyPattern);
-            if (matches) {
-                allSpedKeys.push(...matches.map(key => key.startsWith('NFe') ? key.substring(3) : (key.startsWith('CTe') ? key.substring(3) : key)));
-            }
-        }
-    }
     
     const processedData = processDataFrames(dataFrames);
-
-    let keyCheckResults = null;
-    const keysInTxt = new Set(allSpedKeys);
-    if (processedData['Chaves Válidas']) {
-        const spreadsheetKeysArray = processedData['Chaves Válidas'].map(row => {
-            const key = String(row['Chave de acesso']).trim();
-            return key.startsWith('NFe') ? key.substring(3) : (key.startsWith('CTe') ? key.substring(3) : key);
-        }).filter(key => key);
-        const spreadsheetKeys = new Set(spreadsheetKeysArray);
-        
-        const keysNotFoundInTxt = [...spreadsheetKeys].filter(key => !keysInTxt.has(key));
-        const keysInTxtNotInSheet = [...keysInTxt].filter(key => !spreadsheetKeys.has(key));
-        
-        const duplicateKeysInSheet = findDuplicates(spreadsheetKeysArray);
-        const duplicateKeysInTxt = findDuplicates(allSpedKeys);
-
-        keyCheckResults = { 
-            keysNotFoundInTxt, 
-            keysInTxtNotInSheet,
-            duplicateKeysInSheet,
-            duplicateKeysInTxt,
-        };
-    }
     
-    if (spedInfo && spedInfo.cnpj) {
-        const allProcessedKeys = processedData['Chaves Válidas']?.map(row => row['Chave de acesso']) || [];
-        const keysNotFoundInSpedSet = new Set((keyCheckResults as any)?.keysNotFoundInTxt || []);
-        
-        const keysFromSheet = allProcessedKeys.map(key => ({
-            key: key,
-            foundInSped: !keysNotFoundInSpedSet.has(key),
-            origin: 'planilha',
-            comment: ''
-        }));
-        
-        const keysOnlyInSped = ((keyCheckResults as any)?.keysInTxtNotInSheet || []).map((key: string) => ({
-            key: key,
-            foundInSped: true,
-            origin: 'sped',
-            comment: ''
-        }));
+    return { data: processedData };
 
-        const verificationKeys = [...keysFromSheet, ...keysOnlyInSped];
-
-        // Stats calculation
-        const stats = {
-            totalSheetKeys: allProcessedKeys.length,
-            totalSpedKeys: allSpedKeys.length,
-            foundInBoth: keysFromSheet.filter(k => k.foundInSped).length,
-            onlyInSheet: keysFromSheet.filter(k => !k.foundInSped).length,
-            onlyInSped: keysOnlyInSped.length,
-        };
-
-        const verificationData = {
-            ...spedInfo,
-            keys: verificationKeys,
-            stats: stats,
-            verifiedAt: serverTimestamp(),
-        };
-
-        await setDoc(doc(db, "verifications", spedInfo.cnpj), verificationData, { merge: true });
-    }
-
-    return { data: processedData, keyCheckResults, spedInfo };
   } catch (error: any) {
     console.error('Error processing files:', error);
     return { error: error.message || 'An unexpected error occurred during file processing.' };
   }
 }
+
+export async function validateWithSped(processedData: DataFrames, spedFile: File) {
+    try {
+        const spedFileContent = await spedFile.text();
+        let spedInfo: SpedInfo | null = null;
+        const allSpedKeys: string[] = [];
+
+        if (spedFileContent) {
+            const lines = spedFileContent.split('\n');
+            const keyPattern = /\b\d{44}\b/g;
+            
+            if (lines.length > 0 && lines[0]) {
+                spedInfo = parseSpedInfo(lines[0].trim());
+            }
+            
+            for (const line of lines) {
+                const trimmedLine = line.trim();
+                const matches = trimmedLine.match(keyPattern);
+                if (matches) {
+                    allSpedKeys.push(...matches.map(key => key.startsWith('NFe') ? key.substring(3) : (key.startsWith('CTe') ? key.substring(3) : key)));
+                }
+            }
+        }
+        
+        let keyCheckResults: KeyCheckResult | null = null;
+        const keysInTxt = new Set(allSpedKeys);
+        
+        if (processedData['Chaves Válidas']) {
+            const spreadsheetKeysArray = processedData['Chaves Válidas'].map(row => {
+                const key = String(row['Chave de acesso']).trim();
+                return key.startsWith('NFe') ? key.substring(3) : (key.startsWith('CTe') ? key.substring(3) : key);
+            }).filter(key => key);
+            const spreadsheetKeys = new Set(spreadsheetKeysArray);
+            
+            const keysNotFoundInTxt = [...spreadsheetKeys].filter(key => !keysInTxt.has(key));
+            const keysInTxtNotInSheet = [...keysInTxt].filter(key => !spreadsheetKeys.has(key));
+            
+            const duplicateKeysInSheet = findDuplicates(spreadsheetKeysArray);
+            const duplicateKeysInTxt = findDuplicates(allSpedKeys);
+
+            keyCheckResults = { 
+                keysNotFoundInTxt, 
+                keysInTxtNotInSheet,
+                duplicateKeysInSheet,
+                duplicateKeysInTxt,
+            };
+        }
+        
+        if (spedInfo && spedInfo.cnpj && keyCheckResults) {
+            const keysFromSheet = (processedData['Chaves Válidas']?.map(row => row['Chave de acesso']) || [])
+                .map((key: string) => ({
+                    key: key,
+                    origin: 'planilha',
+                    foundInSped: !keyCheckResults!.keysNotFoundInTxt.includes(key.replace(/^NFe|^CTe/, '')),
+                    comment: ''
+                }));
+            
+            const keysOnlyInSped = (keyCheckResults.keysInTxtNotInSheet).map((key: string) => ({
+                key: key,
+                origin: 'sped',
+                foundInSped: true, // It's from SPED, so it's found in SPED
+                comment: ''
+            }));
+
+            const verificationKeys = [...keysFromSheet, ...keysOnlyInSped];
+
+            const stats = {
+                totalSheetKeys: keysFromSheet.length,
+                totalSpedKeys: allSpedKeys.length,
+                foundInBoth: keysFromSheet.filter(k => k.foundInSped).length,
+                onlyInSheet: keysFromSheet.filter(k => !k.foundInSped).length,
+                onlyInSped: keysOnlyInSped.length,
+            };
+
+            const verificationData = {
+                ...spedInfo,
+                keys: verificationKeys,
+                stats: stats,
+                verifiedAt: serverTimestamp(),
+            };
+
+            await setDoc(doc(db, "verifications", spedInfo.cnpj), verificationData, { merge: true });
+        }
+
+        return { keyCheckResults, spedInfo };
+    } catch (error: any) {
+        console.error('Error during SPED validation:', error);
+        return { error: error.message || 'An unexpected error occurred during SPED validation.' };
+    }
+}
+
 
 export async function addOrUpdateKeyComment(cnpj: string, key: string, comment: string) {
     if (!cnpj || !key) {
@@ -295,7 +308,7 @@ export async function addOrUpdateKeyComment(cnpj: string, key: string, comment: 
         const data = docSnap.data();
         const keys = data.keys || [];
 
-        const keyIndex = keys.findIndex((k: any) => k.key === key);
+        const keyIndex = keys.findIndex((k: any) => k.key.replace(/^NFe|^CTe/, '') === key.replace(/^NFe|^CTe/, ''));
 
         if (keyIndex === -1) {
              return { error: "Chave não encontrada no histórico de verificação." };
@@ -361,3 +374,5 @@ export async function mergeExcelFiles(formData: FormData) {
         return { error: error.message || "Ocorreu um erro ao agrupar as planilhas." };
     }
 }
+
+    

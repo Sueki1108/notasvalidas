@@ -4,7 +4,7 @@
 import * as React from "react";
 import { useState, type ChangeEvent } from "react";
 import Link from 'next/link';
-import { Sheet, UploadCloud, Group, Download, Trash2, File, Loader2, History, KeyRound } from "lucide-react";
+import { Sheet, UploadCloud, Group, Download, Trash2, File, Loader2, History } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -112,9 +112,6 @@ export default function MergerPage() {
                             <Link href="/">Processamento Principal</Link>
                         </Button>
                         <Button variant="ghost" asChild>
-                           <Link href="/key-checker">Verificador de Chaves</Link>
-                        </Button>
-                        <Button variant="ghost" asChild>
                            <Link href="/history">Histórico</Link>
                         </Button>
                     </nav>
@@ -197,3 +194,5 @@ export default function MergerPage() {
         </div>
     );
 }
+
+    
