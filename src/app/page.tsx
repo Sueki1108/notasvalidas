@@ -29,12 +29,6 @@ const initialFilesState: FileList = {
     "NF-Stock CTE Desacordo de Serviço": null,
 };
 
-// This is a global in-memory cache for files.
-if (typeof window !== 'undefined' && !(window as any).__file_cache) {
-    (window as any).__file_cache = {};
-}
-const fileCache: FileList = typeof window !== 'undefined' ? (window as any).__file_cache : {};
-
 type DataFrames = { [key: string]: any[] };
 
 const extractNfeDataFromXml = (xmlContent: string) => {
@@ -47,9 +41,7 @@ const extractNfeDataFromXml = (xmlContent: string) => {
     }
 
     const getValue = (tag: string, context: Element) => context.getElementsByTagName(tag)[0]?.textContent || '';
-    const getAttribute = (tag: string, attribute: string, context: Element) => context.getElementsByTagName(tag)[0]?.getAttribute(attribute) || '';
-
-
+    
     // Check if it's a cancellation event XML
     const procEventoNFe = xmlDoc.getElementsByTagName('procEventoNFe')[0];
     if (procEventoNFe) {
@@ -108,7 +100,7 @@ const extractNfeDataFromXml = (xmlContent: string) => {
         if (!prod || !imposto) continue;
 
         const icms = imposto.getElementsByTagName('ICMS')[0]?.firstElementChild; // gets ICMS00, ICMS60, etc.
-        const ipi = imposto.getElementsByTagName('IPITrib')[0];
+        const ipi = imposto.getElementsByTagName('IPI')[0]?.getElementsByTagName('IPITrib')[0];
         const pis = imposto.getElementsByTagName('PIS')[0]?.firstElementChild;
         const cofins = imposto.getElementsByTagName('COFINS')[0]?.firstElementChild;
 
@@ -138,6 +130,9 @@ const extractNfeDataFromXml = (xmlContent: string) => {
             'ICMS Base de Cálculo': icms ? parseFloat(getValue('vBC', icms) || '0') : 0,
             'ICMS Alíquota': icms ? parseFloat(getValue('pICMS', icms) || '0') : 0,
             'ICMS Valor': icms ? parseFloat(getValue('vICMS', icms) || '0') : 0,
+            'ICMS vBCSTRet': icms ? parseFloat(getValue('vBCSTRet', icms) || '0') : 0,
+            'ICMS pST': icms ? parseFloat(getValue('pST', icms) || '0') : 0,
+            'ICMS vICMSSTRet': icms ? parseFloat(getValue('vICMSSTRet', icms) || '0') : 0,
             
             // IPI
             'IPI CST': ipi ? getValue('CST', ipi) : '',
@@ -207,7 +202,7 @@ const extractCteDataFromXml = (xmlContent: string) => {
 
 export default function Home() {
     const [activeTab, setActiveTab] = useState("process");
-    const [files, setFiles] = useState<FileList>(fileCache);
+    const [files, setFiles] = useState<FileList>(initialFilesState);
     const [spedFile, setSpedFile] = useState<File | null>(null);
     const [processing, setProcessing] = useState(false);
     const [validating, setValidating] = useState(false);
@@ -225,43 +220,7 @@ export default function Home() {
         "NF-Stock NFE Operação Desconhecida",
         "NF-Stock CTE Desacordo de Serviço",
     ];
-
-    useEffect(() => {
-        try {
-            const storedResults = sessionStorage.getItem('processedData');
-            if (storedResults) setResults(JSON.parse(storedResults));
-
-            const storedKeyCheckResults = sessionStorage.getItem('keyCheckResults');
-            if (storedKeyCheckResults) setKeyCheckResults(JSON.parse(storedKeyCheckResults));
-
-            const storedSpedInfo = sessionStorage.getItem('spedInfo');
-            if (storedSpedInfo) setSpedInfo(JSON.parse(storedSpedInfo));
-
-            const storedTab = sessionStorage.getItem('activeTab');
-            if (storedTab) setActiveTab(storedTab);
-
-            setFiles(fileCache);
-        } catch (e) {
-            console.error("Failed to parse state from sessionStorage", e);
-            handleClearData(true);
-        }
-    }, []);
-
-     const handleTabChange = (value: string) => {
-        setActiveTab(value);
-        sessionStorage.setItem('activeTab', value);
-    };
-
-    const updateFileCache = (newFiles: FileList) => {
-        Object.keys(newFiles).forEach(key => {
-            if (newFiles[key] && newFiles[key]!.length > 0) fileCache[key] = newFiles[key];
-            else delete fileCache[key];
-        });
-        Object.keys(fileCache).forEach(key => {
-            if (!newFiles[key]) delete fileCache[key];
-        });
-    };
-
+    
     const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
         const selectedFiles = e.target.files;
         const fileName = e.target.name;
@@ -272,7 +231,6 @@ export default function Home() {
                 const currentFiles = files[fileName] || [];
                 const newFiles = { ...files, [fileName]: [...currentFiles, ...Array.from(selectedFiles)] };
                 setFiles(newFiles);
-                updateFileCache(newFiles);
             }
         }
     };
@@ -286,7 +244,6 @@ export default function Home() {
             const newFiles = { ...files };
             delete newFiles[fileName];
             setFiles(newFiles);
-            updateFileCache(newFiles);
             const input = document.querySelector(`input[name="${fileName}"]`) as HTMLInputElement;
             if (input) input.value = "";
         }
@@ -375,10 +332,9 @@ export default function Home() {
 
             const processedData = processDataFrames(dataFrames, canceledKeys);
 
-            sessionStorage.setItem('processedData', JSON.stringify(processedData));
             setResults(processedData);
             toast({ title: "Processamento Concluído", description: "Os arquivos foram processados. Vá para a aba de Validação SPED." });
-             handleTabChange('validate');
+            setActiveTab('validate');
         } catch (err: any) {
             setError(err.message || "Ocorreu um erro desconhecido.");
             setResults(null);
@@ -407,8 +363,6 @@ export default function Home() {
         validateWithSped(results, spedFileContent, allNotes).then(resultData => {
             if (resultData.error) throw new Error(resultData.error);
 
-            sessionStorage.setItem('keyCheckResults', JSON.stringify(resultData.keyCheckResults || null));
-            sessionStorage.setItem('spedInfo', JSON.stringify(resultData.spedInfo || null));
             setKeyCheckResults(resultData.keyCheckResults || null);
             setSpedInfo(resultData.spedInfo || null);
             toast({ title: "Validação SPED Concluída", description: "A verificação das chaves foi finalizada." });
@@ -431,8 +385,7 @@ export default function Home() {
         setError(null);
         setSpedInfo(null);
         setActiveTab("process");
-        sessionStorage.clear();
-        for (const key in fileCache) delete fileCache[key];
+        
         const inputs = document.querySelectorAll<HTMLInputElement>('input[type="file"]');
         inputs.forEach(input => input.value = "");
         if (!isInternalCall) {
@@ -518,7 +471,7 @@ export default function Home() {
                         </Button>
                     </div>
 
-                    <Tabs value={activeTab} onValueChange={handleTabChange}>
+                    <Tabs value={activeTab} onValueChange={setActiveTab}>
                         <TabsList className="grid w-full grid-cols-2">
                             <TabsTrigger value="process">1. Processamento Principal</TabsTrigger>
                             <TabsTrigger value="validate" disabled={!results}>2. Validação SPED</TabsTrigger>
