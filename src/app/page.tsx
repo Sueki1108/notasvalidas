@@ -4,18 +4,20 @@
 import { useState, useTransition, useEffect, ChangeEvent, useRef } from "react";
 import { useRouter } from 'next/navigation';
 import * as XLSX from "xlsx";
-import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group } from "lucide-react";
+import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, KeyRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileUploadForm, type FileList } from "@/components/app/file-upload-form";
 import { ResultsDisplay } from "@/components/app/results-display";
+import { KeyResultsDisplay } from "@/components/app/key-results-display";
 import { processUploadedFiles } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
 import { formatCnpj } from "@/lib/utils";
+import type { KeyCheckResult } from "@/components/app/key-results-display";
 
 type SpedInfo = {
     companyName: string;
@@ -43,6 +45,7 @@ export default function Home() {
     const [files, setFiles] = useState<FileList>(fileCache);
     const [processing, setProcessing] = useState(false);
     const [results, setResults] = useState<Record<string, any[]> | null>(null);
+    const [keyCheckResults, setKeyCheckResults] = useState<KeyCheckResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const { toast } = useToast();
     const router = useRouter();
@@ -54,6 +57,9 @@ export default function Home() {
             const storedResults = sessionStorage.getItem('processedData');
             if (storedResults) setResults(JSON.parse(storedResults));
             
+            const storedKeyCheckResults = sessionStorage.getItem('keyCheckResults');
+            if (storedKeyCheckResults) setKeyCheckResults(JSON.parse(storedKeyCheckResults));
+
             const storedSpedInfo = sessionStorage.getItem('spedInfo');
             if (storedSpedInfo) setSpedInfo(JSON.parse(storedSpedInfo));
             
@@ -108,7 +114,7 @@ export default function Home() {
                 const fileList = files[name];
                 if (fileList) {
                     for (const file of fileList) {
-                        formData.append(name, file); // Use the category name as the key
+                        formData.append(name, file);
                     }
                 }
             }
@@ -121,12 +127,14 @@ export default function Home() {
             sessionStorage.setItem('spedInfo', JSON.stringify(resultData.spedInfo || null));
 
             setResults(resultData.data || null);
+            setKeyCheckResults(resultData.keyCheckResults || null);
             setSpedInfo(resultData.spedInfo || null);
 
-            toast({ title: "Processamento Concluído", description: "Os arquivos foram processados com sucesso." });
+            toast({ title: "Processamento Concluído", description: "Os arquivos foram processados e validados com sucesso." });
         } catch (err: any) {
             setError(err.message || "Ocorreu um erro desconhecido.");
             setResults(null);
+            setKeyCheckResults(null);
             toast({ variant: "destructive", title: "Erro no Processamento", description: err.message });
         } finally {
             setProcessing(false);
@@ -136,6 +144,7 @@ export default function Home() {
     const handleClearData = () => {
         setFiles({});
         setResults(null);
+        setKeyCheckResults(null);
         setError(null);
         setSpedInfo(null);
         sessionStorage.clear();
@@ -143,15 +152,6 @@ export default function Home() {
         const inputs = document.querySelectorAll<HTMLInputElement>('input[type="file"]');
         inputs.forEach(input => input.value = "");
         toast({ title: "Dados Limpos", description: "Todos os arquivos e resultados foram removidos." });
-    };
-
-    const handleNavigateToKeyChecker = () => {
-        const keyResults = sessionStorage.getItem('keyCheckResults');
-        if (!keyResults || keyResults === 'null' || keyResults === '{}') {
-            toast({ variant: "destructive", title: "Dados Insuficientes", description: "Processe um arquivo SPED para ver os resultados." });
-            return;
-        }
-        startTransition(() => router.push('/key-checker'));
     };
 
     const handleDownload = () => {
@@ -208,9 +208,6 @@ export default function Home() {
                         <Button variant="ghost" asChild>
                             <Link href="/merger" className="flex items-center gap-2"><Group />Agrupador</Link>
                         </Button>
-                        <Button variant="ghost" onClick={handleNavigateToKeyChecker} disabled={isNavigating}>
-                            {isNavigating ? "Navegando..." : "Verificador de Chaves"}
-                        </Button>
                         <Button variant="ghost" asChild>
                             <Link href="/history">Histórico</Link>
                         </Button>
@@ -245,8 +242,8 @@ export default function Home() {
                             <div className="flex items-center gap-3">
                                 <Cpu className="h-8 w-8 text-primary" />
                                 <div>
-                                    <CardTitle className="font-headline text-2xl">2. Processar Dados</CardTitle>
-                                    <CardDescription>Após o upload, clique no botão para iniciar a automação e a verificação.</CardDescription>
+                                    <CardTitle className="font-headline text-2xl">2. Processar e Validar</CardTitle>
+                                    <CardDescription>Inicie a automação, o processamento dos dados e a validação contra o SPED.</CardDescription>
                                 </div>
                             </div>
                         </CardHeader>
@@ -268,7 +265,7 @@ export default function Home() {
                                     <BrainCircuit className="h-8 w-8 text-primary animate-pulse" />
                                     <div>
                                         <CardTitle className="font-headline text-2xl">Processando...</CardTitle>
-                                        <CardDescription>Aguarde enquanto os dados são analisados.</CardDescription>
+                                        <CardDescription>Aguarde enquanto os dados são analisados e validados.</CardDescription>
                                     </div>
                                 </div>
                             </CardHeader>
@@ -287,15 +284,15 @@ export default function Home() {
                         </Alert>
                     )}
 
-                    {results && (
+                    {(results || keyCheckResults) && (
                         <Card className="shadow-lg">
                             <CardHeader>
-                                <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                 <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
                                     <div className="flex items-center gap-3">
                                         <FileText className="h-8 w-8 text-primary" />
                                         <div>
-                                            <CardTitle className="font-headline text-2xl">3. Resultados e Download</CardTitle>
-                                            <CardDescription>Visualize os dados processados e baixe a planilha final.</CardDescription>
+                                            <CardTitle className="font-headline text-2xl">3. Resultados</CardTitle>
+                                            <CardDescription>Visualize a validação do SPED e os dados processados.</CardDescription>
                                         </div>
                                     </div>
                                     <Button onClick={handleDownload} disabled={!results}>
@@ -303,8 +300,24 @@ export default function Home() {
                                     </Button>
                                 </div>
                             </CardHeader>
-                            <CardContent>
-                                <ResultsDisplay results={results} />
+                            <CardContent className="space-y-8">
+                                {keyCheckResults && (
+                                     <Card>
+                                        <CardHeader>
+                                            <div className="flex items-center gap-3">
+                                                <KeyRound className="h-6 w-6 text-primary" />
+                                                <div>
+                                                    <CardTitle className="font-headline text-xl">Validação de Chaves vs. SPED</CardTitle>
+                                                    <CardDescription>Comparação entre as chaves processadas e o arquivo SPED TXT.</CardDescription>
+                                                </div>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <KeyResultsDisplay results={keyCheckResults} cnpj={spedInfo?.cnpj ?? null} />
+                                        </CardContent>
+                                    </Card>
+                                )}
+                                {results && <ResultsDisplay results={results} />}
                             </CardContent>
                         </Card>
                     )}

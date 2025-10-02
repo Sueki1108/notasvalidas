@@ -29,7 +29,7 @@ import { Badge } from "@/components/ui/badge";
 type VerificationKey = {
   key: string;
   foundInSped: boolean;
-  origin: 'planilha' | 'sped' | 'ambos';
+  origin: 'planilha' | 'sped';
   comment?: string;
 };
 
@@ -116,9 +116,6 @@ export default function HistoryPage() {
                             <Link href="/">Processamento Principal</Link>
                         </Button>
                          <Button variant="ghost" asChild>
-                           <Link href="/key-checker">Verificador de Chaves</Link>
-                        </Button>
-                         <Button variant="ghost" asChild>
                            <Link href="/merger" className="flex items-center gap-2"><Group />Agrupador</Link>
                         </Button>
                     </nav>
@@ -157,7 +154,7 @@ export default function HistoryPage() {
                                     </TableHeader>
                                     <TableBody>
                                         {verifications.map((v) => {
-                                            const totalKeys = v.stats?.totalSheetKeys || v.keys?.length || 0;
+                                            const totalKeys = v.stats?.totalSheetKeys || 0;
                                             const discrepancies = (v.stats?.onlyInSheet || 0) + (v.stats?.onlyInSped || 0);
                                             return (
                                             <TableRow key={v.id}>
@@ -228,19 +225,21 @@ export default function HistoryPage() {
                                             </div>
                                         </AccordionTrigger>
                                         <AccordionContent>
-                                            <ul className="space-y-2 pt-2">
-                                                {groupedKeys.foundInBoth.map((item, index) => (
-                                                    <li key={index} className="flex items-center justify-between gap-4 rounded-md bg-secondary/50 p-2 font-mono text-sm">
-                                                        <span>{item.key}</span>
-                                                        {item.comment && (
-                                                            <Tooltip>
-                                                                <TooltipTrigger><MessageSquare className="h-5 w-5 text-blue-600" /></TooltipTrigger>
-                                                                <TooltipContent><p>{item.comment}</p></TooltipContent>
-                                                            </Tooltip>
-                                                        )}
-                                                    </li>
-                                                ))}
-                                            </ul>
+                                            {groupedKeys.foundInBoth.length > 0 ? (
+                                                <ul className="space-y-2 pt-2">
+                                                    {groupedKeys.foundInBoth.map((item, index) => (
+                                                        <li key={index} className="flex items-center justify-between gap-4 rounded-md bg-secondary/50 p-2 font-mono text-sm">
+                                                            <span>{item.key}</span>
+                                                            {item.comment && (
+                                                                <Tooltip>
+                                                                    <TooltipTrigger><MessageSquare className="h-5 w-5 text-blue-600" /></TooltipTrigger>
+                                                                    <TooltipContent><p>{item.comment}</p></TooltipContent>
+                                                                </Tooltip>
+                                                            )}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            ) : <p className="pt-2 text-sm text-muted-foreground">Nenhuma chave encontrada em ambas as fontes.</p>}
                                         </AccordionContent>
                                     </AccordionItem>
                                      <AccordionItem value="item-2">
@@ -251,19 +250,21 @@ export default function HistoryPage() {
                                             </div>
                                         </AccordionTrigger>
                                         <AccordionContent>
-                                             <ul className="space-y-2 pt-2">
-                                                {groupedKeys.onlyInSheet.map((item, index) => (
-                                                    <li key={index} className="flex items-center justify-between gap-4 rounded-md bg-secondary/50 p-2 font-mono text-sm">
-                                                        <span>{item.key}</span>
-                                                        {item.comment && (
-                                                            <Tooltip>
-                                                                <TooltipTrigger><MessageSquare className="h-5 w-5 text-blue-600" /></TooltipTrigger>
-                                                                <TooltipContent><p>{item.comment}</p></TooltipContent>
-                                                            </Tooltip>
-                                                        )}
-                                                    </li>
-                                                ))}
-                                            </ul>
+                                            {groupedKeys.onlyInSheet.length > 0 ? (
+                                                <ul className="space-y-2 pt-2">
+                                                    {groupedKeys.onlyInSheet.map((item, index) => (
+                                                        <li key={index} className="flex items-center justify-between gap-4 rounded-md bg-secondary/50 p-2 font-mono text-sm">
+                                                            <span>{item.key}</span>
+                                                            {item.comment && (
+                                                                <Tooltip>
+                                                                    <TooltipTrigger><MessageSquare className="h-5 w-5 text-blue-600" /></TooltipTrigger>
+                                                                    <TooltipContent><p>{item.comment}</p></TooltipContent>
+                                                                </Tooltip>
+                                                            )}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            ) : <p className="pt-2 text-sm text-muted-foreground">Nenhuma chave encontrada apenas na planilha.</p>}
                                         </AccordionContent>
                                     </AccordionItem>
                                      <AccordionItem value="item-3">
@@ -274,19 +275,21 @@ export default function HistoryPage() {
                                             </div>
                                         </AccordionTrigger>
                                         <AccordionContent>
-                                             <ul className="space-y-2 pt-2">
-                                                {groupedKeys.onlyInSped.map((item, index) => (
-                                                     <li key={index} className="flex items-center justify-between gap-4 rounded-md bg-secondary/50 p-2 font-mono text-sm">
-                                                        <span>{item.key}</span>
-                                                        {item.comment && (
-                                                            <Tooltip>
-                                                                <TooltipTrigger><MessageSquare className="h-5 w-5 text-blue-600" /></TooltipTrigger>
-                                                                <TooltipContent><p>{item.comment}</p></TooltipContent>
-                                                            </Tooltip>
-                                                        )}
-                                                    </li>
-                                                ))}
-                                            </ul>
+                                            {groupedKeys.onlyInSped.length > 0 ? (
+                                                 <ul className="space-y-2 pt-2">
+                                                    {groupedKeys.onlyInSped.map((item, index) => (
+                                                         <li key={index} className="flex items-center justify-between gap-4 rounded-md bg-secondary/50 p-2 font-mono text-sm">
+                                                            <span>{item.key}</span>
+                                                            {item.comment && (
+                                                                <Tooltip>
+                                                                    <TooltipTrigger><MessageSquare className="h-5 w-5 text-blue-600" /></TooltipTrigger>
+                                                                    <TooltipContent><p>{item.comment}</p></TooltipContent>
+                                                                </Tooltip>
+                                                            )}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            ) : <p className="pt-2 text-sm text-muted-foreground">Nenhuma chave encontrada apenas no SPED.</p>}
                                         </AccordionContent>
                                     </AccordionItem>
                                 </Accordion>

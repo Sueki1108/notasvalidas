@@ -7,22 +7,27 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Copy, Download, Ban, Circle, AlertTriangle, MessageSquare, Send, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { KeyCheckResult } from "@/app/key-checker/page";
 import { addOrUpdateKeyComment } from "@/app/actions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 
+export type KeyCheckResult = {
+    keysNotFoundInTxt: string[];
+    keysInTxtNotInSheet: string[];
+    duplicateKeysInSheet: string[];
+    duplicateKeysInTxt: string[];
+};
 
 interface KeyItemProps {
     nfeKey: string;
     isDuplicate: boolean;
     cnpj: string | null;
+    origin: 'sheet' | 'txt';
 }
 
-const KeyItem = ({ nfeKey, isDuplicate, cnpj }: KeyItemProps) => {
+const KeyItem = ({ nfeKey, isDuplicate, cnpj, origin }: KeyItemProps) => {
     const { toast } = useToast();
-    const [status, setStatus] = useState<'default' | 'checked' | 'cancelled'>('default');
     const [comment, setComment] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [isPopoverOpen, setIsPopoverOpen] = useState(false);
@@ -42,6 +47,8 @@ const KeyItem = ({ nfeKey, isDuplicate, cnpj }: KeyItemProps) => {
         }
         setIsSaving(true);
         try {
+            // Adjust the key based on origin to match how it's stored in Firestore
+            const keyToSave = origin === 'txt' ? nfeKey : `NFe${nfeKey}`;
             const result = await addOrUpdateKeyComment(cnpj, nfeKey, comment);
             if (result.error) {
                 throw new Error(result.error);
@@ -72,8 +79,9 @@ const KeyItem = ({ nfeKey, isDuplicate, cnpj }: KeyItemProps) => {
         return '?';
     };
     
-    const invoiceNumber = extractInvoiceNumber(nfeKey);
-    const invoiceModel = identifyInvoiceModel(nfeKey);
+    const displayKey = nfeKey.replace(/^NFe|^CTe/, '');
+    const invoiceNumber = extractInvoiceNumber(displayKey);
+    const invoiceModel = identifyInvoiceModel(displayKey);
 
     return (
         <div className={`p-3 rounded-lg border flex flex-col gap-4 transition-colors bg-secondary/50`}>
@@ -84,7 +92,7 @@ const KeyItem = ({ nfeKey, isDuplicate, cnpj }: KeyItemProps) => {
                     >
                         {invoiceModel}
                     </span>
-                    <span>{nfeKey}</span>
+                    <span>{displayKey}</span>
                 </div>
                  {isDuplicate && (
                     <div className="flex items-center gap-1 text-xs text-amber-700 font-semibold">
@@ -100,7 +108,7 @@ const KeyItem = ({ nfeKey, isDuplicate, cnpj }: KeyItemProps) => {
                         <Copy className="h-4 w-4" />
                     </Button>
                 </div>
-                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => copyToClipboard(nfeKey, 'Chave')}>
+                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => copyToClipboard(displayKey, 'Chave')}>
                     <Copy className="h-4 w-4" />
                 </Button>
                 
@@ -154,7 +162,7 @@ export function KeyResultsDisplay({ results, cnpj }: KeyResultsDisplayProps) {
             });
             return;
         }
-        const data = keys.map(key => ({ "Chave de acesso": key }));
+        const data = keys.map(key => ({ "Chave de acesso": key.replace(/^NFe|^CTe/, '') }));
         const worksheet = XLSX.utils.json_to_sheet(data);
         worksheet['!cols'] = [{ wch: 50 }];
 
@@ -166,46 +174,46 @@ export function KeyResultsDisplay({ results, cnpj }: KeyResultsDisplayProps) {
 
     return (
         <div className="space-y-8">
-            <Card className="shadow-lg">
+            <Card>
                 <CardHeader>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div>
-                            <CardTitle className="font-headline text-2xl text-red-700">Chaves da Planilha NÃO ENCONTRADAS no Texto</CardTitle>
-                            <CardDescription>Estas chaves estavam na sua planilha mas não no arquivo .txt.</CardDescription>
+                            <CardTitle className="font-headline text-xl text-red-700">Chaves da Planilha NÃO ENCONTRADAS no SPED</CardTitle>
+                            <CardDescription>Estas chaves estavam em suas planilhas/XMLs mas não no arquivo SPED TXT.</CardDescription>
                         </div>
-                        <Button onClick={() => handleDownload(results.keysNotFoundInTxt, "chaves_planilha_nao_encontradas.xlsx")} disabled={results.keysNotFoundInTxt.length === 0}>
+                        <Button onClick={() => handleDownload(results.keysNotFoundInTxt, "chaves_nao_encontradas_no_sped.xlsx")} disabled={!results.keysNotFoundInTxt || results.keysNotFoundInTxt.length === 0}>
                             <Download className="mr-2 h-4 w-4" />
-                            Baixar XLSX
+                            Baixar
                         </Button>
                     </div>
                 </CardHeader>
-                <CardContent className="space-y-2">
-                    {results.keysNotFoundInTxt.length > 0 ? (
-                        results.keysNotFoundInTxt.map(key => <KeyItem key={key} nfeKey={key} isDuplicate={duplicateSheetKeys.has(key)} cnpj={cnpj} />)
+                <CardContent className="space-y-2 max-h-96 overflow-y-auto pr-3">
+                    {results.keysNotFoundInTxt && results.keysNotFoundInTxt.length > 0 ? (
+                        results.keysNotFoundInTxt.map(key => <KeyItem key={key} nfeKey={key} isDuplicate={duplicateSheetKeys.has(key)} cnpj={cnpj} origin="sheet" />)
                     ) : (
-                        <p className="text-muted-foreground italic">Boas notícias! Todas as chaves da planilha foram encontradas no arquivo de texto.</p>
+                        <p className="text-muted-foreground italic">Nenhuma divergência encontrada.</p>
                     )}
                 </CardContent>
             </Card>
 
-            <Card className="shadow-lg">
+            <Card>
                  <CardHeader>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div>
-                            <CardTitle className="font-headline text-2xl text-blue-700">Chaves do Texto NÃO ENCONTRADAS na Planilha</CardTitle>
-                            <CardDescription>Estas chaves estavam no seu arquivo .txt mas não na planilha.</CardDescription>
+                            <CardTitle className="font-headline text-xl text-blue-700">Chaves do SPED NÃO ENCONTRADAS na Planilha</CardTitle>
+                            <CardDescription>Estas chaves estavam no seu arquivo SPED TXT mas não nas planilhas/XMLs.</CardDescription>
                         </div>
-                        <Button onClick={() => handleDownload(results.keysInTxtNotInSheet, "chaves_txt_nao_encontradas.xlsx")} disabled={results.keysInTxtNotInSheet.length === 0}>
+                        <Button onClick={() => handleDownload(results.keysInTxtNotInSheet, "chaves_apenas_no_sped.xlsx")} disabled={!results.keysInTxtNotInSheet || results.keysInTxtNotInSheet.length === 0}>
                             <Download className="mr-2 h-4 w-4" />
-                            Baixar XLSX
+                            Baixar
                         </Button>
                     </div>
                 </CardHeader>
-                <CardContent className="space-y-2">
-                    {results.keysInTxtNotInSheet.length > 0 ? (
-                        results.keysInTxtNotInSheet.map(key => <KeyItem key={key} nfeKey={key} isDuplicate={duplicateTxtKeys.has(key)} cnpj={cnpj} />)
+                <CardContent className="space-y-2 max-h-96 overflow-y-auto pr-3">
+                    {results.keysInTxtNotInSheet && results.keysInTxtNotInSheet.length > 0 ? (
+                        results.keysInTxtNotInSheet.map(key => <KeyItem key={key} nfeKey={key} isDuplicate={duplicateTxtKeys.has(key)} cnpj={cnpj} origin="txt" />)
                     ) : (
-                        <p className="text-muted-foreground italic">Boas notícias! Todas as chaves do arquivo de texto foram encontradas na sua planilha.</p>
+                        <p className="text-muted-foreground italic">Nenhuma divergência encontrada.</p>
                     )}
                 </CardContent>
             </Card>
