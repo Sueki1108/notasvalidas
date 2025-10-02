@@ -1,3 +1,4 @@
+
 // src/app/page.tsx
 "use client";
 
@@ -271,6 +272,9 @@ export default function Home() {
                         const xmlData = extractCteDataFromXml(fileContent);
                         if (xmlData) {
                             cteEntrada.push(xmlData.nota);
+                             if (xmlData.nota['Status']?.includes('Cancelada')) {
+                                canceledKeys.add(xmlData.nota['Chave de acesso']);
+                            }
                         }
                     } else {
                         const xmlData = extractNfeDataFromXml(fileContent);
@@ -505,7 +509,7 @@ export default function Home() {
                                                 <CardDescription>Aguarde enquanto os dados primários são analisados.</CardDescription>
                                             </div>
                                         </div>
-                                    </Header>
+                                    </CardHeader>
                                     <CardContent className="space-y-4">
                                        <Skeleton className="h-8 w-full" />
                                        <Skeleton className="h-32 w-full" />
@@ -577,7 +581,7 @@ export default function Home() {
                                                 <CardDescription>Aguarde enquanto as chaves são comparadas.</CardDescription>
                                             </div>
                                         </div>
-                                    </Header>
+                                    </CardHeader>
                                      <CardContent className="space-y-4">
                                        <Skeleton className="h-8 w-full" />
                                        <Skeleton className="h-32 w-full" />
@@ -614,3 +618,5 @@ export default function Home() {
         </div>
     );
 }
+
+    
