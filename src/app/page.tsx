@@ -39,6 +39,11 @@ type DataFrames = { [key: string]: any[] };
 const extractNfeDataFromXml = (xmlContent: string) => {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlContent, "application/xml");
+    const errorNode = xmlDoc.querySelector("parsererror");
+    if (errorNode) {
+      console.error("Error parsing XML:", errorNode.textContent);
+      return null;
+    }
 
     const getValue = (tag: string, context: Document | Element = xmlDoc) => context.getElementsByTagName(tag)[0]?.textContent || '';
 
@@ -88,9 +93,9 @@ const extractNfeDataFromXml = (xmlContent: string) => {
     const isSaida = getValue('tpNF', ide) === '1';
 
     const itens: any[] = [];
-    const detElements = xmlDoc.getElementsByTagName('det');
-    for (let i = 0; i < detElements.length; i++) {
-        const det = detElements[i];
+    const detElements = Array.from(xmlDoc.getElementsByTagName('det'));
+
+    for (const det of detElements) {
         const prod = det.getElementsByTagName('prod')[0];
         if (prod) {
             itens.push({
@@ -114,6 +119,12 @@ const extractNfeDataFromXml = (xmlContent: string) => {
 const extractCteDataFromXml = (xmlContent: string) => {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlContent, "application/xml");
+    const errorNode = xmlDoc.querySelector("parsererror");
+    if (errorNode) {
+      console.error("Error parsing XML:", errorNode.textContent);
+      return null;
+    }
+
 
     const getValue = (tag: string, context: Document | Element = xmlDoc) => context.getElementsByTagName(tag)[0]?.textContent || '';
 
@@ -371,6 +382,7 @@ export default function Home() {
                 "NF-Stock NFE Operação Não Realizada": "NFE Op Nao Realizada",
                 "NF-Stock NFE Operação Desconhecida": "NFE Op Desconhecida",
                 "NF-Stock CTE Desacordo de Serviço": "CTE Desacordo Servico",
+                "NF-Stock Emitidas": "NF Emitidas",
                 "Notas Válidas": "Notas Validas",
                 "Emissão Própria": "Emissao Propria",
                 "Notas Canceladas": "Notas Canceladas",
@@ -380,7 +392,7 @@ export default function Home() {
                 "Chaves Válidas": "Chaves Validas",
             };
             const orderedSheetNames = [
-                "Notas Válidas", "Itens Válidos", "Emissão Própria", "Itens de Saída", "Chaves Válidas", "Imobilizados", "Notas Canceladas",
+                "Notas Válidas", "Itens Válidos", "Emissão Própria", "NF-Stock Emitidas", "Itens de Saída", "Chaves Válidas", "Imobilizados", "Notas Canceladas",
                 "NF-Stock NFE Operação Não Realizada", "NF-Stock NFE Operação Desconhecida", "NF-Stock CTE Desacordo de Serviço"
             ].filter(name => results[name] && results[name].length > 0);
             

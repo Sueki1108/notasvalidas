@@ -74,15 +74,14 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>): D
     // Step 2: Identify and separate exceptions
     const chavesUnicasARemover = new Set<string>();
 
-    // Add keys from cancellation events and status
-    canceledKeys.forEach(key => {
-         const entryNote = notasEntradaTemporaria.find(n => n['Chave de acesso'] === key);
-         if(entryNote) {
-            chavesUnicasARemover.add(cleanAndToStr(entryNote["Chave Unica"]));
-         }
+    // Add keys from cancellation events and status from XMLs to canceledKeys Set first
+    notasEntradaTemporaria.forEach(row => {
+        if (row && (row["Status"]?.includes('Cancelada') || canceledKeys.has(row['Chave de acesso']))) {
+            canceledKeys.add(row['Chave de acesso']);
+        }
     });
 
-    processedDfs["Notas Canceladas"] = notasEntradaTemporaria.filter(row => row && (row["Status"]?.includes('Cancelada') || canceledKeys.has(row['Chave de acesso'])));
+    processedDfs["Notas Canceladas"] = notasEntradaTemporaria.filter(row => row && canceledKeys.has(row['Chave de acesso']));
     
     processedDfs["Notas Canceladas"].forEach(row => {
         if (row && row["Chave Unica"]) {
@@ -122,14 +121,29 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>): D
         row && row["Chave Unica"] && chavesFinaisValidas.has(cleanAndToStr(row["Chave Unica"]))
     );
 
-    // Handle outgoing notes ("Emissão Própria")
-    const notasSaida = processedDfs["NF-Stock Emitidas"] || [];
-    processedDfs["Emissão Própria"] = filterRows(notasSaida).filter(row => row && !canceledKeys.has(row['Chave de acesso']));
+    // Handle outgoing notes
+    processedDfs["NF-Stock Emitidas"] = filterRows(processedDfs["NF-Stock Emitidas"] || []).filter(row => row && !canceledKeys.has(row['Chave de acesso']));
     processedDfs["Itens de Saída"] = (processedDfs["NF-Stock Emitidas Itens"] || []).filter(item => item && !canceledKeys.has(item['Chave de acesso']));
+    
+    // Logic for "Emissão Própria"
+    const cfopsProprios = new Set<string>();
+    if (processedDfs["Itens Válidos"]) {
+        processedDfs["Itens Válidos"].forEach(item => {
+            const cfop = String(item.CFOP);
+            if (cfop.startsWith('1') || cfop.startsWith('2')) {
+                const chaveUnica = cleanAndToStr(item["Chave Unica"]);
+                cfopsProprios.add(chaveUnica);
+            }
+        });
+    }
+    processedDfs["Emissão Própria"] = processedDfs["Notas Válidas"].filter(nota => {
+        const chaveUnica = cleanAndToStr(nota["Chave Unica"]);
+        return cfopsProprios.has(chaveUnica);
+    });
 
 
     const chavesRecebidasValidas = new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));
-    const chavesEmitidasValidas = new Set(processedDfs["Emissão Própria"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));
+    const chavesEmitidasValidas = new Set(processedDfs["NF-Stock Emitidas"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));
 
     const combinedChavesValidas = new Set([...chavesRecebidasValidas, ...chavesEmitidasValidas]);
     processedDfs["Chaves Válidas"] = Array.from(combinedChavesValidas).map(key => ({ "Chave de acesso": key }));
@@ -173,7 +187,8 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>): D
     delete processedDfs["NF-Stock NFE"];
     delete processedDfs["NF-Stock CTE"];
     delete processedDfs["NF-Stock Itens"];
-    delete processedDfs["NF-Stock Emitidas"];
+    // Keep NF-Stock Emitidas and Itens de Saída for display
+    // delete processedDfs["NF-Stock Emitidas"];
     delete processedDfs["NF-Stock Emitidas Itens"];
 
     return processedDfs;
