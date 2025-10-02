@@ -7,7 +7,7 @@ import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Sheet, History, Search, ArrowLeft, CheckCircle, XCircle, MessageSquare, Group, HelpCircle, File as FileIcon, AlertCircle } from "lucide-react";
+import { Loader2, Sheet, History, Search, ArrowLeft, CheckCircle, XCircle, MessageSquare, Group, File as FileIcon } from "lucide-react";
 import Link from 'next/link';
 import {
   AlertDialog,
@@ -28,7 +28,7 @@ import { Badge } from "@/components/ui/badge";
 
 type VerificationKey = {
   key: string;
-  foundInSped?: boolean;
+  foundInSped: boolean;
   origin: 'planilha' | 'sped' | 'ambos';
   comment?: string;
 };
@@ -61,7 +61,7 @@ export default function HistoryPage() {
             return { foundInBoth: [], onlyInSheet: [], onlyInSped: [] };
         }
         return {
-            foundInBoth: selectedVerification.keys.filter(k => k.origin === 'ambos' || (k.origin === 'planilha' && k.foundInSped)),
+            foundInBoth: selectedVerification.keys.filter(k => k.origin === 'planilha' && k.foundInSped),
             onlyInSheet: selectedVerification.keys.filter(k => k.origin === 'planilha' && !k.foundInSped),
             onlyInSped: selectedVerification.keys.filter(k => k.origin === 'sped'),
         };
@@ -100,56 +100,6 @@ export default function HistoryPage() {
         if (!timestamp) return '';
         return timestamp.toDate().toLocaleTimeString('pt-BR');
     }
-
-    const getStatusIcon = (item: VerificationKey) => {
-        if (item.origin === 'ambos' || (item.origin === 'planilha' && item.foundInSped)) {
-            return (
-                 <Tooltip>
-                    <TooltipTrigger>
-                        <CheckCircle className="h-5 w-5 text-green-600" />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        <p>Encontrada na Planilha e no SPED</p>
-                    </TooltipContent>
-                </Tooltip>
-            );
-        }
-        if (item.origin === 'planilha' && !item.foundInSped) {
-            return (
-                 <Tooltip>
-                    <TooltipTrigger>
-                        <XCircle className="h-5 w-5 text-red-600" />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        <p>Encontrada na Planilha, mas não no SPED</p>
-                    </TooltipContent>
-                </Tooltip>
-            );
-        }
-        if (item.origin === 'sped') {
-             return (
-                 <Tooltip>
-                    <TooltipTrigger>
-                        <FileIcon className="h-5 w-5 text-blue-600" />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        <p>Encontrada no SPED, mas não na Planilha</p>
-                    </TooltipContent>
-                </Tooltip>
-            );
-        }
-        return (
-             <Tooltip>
-                <TooltipTrigger>
-                    <HelpCircle className="h-5 w-5 text-gray-500" />
-                </TooltipTrigger>
-                <TooltipContent>
-                    <p>Status desconhecido</p>
-                </TooltipContent>
-            </Tooltip>
-        );
-    }
-
 
     return (
         <div className="min-h-screen bg-background text-foreground">
@@ -268,7 +218,8 @@ export default function HistoryPage() {
                         
                          <div className="space-y-4">
                             <ScrollArea className="h-96 w-full pr-4">
-                                <Accordion type="single" collapsible defaultValue="item-1">
+                               <TooltipProvider>
+                                <Accordion type="single" collapsible defaultValue="item-1" className="w-full">
                                     <AccordionItem value="item-1">
                                         <AccordionTrigger className="font-semibold">
                                             <div className="flex items-center gap-2">
@@ -278,7 +229,6 @@ export default function HistoryPage() {
                                         </AccordionTrigger>
                                         <AccordionContent>
                                             <ul className="space-y-2 pt-2">
-                                                <TooltipProvider>
                                                 {groupedKeys.foundInBoth.map((item, index) => (
                                                     <li key={index} className="flex items-center justify-between gap-4 rounded-md bg-secondary/50 p-2 font-mono text-sm">
                                                         <span>{item.key}</span>
@@ -290,7 +240,6 @@ export default function HistoryPage() {
                                                         )}
                                                     </li>
                                                 ))}
-                                                </TooltipProvider>
                                             </ul>
                                         </AccordionContent>
                                     </AccordionItem>
@@ -303,7 +252,6 @@ export default function HistoryPage() {
                                         </AccordionTrigger>
                                         <AccordionContent>
                                              <ul className="space-y-2 pt-2">
-                                                <TooltipProvider>
                                                 {groupedKeys.onlyInSheet.map((item, index) => (
                                                     <li key={index} className="flex items-center justify-between gap-4 rounded-md bg-secondary/50 p-2 font-mono text-sm">
                                                         <span>{item.key}</span>
@@ -315,7 +263,6 @@ export default function HistoryPage() {
                                                         )}
                                                     </li>
                                                 ))}
-                                                </TooltipProvider>
                                             </ul>
                                         </AccordionContent>
                                     </AccordionItem>
@@ -328,7 +275,6 @@ export default function HistoryPage() {
                                         </AccordionTrigger>
                                         <AccordionContent>
                                              <ul className="space-y-2 pt-2">
-                                                <TooltipProvider>
                                                 {groupedKeys.onlyInSped.map((item, index) => (
                                                      <li key={index} className="flex items-center justify-between gap-4 rounded-md bg-secondary/50 p-2 font-mono text-sm">
                                                         <span>{item.key}</span>
@@ -340,11 +286,11 @@ export default function HistoryPage() {
                                                         )}
                                                     </li>
                                                 ))}
-                                                </TooltipProvider>
                                             </ul>
                                         </AccordionContent>
                                     </AccordionItem>
                                 </Accordion>
+                                </TooltipProvider>
                             </ScrollArea>
                         </div>
                         
@@ -363,4 +309,6 @@ export default function HistoryPage() {
         </div>
     );
 }
+    
+
     
