@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
 import { formatCnpj } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
 const initialFilesState: FileList = {
@@ -55,28 +56,32 @@ const extractNfeDataFromXml = (xmlContent: string) => {
         const cStatEvento = procEventoNFe.getElementsByTagName('cStat')[0]?.textContent || '';
 
         // 110111 is cancellation event, 135 is success status for the event
-        if (tpEvento === '110111' && cStatEvento === '135') {
-            return { 
-                nota: { 
+        if (tpEvento === '110111' && (cStatEvento === '135' || cStatEvento === '101')) {
+            return {
+                nota: {
                     'Chave de acesso': `NFe${chNFe}`,
                     'Status': 'Cancelada (Evento)',
-                }, 
-                itens: [] 
+                },
+                itens: []
             };
         }
         return null; // Not a relevant event
     }
-    
+
     const ide = xmlDoc.getElementsByTagName('ide')[0];
     const emit = xmlDoc.getElementsByTagName('emit')[0];
     const dest = xmlDoc.getElementsByTagName('dest')[0];
     const total = xmlDoc.getElementsByTagName('ICMSTot')[0];
     const protNFe = xmlDoc.getElementsByTagName('protNFe')[0];
-    
-    if (!ide || !emit || !dest || !total || !protNFe) return null;
 
-    const chNFe = protNFe.getElementsByTagName('chNFe')[0]?.textContent || '';
-    const cStat = protNFe.getElementsByTagName('cStat')[0]?.textContent || '';
+    if (!ide || !emit || !total ) return null;
+    
+    const infProt = protNFe ? protNFe.getElementsByTagName('infProt')[0] : null;
+    const chNFe = infProt ? getValue('chNFe', infProt) : xmlDoc.getElementsByTagName('infNFe')[0]?.getAttribute('Id')?.replace('NFe', '') || '';
+    const cStat = infProt ? getValue('cStat', infProt) : '0';
+
+
+    const isSaida = getValue('tpNF', ide) === '1';
 
     const nota = {
         'Chave de acesso': `NFe${chNFe}`,
@@ -86,11 +91,11 @@ const extractNfeDataFromXml = (xmlContent: string) => {
         'Status': parseInt(cStat) === 100 ? 'Autorizadas' : (parseInt(cStat) === 101 ? 'Canceladas' : `Status ${cStat}`),
         'Emitente CPF/CNPJ': getValue('CNPJ', emit) || getValue('CPF', emit),
         'Emitente': getValue('xNome', emit),
-        'Destinatário CPF/CNPJ': getValue('CNPJ', dest) || getValue('CPF', dest),
-        'Destinatário': getValue('xNome', dest)
+        'Destinatário CPF/CNPJ': dest ? (getValue('CNPJ', dest) || getValue('CPF', dest)) : '',
+        'Destinatário': dest ? getValue('xNome', dest) : '',
+        'Fornecedor/Cliente': isSaida ? (getValue('xNome', dest)) : (getValue('xNome', emit)),
     };
-    
-    const isSaida = getValue('tpNF', ide) === '1';
+
 
     const itens: any[] = [];
     const detElements = Array.from(xmlDoc.getElementsByTagName('det'));
@@ -112,7 +117,7 @@ const extractNfeDataFromXml = (xmlContent: string) => {
             });
         }
     }
-    
+
     return { nota, itens };
 }
 
@@ -137,22 +142,24 @@ const extractCteDataFromXml = (xmlContent: string) => {
 
     const chCTe = protCTe.getElementsByTagName('chCTe')[0]?.textContent || '';
     const cStat = protCTe.getElementsByTagName('cStat')[0]?.textContent || '';
+    const tomadorName = toma ? getValue('xNome', toma) : '';
 
     const nota = {
         'Chave de acesso': `CTe${chCTe}`,
         'Número': getValue('nCT', ide),
         'Data de Emissão': getValue('dhEmi', ide),
-        'Valor da Prestação': parseFloat(getValue('vTPrest', vPrest)),
+        'Valor': parseFloat(getValue('vTPrest', vPrest)),
         'Status': parseInt(cStat) === 100 ? 'Autorizadas' : `Status ${cStat}`,
         'Tomador CPF/CNPJ': toma ? (getValue('CNPJ', toma) || getValue('CPF', toma)) : '',
-        'Tomador': toma ? getValue('xNome', toma) : '',
+        'Tomador': tomadorName,
+        'Fornecedor/Cliente': tomadorName,
     };
-    
+
     return { nota };
 }
 
 export default function Home() {
-    const [step, setStep] = useState(1);
+    const [activeTab, setActiveTab] = useState("process");
     const [files, setFiles] = useState<FileList>(fileCache);
     const [spedFile, setSpedFile] = useState<File | null>(null);
     const [processing, setProcessing] = useState(false);
@@ -173,26 +180,30 @@ export default function Home() {
     ];
 
     useEffect(() => {
-        // This effect helps in persisting state across reloads, but we clear it on a full clear.
         try {
             const storedResults = sessionStorage.getItem('processedData');
-            if (storedResults) {
-                setResults(JSON.parse(storedResults));
-                setStep(2); // If we have results, we should be at least at step 2
-            }
-            
+            if (storedResults) setResults(JSON.parse(storedResults));
+
             const storedKeyCheckResults = sessionStorage.getItem('keyCheckResults');
             if (storedKeyCheckResults) setKeyCheckResults(JSON.parse(storedKeyCheckResults));
 
             const storedSpedInfo = sessionStorage.getItem('spedInfo');
             if (storedSpedInfo) setSpedInfo(JSON.parse(storedSpedInfo));
-            
+
+            const storedTab = sessionStorage.getItem('activeTab');
+            if (storedTab) setActiveTab(storedTab);
+
             setFiles(fileCache);
         } catch (e) {
             console.error("Failed to parse state from sessionStorage", e);
-            handleClearData(true); // Clear everything if session data is corrupt
+            handleClearData(true);
         }
     }, []);
+
+     const handleTabChange = (value: string) => {
+        setActiveTab(value);
+        sessionStorage.setItem('activeTab', value);
+    };
 
     const updateFileCache = (newFiles: FileList) => {
         Object.keys(newFiles).forEach(key => {
@@ -218,7 +229,7 @@ export default function Home() {
             }
         }
     };
-    
+
     const handleClearFile = (fileName: string) => {
         if (fileName === 'SPED TXT') {
             setSpedFile(null);
@@ -237,6 +248,7 @@ export default function Home() {
     const handleProcessPrimaryFiles = async () => {
         setError(null);
         setKeyCheckResults(null);
+        setResults(null);
         if (!Object.values(files).some(fileList => fileList && fileList.length > 0)) {
             toast({ variant: "destructive", title: "Nenhum arquivo carregado", description: "Por favor, carregue pelo menos um arquivo XML ou de exceção." });
             return;
@@ -252,14 +264,13 @@ export default function Home() {
             const nfeItensSaida: any[] = [];
             const canceledKeys = new Set<string>();
 
-            // Process XMLs
             const processXmls = async (fileList: File[], type: 'NFe-Entrada' | 'CTe-Entrada' | 'Saida') => {
                  for (const file of fileList) {
                     const fileContent = await file.text();
                     if (type === 'CTe-Entrada') {
                         const xmlData = extractCteDataFromXml(fileContent);
                         if (xmlData) cteEntrada.push(xmlData.nota);
-                    } else { // NFe-Entrada or Saida
+                    } else {
                         const xmlData = extractNfeDataFromXml(fileContent);
                         if (xmlData) {
                              if (xmlData.nota['Status']?.includes('Cancelada')) {
@@ -268,7 +279,7 @@ export default function Home() {
                             if (type === 'NFe-Entrada') {
                                 nfeEntrada.push(xmlData.nota);
                                 nfeItensEntrada.push(...xmlData.itens);
-                            } else { // Saida
+                            } else {
                                 nfeSaida.push(xmlData.nota);
                                 nfeItensSaida.push(...xmlData.itens);
                             }
@@ -276,22 +287,21 @@ export default function Home() {
                     }
                 }
             };
-            
+
             if (files["XMLs de Entrada (NFe)"]) await processXmls(files["XMLs de Entrada (NFe)"]!, 'NFe-Entrada');
             if (files["XMLs de Entrada (CTe)"]) await processXmls(files["XMLs de Entrada (CTe)"]!, 'CTe-Entrada');
             if (files["XMLs de Saída"]) await processXmls(files["XMLs de Saída"]!, 'Saida');
-            
+
             dataFrames['NF-Stock NFE'] = nfeEntrada;
             dataFrames['NF-Stock CTE'] = cteEntrada;
             dataFrames['NF-Stock Itens'] = nfeItensEntrada;
             dataFrames['NF-Stock Emitidas'] = nfeSaida;
             dataFrames['NF-Stock Emitidas Itens'] = nfeItensSaida;
-            
-            // Process Exception Spreadsheets
+
             for (const category in files) {
                 const fileList = files[category];
                 if (!fileList || category.includes('XML')) continue;
-                
+
                 for (const file of fileList) {
                     if (file.name.toLowerCase().endsWith('.xlsx')) {
                          const sheetName = category;
@@ -306,39 +316,40 @@ export default function Home() {
                     }
                 }
             }
-            
+
             const processedData = processDataFrames(dataFrames, canceledKeys);
 
             sessionStorage.setItem('processedData', JSON.stringify(processedData));
             setResults(processedData);
-            setStep(2); // Move to the next step
-            toast({ title: "Processamento Concluído", description: "Os arquivos foram processados. Agora, carregue o arquivo SPED para validação." });
-
+            toast({ title: "Processamento Concluído", description: "Os arquivos foram processados. Vá para a aba de Validação SPED." });
+             handleTabChange('validate');
         } catch (err: any) {
             setError(err.message || "Ocorreu um erro desconhecido.");
             setResults(null);
-            setStep(1);
             toast({ variant: "destructive", title: "Erro no Processamento", description: err.message });
         } finally {
             setProcessing(false);
         }
     };
 
-    const handleValidateWithSped = async () => {
+    async function handleValidateWithSped() {
         if (!spedFile) {
             toast({ variant: "destructive", title: "Arquivo SPED Ausente", description: "Por favor, carregue o arquivo SPED TXT." });
             return;
         }
         if (!results) {
-             toast({ variant: "destructive", title: "Dados não processados", description: "Processe os arquivos primários antes de validar com o SPED." });
+             toast({ variant: "destructive", title: "Dados não processados", description: "Processe os arquivos na aba 'Processamento Principal' primeiro." });
             return;
         }
-        
+
         setError(null);
         setValidating(true);
         try {
             const spedFileContent = await spedFile.text();
-            const resultData = await validateWithSped(results, spedFileContent);
+            // Pass all notes (valid entries and exits) to the validation function
+            const allNotes = [...(results["Notas Válidas"] || []), ...(results["NF-Stock Emitidas"] || [])];
+            const resultData = await validateWithSped(results, spedFileContent, allNotes);
+
             if (resultData.error) throw new Error(resultData.error);
 
             sessionStorage.setItem('keyCheckResults', JSON.stringify(resultData.keyCheckResults || null));
@@ -364,7 +375,7 @@ export default function Home() {
         setKeyCheckResults(null);
         setError(null);
         setSpedInfo(null);
-        setStep(1);
+        setActiveTab("process");
         sessionStorage.clear();
         for (const key in fileCache) delete fileCache[key];
         const inputs = document.querySelectorAll<HTMLInputElement>('input[type="file"]');
@@ -395,7 +406,7 @@ export default function Home() {
                 "Notas Válidas", "Itens Válidos", "Emissão Própria", "NF-Stock Emitidas", "Itens de Saída", "Chaves Válidas", "Imobilizados", "Notas Canceladas",
                 "NF-Stock NFE Operação Não Realizada", "NF-Stock NFE Operação Desconhecida", "NF-Stock CTE Desacordo de Serviço"
             ].filter(name => results[name] && results[name].length > 0);
-            
+
             orderedSheetNames.forEach(sheetName => {
                 const worksheet = XLSX.utils.json_to_sheet(results[sheetName]);
                 worksheet['!cols'] = Object.keys(results[sheetName][0] || {}).map(() => ({ wch: 20 }));
@@ -439,145 +450,157 @@ export default function Home() {
             </header>
 
             <main className="container mx-auto p-4 md:p-8">
-                <div className="mx-auto max-w-5xl space-y-8">
-                     <div className="flex justify-end">
+                <div className="mx-auto max-w-7xl space-y-8">
+                     <div className="flex justify-between items-center">
+                        <h2 className="text-3xl font-bold font-headline text-primary flex items-center gap-2">
+                            Fluxo de Conferência
+                        </h2>
                         <Button onClick={() => handleClearData()} variant="destructive">
                             <Trash2 className="mr-2 h-4 w-4" />
                             Limpar Tudo e Recomeçar
                         </Button>
                     </div>
 
-                    {/* Step 1: Primary Files Upload and Processing */}
-                    <Card className="shadow-lg">
-                        <CardHeader>
-                            <div className="flex items-center gap-3">
-                                <UploadCloud className="h-8 w-8 text-primary" />
-                                <div>
-                                    <CardTitle className="font-headline text-2xl">1. Carregar XMLs e Exceções</CardTitle>
-                                    <CardDescription>Faça o upload dos arquivos XML e das planilhas de exceção.</CardDescription>
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            <FileUploadForm
-                                requiredFiles={requiredFilesForStep1}
-                                files={files}
-                                onFileChange={handleFileChange}
-                                onClearFile={handleClearFile}
-                                disabled={step > 1}
-                            />
-                            {step === 1 && (
-                                <Button onClick={handleProcessPrimaryFiles} disabled={processing} className="w-full">
-                                    {processing ? "Processando..." : "Processar Arquivos"}
-                                </Button>
-                            )}
-                        </CardContent>
-                    </Card>
-                    
-                    {processing && (
-                        <Card className="shadow-lg">
-                            <CardHeader>
-                                <div className="flex items-center gap-3">
-                                    <BrainCircuit className="h-8 w-8 text-primary animate-pulse" />
-                                    <div>
-                                        <CardTitle className="font-headline text-2xl">Processando Arquivos...</CardTitle>
-                                        <CardDescription>Aguarde enquanto os dados primários são analisados.</CardDescription>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                               <Skeleton className="h-8 w-full" />
-                               <Skeleton className="h-32 w-full" />
-                            </CardContent>
-                        </Card>
-                    )}
-
-                    {/* Step 2: SPED Validation */}
-                    {step === 2 && (
-                         <Card className="shadow-lg">
-                            <CardHeader>
-                                <div className="flex items-center gap-3">
-                                    <KeyRound className="h-8 w-8 text-primary" />
-                                    <div>
-                                        <CardTitle className="font-headline text-2xl">2. Validar com SPED</CardTitle>
-                                        <CardDescription>Agora, carregue o arquivo SPED TXT para comparar com os dados processados.</CardDescription>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-6">
-                               <FileUploadForm
-                                    requiredFiles={["SPED TXT"]}
-                                    files={{ "SPED TXT": spedFile ? [spedFile] : null }}
-                                    onFileChange={handleFileChange}
-                                    onClearFile={handleClearFile}
-                                />
-                                <Button onClick={handleValidateWithSped} disabled={validating || !spedFile} className="w-full">
-                                    {validating ? "Validando..." : "Validar com SPED"}
-                                </Button>
-                            </CardContent>
-                        </Card>
-                    )}
-
-                    {validating && (
-                         <Card className="shadow-lg">
-                            <CardHeader>
-                                <div className="flex items-center gap-3">
-                                    <BrainCircuit className="h-8 w-8 text-primary animate-pulse" />
-                                    <div>
-                                        <CardTitle className="font-headline text-2xl">Validando SPED...</CardTitle>
-                                        <CardDescription>Aguarde enquanto as chaves são comparadas.</CardDescription>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                             <CardContent className="space-y-4">
-                               <Skeleton className="h-8 w-full" />
-                               <Skeleton className="h-32 w-full" />
-                            </CardContent>
-                        </Card>
-                    )}
-
-                    {error && (
-                        <Alert variant="destructive">
-                            <FileText className="h-4 w-4" />
-                            <AlertTitle>Erro</AlertTitle>
-                            <AlertDescription>{error}</AlertDescription>
-                        </Alert>
-                    )}
-
-                    {/* Step 3: Results */}
-                    {results && (
-                        <Card className="shadow-lg">
-                            <CardHeader>
-                                 <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <Tabs value={activeTab} onValueChange={handleTabChange}>
+                        <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="process">1. Processamento Principal</TabsTrigger>
+                            <TabsTrigger value="validate" disabled={!results}>2. Validação SPED</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="process" className="mt-6">
+                            <Card className="shadow-lg">
+                                <CardHeader>
                                     <div className="flex items-center gap-3">
-                                        <FileText className="h-8 w-8 text-primary" />
+                                        <UploadCloud className="h-8 w-8 text-primary" />
                                         <div>
-                                            <CardTitle className="font-headline text-2xl">3. Resultados</CardTitle>
-                                            <CardDescription>Visualize e baixe os dados processados e as divergências encontradas.</CardDescription>
+                                            <CardTitle className="font-headline text-2xl">Carregar XMLs e Exceções</CardTitle>
+                                            <CardDescription>Faça o upload dos arquivos XML e das planilhas de exceção.</CardDescription>
                                         </div>
                                     </div>
-                                    <Button onClick={handleDownload} disabled={!results}>
-                                        Baixar Planilha (.xlsx)
+                                </CardHeader>
+                                <CardContent className="space-y-6">
+                                    <FileUploadForm
+                                        requiredFiles={requiredFilesForStep1}
+                                        files={files}
+                                        onFileChange={handleFileChange}
+                                        onClearFile={handleClearFile}
+                                        disabled={!!results}
+                                    />
+                                    {!results && (
+                                        <Button onClick={handleProcessPrimaryFiles} disabled={processing} className="w-full">
+                                            {processing ? "Processando..." : "Processar Arquivos"}
+                                        </Button>
+                                    )}
+                                </CardContent>
+                            </Card>
+
+                             {processing && (
+                                <Card className="shadow-lg mt-8">
+                                    <CardHeader>
+                                        <div className="flex items-center gap-3">
+                                            <BrainCircuit className="h-8 w-8 text-primary animate-pulse" />
+                                            <div>
+                                                <CardTitle className="font-headline text-2xl">Processando Arquivos...</CardTitle>
+                                                <CardDescription>Aguarde enquanto os dados primários são analisados.</CardDescription>
+                                            </div>
+                                        </div>
+                                    </Header>
+                                    <CardContent className="space-y-4">
+                                       <Skeleton className="h-8 w-full" />
+                                       <Skeleton className="h-32 w-full" />
+                                    </CardContent>
+                                </Card>
+                            )}
+
+                             {error && (
+                                <Alert variant="destructive" className="mt-8">
+                                    <FileText className="h-4 w-4" />
+                                    <AlertTitle>Erro</AlertTitle>
+                                    <AlertDescription>{error}</AlertDescription>
+                                </Alert>
+                            )}
+
+                            {results && (
+                                <Card className="shadow-lg mt-8">
+                                    <CardHeader>
+                                        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <FileText className="h-8 w-8 text-primary" />
+                                                <div>
+                                                    <CardTitle className="font-headline text-2xl">Resultados do Processamento</CardTitle>
+                                                    <CardDescription>Visualize e baixe os dados processados.</CardDescription>
+                                                </div>
+                                            </div>
+                                            <Button onClick={handleDownload} disabled={!results}>
+                                                Baixar Planilha (.xlsx)
+                                            </Button>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <ResultsDisplay results={results} />
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </TabsContent>
+                        <TabsContent value="validate" className="mt-6">
+                            <Card className="shadow-lg">
+                                <CardHeader>
+                                    <div className="flex items-center gap-3">
+                                        <KeyRound className="h-8 w-8 text-primary" />
+                                        <div>
+                                            <CardTitle className="font-headline text-2xl">Validar com SPED</CardTitle>
+                                            <CardDescription>Carregue o arquivo SPED TXT para comparar com os dados processados.</CardDescription>
+                                        </div>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="space-y-6">
+                                   <FileUploadForm
+                                        requiredFiles={["SPED TXT"]}
+                                        files={{ "SPED TXT": spedFile ? [spedFile] : null }}
+                                        onFileChange={handleFileChange}
+                                        onClearFile={handleClearFile}
+                                    />
+                                    <Button onClick={handleValidateWithSped} disabled={validating || !spedFile} className="w-full">
+                                        {validating ? "Validando..." : "Validar com SPED"}
                                     </Button>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-8">
-                                {keyCheckResults && spedInfo && (
-                                    <div className="space-y-4">
-                                         <div className="flex items-center gap-3 p-4 bg-secondary rounded-lg">
+                                </CardContent>
+                            </Card>
+
+                            {validating && (
+                                <Card className="shadow-lg mt-8">
+                                    <CardHeader>
+                                        <div className="flex items-center gap-3">
+                                            <BrainCircuit className="h-8 w-8 text-primary animate-pulse" />
+                                            <div>
+                                                <CardTitle className="font-headline text-2xl">Validando SPED...</CardTitle>
+                                                <CardDescription>Aguarde enquanto as chaves são comparadas.</CardDescription>
+                                            </div>
+                                        </div>
+                                    </Header>
+                                     <CardContent className="space-y-4">
+                                       <Skeleton className="h-8 w-full" />
+                                       <Skeleton className="h-32 w-full" />
+                                    </CardContent>
+                                </Card>
+                            )}
+
+                             {keyCheckResults && spedInfo && (
+                                <Card className="shadow-lg mt-8">
+                                    <CardHeader>
+                                        <div className="flex items-center gap-3 p-4 bg-secondary rounded-lg">
                                             <AlertTriangle className="h-8 w-8 text-amber-600" />
                                             <div>
-                                                <h3 className="font-headline text-xl">Validação SPED</h3>
+                                                <h3 className="font-headline text-xl">Resultados da Validação SPED</h3>
                                                 <p className="text-muted-foreground">Comparação entre os XMLs/planilhas e o arquivo SPED TXT.</p>
                                             </div>
                                         </div>
-                                        <KeyResultsDisplay results={keyCheckResults} cnpj={spedInfo.cnpj} />
-                                    </div>
-                                )}
-                                <ResultsDisplay results={results} />
-                            </CardContent>
-                        </Card>
-                    )}
+                                    </CardHeader>
+                                    <CardContent>
+                                         <KeyResultsDisplay results={keyCheckResults} cnpj={spedInfo.cnpj} />
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </TabsContent>
+                    </Tabs>
                 </div>
             </main>
 

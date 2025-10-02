@@ -3,6 +3,7 @@
 
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import * as XLSX from 'xlsx';
 
 // Type for the file data structure expected by the processor
 type DataFrames = { [key: string]: any[] };
@@ -13,9 +14,20 @@ export type SpedInfo = {
     competence: string;
 }
 
+export type KeyInfo = {
+    key: string;
+    origin: 'planilha' | 'sped';
+    comment?: string;
+    // Enriched data
+    partnerName?: string;
+    emissionDate?: string;
+    value?: number;
+};
+
+
 export type KeyCheckResult = {
-    keysNotFoundInTxt: string[];
-    keysInTxtNotInSheet: string[];
+    keysNotFoundInTxt: KeyInfo[];
+    keysInTxtNotInSheet: KeyInfo[];
     duplicateKeysInSheet: string[];
     duplicateKeysInTxt: string[];
 };
@@ -58,30 +70,50 @@ const parseSpedInfo = (spedLine: string): SpedInfo | null => {
     return { cnpj, companyName, competence };
 };
 
-export async function validateWithSped(processedData: DataFrames, spedFileContent: string) {
+const parseSpedLineForData = (line: string): Partial<KeyInfo> | null => {
+    const parts = line.split('|');
+    // Basic validation for a C100 line (NFe)
+    if (parts.length > 9 && (parts[1] === 'C100')) {
+        const key = parts[9];
+        const value = parseFloat(parts[23] || '0');
+        const emissionDate = parts[10]; // DDMMYYYY
+        const partnerName = parts[14] || '';
+
+        if (key && key.length === 44) {
+            return {
+                key,
+                value,
+                emissionDate: emissionDate ? `${emissionDate.substring(0,2)}/${emissionDate.substring(2,4)}/${emissionDate.substring(4,8)}` : '',
+                partnerName
+            };
+        }
+    }
+    // Add parsing for other types like CTe if needed
+    return null;
+}
+
+
+export async function validateWithSped(processedData: DataFrames, spedFileContent: string, allNotesFromXmls: any[]) {
     try {
         let spedInfo: SpedInfo | null = null;
-        const allSpedKeys: string[] = [];
+        const allSpedKeys = new Map<string, Partial<KeyInfo>>();
 
-        if (spedFileContent) {
-            const lines = spedFileContent.split('\n');
-            const keyPattern = /\b\d{44}\b/g;
-            
-            if (lines.length > 0 && lines[0]) {
-                spedInfo = parseSpedInfo(lines[0].trim());
-            }
-            
-            for (const line of lines) {
-                const trimmedLine = line.trim();
-                const matches = trimmedLine.match(keyPattern);
-                if (matches) {
-                    allSpedKeys.push(...matches.map(key => key.startsWith('NFe') ? key.substring(3) : (key.startsWith('CTe') ? key.substring(3) : key)));
+        const lines = spedFileContent.split('\n');
+        if (lines.length > 0 && lines[0]) {
+            spedInfo = parseSpedInfo(lines[0].trim());
+        }
+        
+        for (const line of lines) {
+            const parsedData = parseSpedLineForData(line.trim());
+            if (parsedData && parsedData.key) {
+                 if (!allSpedKeys.has(parsedData.key)) {
+                    allSpedKeys.set(parsedData.key, parsedData);
                 }
             }
         }
         
         let keyCheckResults: KeyCheckResult | null = null;
-        const keysInTxt = new Set(allSpedKeys);
+        const keysInTxt = new Set(allSpedKeys.keys());
         
         if (processedData['Chaves Válidas']) {
             const spreadsheetKeysArray = processedData['Chaves Válidas'].map(row => {
@@ -89,12 +121,40 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                 return key.startsWith('NFe') ? key.substring(3) : (key.startsWith('CTe') ? key.substring(3) : key);
             }).filter(key => key);
             const spreadsheetKeys = new Set(spreadsheetKeysArray);
+
+            const allNotesMap = new Map(allNotesFromXmls.map(note => [
+                (note['Chave de acesso'] || '').replace(/^NFe|^CTe/, ''), 
+                note
+            ]));
             
-            const keysNotFoundInTxt = [...spreadsheetKeys].filter(key => !keysInTxt.has(key));
-            const keysInTxtNotInSheet = [...keysInTxt].filter(key => !spreadsheetKeys.has(key));
+            const keysNotFoundInTxt = [...spreadsheetKeys]
+                .filter(key => !keysInTxt.has(key))
+                .map(key => {
+                    const note = allNotesMap.get(key);
+                    return {
+                        key: key,
+                        origin: 'planilha' as 'planilha',
+                        partnerName: note?.['Fornecedor/Cliente'] || '',
+                        emissionDate: note?.['Data de Emissão'] || '',
+                        value: note?.['Valor'] || 0
+                    }
+                });
+
+            const keysInTxtNotInSheet = [...keysInTxt]
+                .filter(key => !spreadsheetKeys.has(key))
+                .map(key => {
+                    const spedData = allSpedKeys.get(key);
+                    return {
+                        key: key,
+                        origin: 'sped' as 'sped',
+                        partnerName: spedData?.partnerName || '',
+                        emissionDate: spedData?.emissionDate || '',
+                        value: spedData?.value || 0
+                    }
+                });
             
             const duplicateKeysInSheet = findDuplicates(spreadsheetKeysArray);
-            const duplicateKeysInTxt = findDuplicates(allSpedKeys);
+            const duplicateKeysInTxt = findDuplicates(Array.from(allSpedKeys.keys()));
 
             keyCheckResults = { 
                 keysNotFoundInTxt, 
@@ -105,18 +165,25 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         }
         
         if (spedInfo && spedInfo.cnpj && keyCheckResults) {
-            const keysFromSheet = (processedData['Chaves Válidas']?.map(row => row['Chave de acesso']) || [])
-                .map((key: string) => ({
-                    key: key,
-                    origin: 'planilha',
-                    foundInSped: !keyCheckResults!.keysNotFoundInTxt.includes(key.replace(/^NFe|^CTe/, '')),
-                    comment: ''
-                }));
+            const keysFromSheet: KeyInfo[] = (processedData['Chaves Válidas']?.map(row => row['Chave de acesso']) || [])
+                .map((key: string) => {
+                    const cleanKey = key.replace(/^NFe|^CTe/, '');
+                    const note = allNotesMap.get(cleanKey);
+                    return {
+                        key: cleanKey,
+                        origin: 'planilha',
+                        foundInSped: keysInTxt.has(cleanKey),
+                        comment: '',
+                        partnerName: note?.['Fornecedor/Cliente'] || '',
+                        emissionDate: note?.['Data de Emissão'] || '',
+                        value: note?.['Valor'] || 0
+                    };
+                });
             
-            const keysOnlyInSped = (keyCheckResults.keysInTxtNotInSheet).map((key: string) => ({
-                key: key,
+            const keysOnlyInSped: KeyInfo[] = (keyCheckResults.keysInTxtNotInSheet).map((keyInfo: KeyInfo) => ({
+                ...keyInfo,
                 origin: 'sped',
-                foundInSped: true, // It's from SPED, so it's found in SPED
+                foundInSped: true,
                 comment: ''
             }));
 
@@ -124,7 +191,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
 
             const stats = {
                 totalSheetKeys: keysFromSheet.length,
-                totalSpedKeys: allSpedKeys.length,
+                totalSpedKeys: allSpedKeys.size,
                 foundInBoth: keysFromSheet.filter(k => k.foundInSped).length,
                 onlyInSheet: keysFromSheet.filter(k => !k.foundInSped).length,
                 onlyInSped: keysOnlyInSped.length,

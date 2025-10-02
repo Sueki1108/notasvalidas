@@ -5,28 +5,28 @@ import { useState } from "react";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Copy, Download, Ban, Circle, AlertTriangle, MessageSquare, Send, Loader2 } from "lucide-react";
+import { Copy, Download, MessageSquare, Send, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { addOrUpdateKeyComment } from "@/app/actions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import type { KeyCheckResult } from "@/app/actions";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { KeyCheckResult, KeyInfo } from "@/app/actions";
 
-interface KeyItemProps {
-    nfeKey: string;
-    isDuplicate: boolean;
+interface KeyItemRowProps {
+    item: KeyInfo;
     cnpj: string | null;
-    origin: 'sheet' | 'txt';
 }
 
-const KeyItem = ({ nfeKey, isDuplicate, cnpj, origin }: KeyItemProps) => {
+const KeyItemRow = ({ item, cnpj }: KeyItemRowProps) => {
     const { toast } = useToast();
-    const [comment, setComment] = useState('');
+    const [comment, setComment] = useState(item.comment || '');
     const [isSaving, setIsSaving] = useState(false);
     const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
     const copyToClipboard = (text: string, type: string) => {
+        if (!text) return;
         navigator.clipboard.writeText(text).then(() => {
             toast({ title: `${type} copiad${type.endsWith('a') ? 'a' : 'o'}`, description: text });
         }).catch(() => {
@@ -41,10 +41,8 @@ const KeyItem = ({ nfeKey, isDuplicate, cnpj, origin }: KeyItemProps) => {
         }
         setIsSaving(true);
         try {
-            const result = await addOrUpdateKeyComment(cnpj, nfeKey, comment);
-            if (result.error) {
-                throw new Error(result.error);
-            }
+            const result = await addOrUpdateKeyComment(cnpj, item.key, comment);
+            if (result.error) throw new Error(result.error);
             toast({ title: 'Sucesso', description: result.message });
             setIsPopoverOpen(false);
         } catch (error: any) {
@@ -53,101 +51,74 @@ const KeyItem = ({ nfeKey, isDuplicate, cnpj, origin }: KeyItemProps) => {
             setIsSaving(false);
         }
     };
-
-
-    const extractInvoiceNumber = (key: string): string => {
-        const cleanKey = key.replace(/^NFe|^CTe/, '');
-        if (cleanKey.length === 44 && /^\d+$/.test(cleanKey.substring(25, 34))) {
-            return String(parseInt(cleanKey.substring(25, 34), 10));
-        }
-        return "N/A";
-    };
-
-    const identifyInvoiceModel = (key: string): 'NFE' | 'CTE' | '?' => {
-        const cleanKey = key.replace(/^NFe|^CTe/, '');
-        if (cleanKey.length === 44 && /^\d+$/.test(cleanKey.substring(20, 22))) {
-            const modelCode = cleanKey.substring(20, 22);
-            if (modelCode === '55') return 'NFE';
-            if (modelCode === '57') return 'CTE';
-        }
-        return '?';
-    };
     
-    const displayKey = nfeKey.replace(/^NFe|^CTe/, '');
-    const invoiceNumber = extractInvoiceNumber(displayKey);
-    const invoiceModel = identifyInvoiceModel(displayKey);
+    const formatDate = (dateStr: string | undefined) => {
+        if (!dateStr) return 'N/A';
+        // Handle YYYY-MM-DDTHH:MM:SS-HH:MM format
+        if (dateStr.includes('T')) {
+            return new Date(dateStr).toLocaleDateString('pt-BR');
+        }
+        // Handle DDMMYYYY format
+        if (dateStr.length === 8 && /^\d+$/.test(dateStr)) {
+            return `${dateStr.substring(0, 2)}/${dateStr.substring(2, 4)}/${dateStr.substring(4, 8)}`;
+        }
+        return dateStr;
+    }
 
     return (
-        <div className={`p-3 rounded-lg border flex flex-col gap-4 transition-colors bg-secondary/50`}>
-            <div className="flex-grow font-mono text-sm break-all">
-                <div className="flex items-center gap-2 mb-1">
-                     <span
-                        className={`px-2 py-1 text-xs font-bold text-white rounded-md ${invoiceModel === 'NFE' ? 'bg-emerald-500' : invoiceModel === 'CTE' ? 'bg-amber-500' : 'bg-gray-500'}`}
-                    >
-                        {invoiceModel}
-                    </span>
-                    <span>{displayKey}</span>
-                </div>
-                 {isDuplicate && (
-                    <div className="flex items-center gap-1 text-xs text-amber-700 font-semibold">
-                        <AlertTriangle className="h-3 w-3" />
-                        <span>Possível duplicidade</span>
-                    </div>
-                )}
-            </div>
-            <div className="flex-shrink-0 flex items-center flex-wrap gap-2">
-                 <div className="text-sm font-mono flex items-center gap-2 bg-gray-200 px-2 py-1 rounded">
-                    <span>NF: {invoiceNumber}</span>
-                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copyToClipboard(invoiceNumber, 'Número da NF')}>
-                        <Copy className="h-4 w-4" />
-                    </Button>
-                </div>
-                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => copyToClipboard(displayKey, 'Chave')}>
-                    <Copy className="h-4 w-4" />
+        <TableRow>
+            <TableCell className="font-mono text-xs break-all">
+                {item.key}
+                <Button size="icon" variant="ghost" className="h-6 w-6 ml-2" onClick={() => copyToClipboard(item.key, 'Chave')}>
+                    <Copy className="h-3 w-3" />
                 </Button>
-                
+            </TableCell>
+            <TableCell>{item.partnerName || 'N/A'}</TableCell>
+            <TableCell>{formatDate(item.emissionDate)}</TableCell>
+            <TableCell className="text-right">
+                {item.value ? item.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'N/A'}
+            </TableCell>
+            <TableCell className="text-center">
                 <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
                     <PopoverTrigger asChild>
-                         <Button size="icon" variant="ghost" className="h-8 w-8" disabled={!cnpj}>
-                            <MessageSquare className="h-5 w-5" />
+                         <Button size="icon" variant={comment ? "default" : "ghost"} className="h-8 w-8" disabled={!cnpj}>
+                            <MessageSquare className="h-4 w-4" />
                         </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-80">
                         <div className="grid gap-4">
                             <div className="space-y-2">
                                 <h4 className="font-medium leading-none">Adicionar Comentário</h4>
-                                <p className="text-sm text-muted-foreground">
-                                   Adicione uma anotação a esta chave.
-                                </p>
+                                <p className="text-sm text-muted-foreground">Adicione uma anotação para a chave {item.key.slice(0, 10)}...</p>
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="comment">Comentário</Label>
                                 <Textarea id="comment" value={comment} onChange={(e) => setComment(e.target.value)} />
                             </div>
                             <Button onClick={handleSaveComment} disabled={isSaving}>
-                                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
                                 Salvar
                             </Button>
                         </div>
                     </PopoverContent>
                 </Popover>
-
-            </div>
-        </div>
+            </TableCell>
+        </TableRow>
     );
 };
 
-interface KeyResultsDisplayProps {
-    results: KeyCheckResult;
+interface KeyTableProps {
+    title: string;
+    description: string;
+    keys: KeyInfo[];
     cnpj: string | null;
+    filename: string;
 }
 
-export function KeyResultsDisplay({ results, cnpj }: KeyResultsDisplayProps) {
+const KeyTable = ({ title, description, keys, cnpj, filename }: KeyTableProps) => {
     const { toast } = useToast();
-    const duplicateSheetKeys = new Set(results.duplicateKeysInSheet || []);
-    const duplicateTxtKeys = new Set(results.duplicateKeysInTxt || []);
-
-    const handleDownload = (keys: string[], filename: string) => {
+    
+    const handleDownload = () => {
         if (keys.length === 0) {
             toast({
                 variant: 'destructive',
@@ -156,9 +127,14 @@ export function KeyResultsDisplay({ results, cnpj }: KeyResultsDisplayProps) {
             });
             return;
         }
-        const data = keys.map(key => ({ "Chave de acesso": key.replace(/^NFe|^CTe/, '') }));
+        const data = keys.map(item => ({ 
+            "Chave de acesso": item.key.replace(/^NFe|^CTe/, ''),
+            "Fornecedor/Cliente": item.partnerName,
+            "Data de Emissão": item.emissionDate,
+            "Valor": item.value
+        }));
         const worksheet = XLSX.utils.json_to_sheet(data);
-        worksheet['!cols'] = [{ wch: 50 }];
+        worksheet['!cols'] = [{ wch: 50 }, { wch: 40 }, { wch: 15 }, { wch: 15 }];
 
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Chaves");
@@ -167,52 +143,66 @@ export function KeyResultsDisplay({ results, cnpj }: KeyResultsDisplayProps) {
     };
 
     return (
-        <div className="space-y-8">
-            <Card>
-                <CardHeader>
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        <div>
-                            <CardTitle className="font-headline text-xl text-red-700">Chaves da Planilha/XML NÃO ENCONTRADAS no SPED</CardTitle>
-                            <CardDescription>Estas chaves estavam em seus arquivos mas não no SPED TXT.</CardDescription>
-                        </div>
-                        <Button onClick={() => handleDownload(results.keysNotFoundInTxt, "chaves_nao_encontradas_no_sped.xlsx")} disabled={!results.keysNotFoundInTxt || results.keysNotFoundInTxt.length === 0}>
-                            <Download className="mr-2 h-4 w-4" />
-                            Baixar
-                        </Button>
+        <Card>
+            <CardHeader>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                        <CardTitle className="font-headline text-xl">{title}</CardTitle>
+                        <CardDescription>{description}</CardDescription>
                     </div>
-                </CardHeader>
-                <CardContent className="space-y-2 max-h-96 overflow-y-auto pr-3">
-                    {results.keysNotFoundInTxt && results.keysNotFoundInTxt.length > 0 ? (
-                        results.keysNotFoundInTxt.map(key => <KeyItem key={key} nfeKey={key} isDuplicate={duplicateSheetKeys.has(key)} cnpj={cnpj} origin="sheet" />)
-                    ) : (
-                        <p className="text-muted-foreground italic">Nenhuma divergência encontrada.</p>
-                    )}
-                </CardContent>
-            </Card>
+                    <Button onClick={handleDownload} disabled={keys.length === 0}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Baixar
+                    </Button>
+                </div>
+            </CardHeader>
+            <CardContent className="space-y-2 max-h-[450px] overflow-y-auto pr-3">
+                {keys.length > 0 ? (
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Chave</TableHead>
+                                <TableHead>Fornecedor/Cliente</TableHead>
+                                <TableHead>Data Emissão</TableHead>
+                                <TableHead className="text-right">Valor</TableHead>
+                                <TableHead className="text-center">Ações</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {keys.map(item => <KeyItemRow key={item.key} item={item} cnpj={cnpj} />)}
+                        </TableBody>
+                    </Table>
+                ) : (
+                    <p className="text-muted-foreground italic p-4 text-center">Nenhuma divergência encontrada nesta categoria.</p>
+                )}
+            </CardContent>
+        </Card>
+    );
+};
 
-            <Card>
-                 <CardHeader>
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        <div>
-                            <CardTitle className="font-headline text-xl text-blue-700">Chaves do SPED NÃO ENCONTRADAS na Planilha/XML</CardTitle>
-                            <CardDescription>Estas chaves estavam no seu arquivo SPED TXT mas não nos arquivos primários.</CardDescription>
-                        </div>
-                        <Button onClick={() => handleDownload(results.keysInTxtNotInSheet, "chaves_apenas_no_sped.xlsx")} disabled={!results.keysInTxtNotInSheet || results.keysInTxtNotInSheet.length === 0}>
-                            <Download className="mr-2 h-4 w-4" />
-                            Baixar
-                        </Button>
-                    </div>
-                </CardHeader>
-                <CardContent className="space-y-2 max-h-96 overflow-y-auto pr-3">
-                    {results.keysInTxtNotInSheet && results.keysInTxtNotInSheet.length > 0 ? (
-                        results.keysInTxtNotInSheet.map(key => <KeyItem key={key} nfeKey={key} isDuplicate={duplicateTxtKeys.has(key)} cnpj={cnpj} origin="txt" />)
-                    ) : (
-                        <p className="text-muted-foreground italic">Nenhuma divergência encontrada.</p>
-                    )}
-                </CardContent>
-            </Card>
+
+interface KeyResultsDisplayProps {
+    results: KeyCheckResult;
+    cnpj: string | null;
+}
+
+export function KeyResultsDisplay({ results, cnpj }: KeyResultsDisplayProps) {
+    return (
+        <div className="space-y-8">
+            <KeyTable
+                title="Chaves da Planilha/XML NÃO ENCONTRADAS no SPED"
+                description="Estas chaves estavam em seus arquivos mas não no SPED TXT."
+                keys={results.keysNotFoundInTxt || []}
+                cnpj={cnpj}
+                filename="chaves_nao_encontradas_no_sped.xlsx"
+            />
+            <KeyTable
+                title="Chaves do SPED NÃO ENCONTRADAS na Planilha/XML"
+                description="Estas chaves estavam no seu arquivo SPED TXT mas não nos arquivos primários."
+                keys={results.keysInTxtNotInSheet || []}
+                cnpj={cnpj}
+                filename="chaves_apenas_no_sped.xlsx"
+            />
         </div>
     );
 }
-
-    

@@ -7,7 +7,7 @@ import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Sheet, History, Search, ArrowLeft, CheckCircle, XCircle, MessageSquare, Group, File as FileIcon, KeyRound } from "lucide-react";
+import { Loader2, Sheet, History, Search, ArrowLeft, CheckCircle, XCircle, MessageSquare, Group, File as FileIcon } from "lucide-react";
 import Link from 'next/link';
 import {
   AlertDialog,
@@ -24,20 +24,17 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { formatCnpj } from "@/lib/utils";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
+import type { KeyInfo } from "@/app/actions";
 
 
-type VerificationKey = {
-  key: string;
+type VerificationKey = KeyInfo & {
   foundInSped: boolean;
-  origin: 'planilha' | 'sped';
-  comment?: string;
 };
 
 type VerificationStats = {
     totalSheetKeys: number;
     totalSpedKeys: number;
     foundInBoth: number;
-
     onlyInSheet: number;
     onlyInSped: number;
 };
@@ -92,8 +89,15 @@ export default function HistoryPage() {
         setSelectedVerification(null);
     }
 
-    const formatDate = (timestamp: Timestamp) => {
+    const formatDate = (timestamp: Timestamp | string) => {
         if (!timestamp) return 'N/A';
+        if (typeof timestamp === 'string') {
+             if (timestamp.includes('T')) return new Date(timestamp).toLocaleDateString('pt-BR');
+             if (timestamp.length === 8) { //DDMMYYYY
+                return `${timestamp.substring(0,2)}/${timestamp.substring(2,4)}/${timestamp.substring(4,8)}`
+             }
+             return timestamp;
+        }
         return timestamp.toDate().toLocaleDateString('pt-BR');
     }
     
@@ -205,8 +209,8 @@ export default function HistoryPage() {
             </main>
 
             {selectedVerification && (
-                <AlertDialog open={!!selectedVerification} onOpenChange={handleCloseModal}>
-                    <AlertDialogContent className="max-w-4xl">
+                <AlertDialog open={!!selectedVerification} onOpenChange={(isOpen) => !isOpen && handleCloseModal()}>
+                    <AlertDialogContent className="max-w-6xl">
                         <AlertDialogHeader>
                             <AlertDialogTitle>Detalhes da Verificação: {selectedVerification.companyName}</AlertDialogTitle>
                              <AlertDialogDescription>
@@ -313,5 +317,3 @@ export default function HistoryPage() {
         </div>
     );
 }
-
-    
