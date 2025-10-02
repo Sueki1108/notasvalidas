@@ -269,19 +269,21 @@ export default function Home() {
                     const fileContent = await file.text();
                     if (type === 'CTe-Entrada') {
                         const xmlData = extractCteDataFromXml(fileContent);
-                        if (xmlData) cteEntrada.push(xmlData.nota);
+                        if (xmlData) {
+                            cteEntrada.push(xmlData.nota);
+                        }
                     } else {
                         const xmlData = extractNfeDataFromXml(fileContent);
                         if (xmlData) {
                              if (xmlData.nota['Status']?.includes('Cancelada')) {
                                 canceledKeys.add(xmlData.nota['Chave de acesso']);
                             }
-                            if (type === 'NFe-Entrada') {
-                                nfeEntrada.push(xmlData.nota);
-                                nfeItensEntrada.push(...xmlData.itens);
-                            } else {
-                                nfeSaida.push(xmlData.nota);
-                                nfeItensSaida.push(...xmlData.itens);
+                             if (type === 'NFe-Entrada') {
+                                if (xmlData.nota) nfeEntrada.push(xmlData.nota);
+                                if (xmlData.itens && xmlData.itens.length > 0) nfeItensEntrada.push(...xmlData.itens);
+                            } else { // Saida
+                                if (xmlData.nota) nfeSaida.push(xmlData.nota);
+                                if (xmlData.itens && xmlData.itens.length > 0) nfeItensSaida.push(...xmlData.itens);
                             }
                         }
                     }
