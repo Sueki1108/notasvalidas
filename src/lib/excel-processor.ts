@@ -16,7 +16,7 @@ const cleanAndToStr = (value: any): string => {
 };
 
 
-export function processDataFrames(dfs: DataFrames): DataFrames {
+export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>): DataFrames {
     const processedDfs: DataFrames = JSON.parse(JSON.stringify(dfs));
 
     // Step 1: Unify NFE and CTE for entries
@@ -74,9 +74,20 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
     // Step 2: Identify and separate exceptions
     const chavesUnicasARemover = new Set<string>();
 
-    processedDfs["Notas Canceladas"] = notasEntradaTemporaria.filter(row => row && row["Status"] === "Canceladas");
+    // Add keys from cancellation events and status
+    canceledKeys.forEach(key => {
+         const entryNote = notasEntradaTemporaria.find(n => n['Chave de acesso'] === key);
+         if(entryNote) {
+            chavesUnicasARemover.add(cleanAndToStr(entryNote["Chave Unica"]));
+         }
+    });
+
+    processedDfs["Notas Canceladas"] = notasEntradaTemporaria.filter(row => row && (row["Status"]?.includes('Cancelada') || canceledKeys.has(row['Chave de acesso'])));
+    
     processedDfs["Notas Canceladas"].forEach(row => {
-        if (row && row["Chave Unica"]) chavesUnicasARemover.add(cleanAndToStr(row["Chave Unica"]));
+        if (row && row["Chave Unica"]) {
+             chavesUnicasARemover.add(cleanAndToStr(row["Chave Unica"]))
+        };
     });
     
     const exceptionSheets = [
@@ -113,8 +124,8 @@ export function processDataFrames(dfs: DataFrames): DataFrames {
 
     // Handle outgoing notes ("Emissão Própria")
     const notasSaida = processedDfs["NF-Stock Emitidas"] || [];
-    processedDfs["Emissão Própria"] = filterRows(notasSaida).filter(row => row && row['Status'] !== 'Canceladas');
-    processedDfs["Itens de Saída"] = processedDfs["NF-Stock Emitidas Itens"] || [];
+    processedDfs["Emissão Própria"] = filterRows(notasSaida).filter(row => row && !canceledKeys.has(row['Chave de acesso']));
+    processedDfs["Itens de Saída"] = (processedDfs["NF-Stock Emitidas Itens"] || []).filter(item => item && !canceledKeys.has(item['Chave de acesso']));
 
 
     const chavesRecebidasValidas = new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));

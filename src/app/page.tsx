@@ -39,8 +39,28 @@ type DataFrames = { [key: string]: any[] };
 const extractNfeDataFromXml = (xmlContent: string) => {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlContent, "application/xml");
-    
+
     const getValue = (tag: string, context: Document | Element = xmlDoc) => context.getElementsByTagName(tag)[0]?.textContent || '';
+
+    // Check if it's a cancellation event XML
+    const procEventoNFe = xmlDoc.getElementsByTagName('procEventoNFe')[0];
+    if (procEventoNFe) {
+        const chNFe = procEventoNFe.getElementsByTagName('chNFe')[0]?.textContent || '';
+        const tpEvento = procEventoNFe.getElementsByTagName('tpEvento')[0]?.textContent || '';
+        const cStatEvento = procEventoNFe.getElementsByTagName('cStat')[0]?.textContent || '';
+
+        // 110111 is cancellation event, 135 is success status for the event
+        if (tpEvento === '110111' && cStatEvento === '135') {
+            return { 
+                nota: { 
+                    'Chave de acesso': `NFe${chNFe}`,
+                    'Status': 'Cancelada (Evento)',
+                }, 
+                itens: [] 
+            };
+        }
+        return null; // Not a relevant event
+    }
     
     const ide = xmlDoc.getElementsByTagName('ide')[0];
     const emit = xmlDoc.getElementsByTagName('emit')[0];
@@ -219,25 +239,28 @@ export default function Home() {
             const cteEntrada: any[] = [];
             const nfeSaida: any[] = [];
             const nfeItensSaida: any[] = [];
+            const canceledKeys = new Set<string>();
 
             // Process XMLs
             const processXmls = async (fileList: File[], type: 'NFe-Entrada' | 'CTe-Entrada' | 'Saida') => {
                  for (const file of fileList) {
                     const fileContent = await file.text();
-                    if (type === 'NFe-Entrada') {
+                    if (type === 'CTe-Entrada') {
+                        const xmlData = extractCteDataFromXml(fileContent);
+                        if (xmlData) cteEntrada.push(xmlData.nota);
+                    } else { // NFe-Entrada or Saida
                         const xmlData = extractNfeDataFromXml(fileContent);
                         if (xmlData) {
-                            nfeEntrada.push(xmlData.nota);
-                            nfeItensEntrada.push(...xmlData.itens);
-                        }
-                    } else if (type === 'CTe-Entrada') {
-                         const xmlData = extractCteDataFromXml(fileContent);
-                         if (xmlData) cteEntrada.push(xmlData.nota);
-                    } else if (type === 'Saida') {
-                        const xmlData = extractNfeDataFromXml(fileContent);
-                        if(xmlData) {
-                            nfeSaida.push(xmlData.nota);
-                            nfeItensSaida.push(...xmlData.itens);
+                             if (xmlData.nota['Status']?.includes('Cancelada')) {
+                                canceledKeys.add(xmlData.nota['Chave de acesso']);
+                            }
+                            if (type === 'NFe-Entrada') {
+                                nfeEntrada.push(xmlData.nota);
+                                nfeItensEntrada.push(...xmlData.itens);
+                            } else { // Saida
+                                nfeSaida.push(xmlData.nota);
+                                nfeItensSaida.push(...xmlData.itens);
+                            }
                         }
                     }
                 }
@@ -273,7 +296,7 @@ export default function Home() {
                 }
             }
             
-            const processedData = processDataFrames(dataFrames);
+            const processedData = processDataFrames(dataFrames, canceledKeys);
 
             sessionStorage.setItem('processedData', JSON.stringify(processedData));
             setResults(processedData);
@@ -357,19 +380,17 @@ export default function Home() {
                 "Chaves Válidas": "Chaves Validas",
             };
             const orderedSheetNames = [
-                "Notas Válidas", "Itens Válidos", "Emissão Própria", "Itens de Saída", "Chaves Válidas", "Imobilizados",
-                ...Object.keys(results).filter(name => ![
-                    "Notas Válidas", "Itens Válidos", "Emissão Própria", "Itens de Saída", "Chaves Válidas", "Imobilizados"
-                ].includes(name))
-            ];
+                "Notas Válidas", "Itens Válidos", "Emissão Própria", "Itens de Saída", "Chaves Válidas", "Imobilizados", "Notas Canceladas",
+                "NF-Stock NFE Operação Não Realizada", "NF-Stock NFE Operação Desconhecida", "NF-Stock CTE Desacordo de Serviço"
+            ].filter(name => results[name] && results[name].length > 0);
+            
             orderedSheetNames.forEach(sheetName => {
-                if (results[sheetName] && results[sheetName].length > 0) {
-                    const worksheet = XLSX.utils.json_to_sheet(results[sheetName]);
-                    worksheet['!cols'] = Object.keys(results[sheetName][0] || {}).map(() => ({ wch: 20 }));
-                    const excelSheetName = sheetNameMap[sheetName] || sheetName;
-                    XLSX.utils.book_append_sheet(workbook, worksheet, excelSheetName);
-                }
+                const worksheet = XLSX.utils.json_to_sheet(results[sheetName]);
+                worksheet['!cols'] = Object.keys(results[sheetName][0] || {}).map(() => ({ wch: 20 }));
+                const excelSheetName = sheetNameMap[sheetName] || sheetName;
+                XLSX.utils.book_append_sheet(workbook, worksheet, excelSheetName);
             });
+
             XLSX.writeFile(workbook, "Planilhas_Processadas.xlsx");
             toast({ title: "Download Iniciado", description: "O arquivo Excel está sendo baixado." });
         } catch (err: any) {
