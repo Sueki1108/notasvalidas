@@ -1,4 +1,3 @@
-
 // src/app/page.tsx
 "use client";
 
@@ -47,38 +46,40 @@ const extractNfeDataFromXml = (xmlContent: string) => {
       return null;
     }
 
-    const getValue = (tag: string, context: Document | Element = xmlDoc) => context.getElementsByTagName(tag)[0]?.textContent || '';
+    const getValue = (tag: string, context: Element) => context.getElementsByTagName(tag)[0]?.textContent || '';
+    const getAttribute = (tag: string, attribute: string, context: Element) => context.getElementsByTagName(tag)[0]?.getAttribute(attribute) || '';
+
 
     // Check if it's a cancellation event XML
     const procEventoNFe = xmlDoc.getElementsByTagName('procEventoNFe')[0];
     if (procEventoNFe) {
-        const chNFe = procEventoNFe.getElementsByTagName('chNFe')[0]?.textContent || '';
-        const tpEvento = procEventoNFe.getElementsByTagName('tpEvento')[0]?.textContent || '';
-        const cStatEvento = procEventoNFe.getElementsByTagName('cStat')[0]?.textContent || '';
+        const chNFe = getValue('chNFe', procEventoNFe) || '';
+        const tpEvento = getValue('tpEvento', procEventoNFe) || '';
+        const cStatEvento = getValue('cStat', procEventoNFe.getElementsByTagName('infEvento')[0]) || '';
 
-        // 110111 is cancellation event, 135 is success status for the event
+        // 110111 is cancellation event, 135 or 101 is success status for the event
         if (tpEvento === '110111' && (cStatEvento === '135' || cStatEvento === '101')) {
             return {
-                nota: {
-                    'Chave de acesso': `NFe${chNFe}`,
-                    'Status': 'Cancelada (Evento)',
-                },
+                nota: { 'Chave de acesso': `NFe${chNFe}`, 'Status': 'Cancelada (Evento)' },
                 itens: []
             };
         }
         return null; // Not a relevant event
     }
 
-    const ide = xmlDoc.getElementsByTagName('ide')[0];
-    const emit = xmlDoc.getElementsByTagName('emit')[0];
-    const dest = xmlDoc.getElementsByTagName('dest')[0];
-    const total = xmlDoc.getElementsByTagName('ICMSTot')[0];
+    const infNFe = xmlDoc.getElementsByTagName('infNFe')[0];
+    if(!infNFe) return null;
+
+    const ide = infNFe.getElementsByTagName('ide')[0];
+    const emit = infNFe.getElementsByTagName('emit')[0];
+    const dest = infNFe.getElementsByTagName('dest')[0];
+    const total = infNFe.getElementsByTagName('ICMSTot')[0];
     const protNFe = xmlDoc.getElementsByTagName('protNFe')[0];
 
     if (!ide || !emit || !total ) return null;
     
     const infProt = protNFe ? protNFe.getElementsByTagName('infProt')[0] : null;
-    const chNFe = infProt ? getValue('chNFe', infProt) : xmlDoc.getElementsByTagName('infNFe')[0]?.getAttribute('Id')?.replace('NFe', '') || '';
+    const chNFe = infProt ? getValue('chNFe', infProt) : infNFe.getAttribute('Id')?.replace('NFe', '') || '';
     const cStat = infProt ? getValue('cStat', infProt) : '0';
 
 
@@ -94,29 +95,68 @@ const extractNfeDataFromXml = (xmlContent: string) => {
         'Emitente': getValue('xNome', emit),
         'Destinatário CPF/CNPJ': dest ? (getValue('CNPJ', dest) || getValue('CPF', dest)) : '',
         'Destinatário': dest ? getValue('xNome', dest) : '',
-        'Fornecedor/Cliente': isSaida ? (getValue('xNome', dest)) : (getValue('xNome', emit)),
+        'Fornecedor/Cliente': isSaida ? (dest ? getValue('xNome', dest): '') : (getValue('xNome', emit)),
     };
 
 
     const itens: any[] = [];
-    const detElements = Array.from(xmlDoc.getElementsByTagName('det'));
+    const detElements = Array.from(infNFe.getElementsByTagName('det'));
 
     for (const det of detElements) {
         const prod = det.getElementsByTagName('prod')[0];
-        if (prod) {
-            itens.push({
-                'Chave de acesso': `NFe${chNFe}`,
-                'Número': getValue('nNF', ide),
-                'CPF/CNPJ': isSaida ? (getValue('CNPJ', dest) || getValue('CPF', dest)) : (getValue('CNPJ', emit) || getValue('CPF', emit)),
-                'CFOP': prod.getElementsByTagName('CFOP')[0]?.textContent || '',
-                'Código': prod.getElementsByTagName('cProd')[0]?.textContent || '',
-                'Descrição': prod.getElementsByTagName('xProd')[0]?.textContent || '',
-                'NCM': prod.getElementsByTagName('NCM')[0]?.textContent || '',
-                'Quantidade': parseFloat(prod.getElementsByTagName('qCom')[0]?.textContent || '0'),
-                'Valor Unitário': parseFloat(prod.getElementsByTagName('vUnCom')[0]?.textContent || '0'),
-                'Valor Total': parseFloat(prod.getElementsByTagName('vProd')[0]?.textContent || '0'),
-            });
-        }
+        const imposto = det.getElementsByTagName('imposto')[0];
+        if (!prod || !imposto) continue;
+
+        const icms = imposto.getElementsByTagName('ICMS')[0]?.firstElementChild; // gets ICMS00, ICMS60, etc.
+        const ipi = imposto.getElementsByTagName('IPITrib')[0];
+        const pis = imposto.getElementsByTagName('PIS')[0]?.firstElementChild;
+        const cofins = imposto.getElementsByTagName('COFINS')[0]?.firstElementChild;
+
+        itens.push({
+            'Chave de acesso': `NFe${chNFe}`,
+            'Número do Item': det.getAttribute('nItem'),
+            'Código do Produto': getValue('cProd', prod),
+            'Descrição do Produto': getValue('xProd', prod),
+            'CFOP': getValue('CFOP', prod),
+            'NCM': getValue('NCM', prod),
+            'Quantidade': parseFloat(getValue('qCom', prod) || '0'),
+            'Unidade': getValue('uCom', prod),
+            'Valor Unitário': parseFloat(getValue('vUnCom', prod) || '0'),
+            'Valor Total do Produto': parseFloat(getValue('vProd', prod) || '0'),
+            'Valor do Desconto': parseFloat(getValue('vDesc', prod) || '0'),
+            'EAN': getValue('cEAN', prod),
+            'CEST': getValue('CEST', prod),
+            'Pedido Compra': getValue('xPed', prod),
+            
+            // Impostos
+            'Valor Total Tributos': parseFloat(getValue('vTotTrib', imposto) || '0'),
+            
+            // ICMS
+            'ICMS Origem': icms ? getValue('orig', icms) : '',
+            'ICMS CST': icms ? getValue('CST', icms) : '',
+            'ICMS Modalidade BC': icms ? getValue('modBC', icms) : '',
+            'ICMS Base de Cálculo': icms ? parseFloat(getValue('vBC', icms) || '0') : 0,
+            'ICMS Alíquota': icms ? parseFloat(getValue('pICMS', icms) || '0') : 0,
+            'ICMS Valor': icms ? parseFloat(getValue('vICMS', icms) || '0') : 0,
+            
+            // IPI
+            'IPI CST': ipi ? getValue('CST', ipi) : '',
+            'IPI Base de Cálculo': ipi ? parseFloat(getValue('vBC', ipi) || '0') : 0,
+            'IPI Alíquota': ipi ? parseFloat(getValue('pIPI', ipi) || '0') : 0,
+            'IPI Valor': ipi ? parseFloat(getValue('vIPI', ipi) || '0') : 0,
+
+            // PIS
+            'PIS CST': pis ? getValue('CST', pis) : '',
+            'PIS Base de Cálculo': pis ? parseFloat(getValue('vBC', pis) || '0') : 0,
+            'PIS Alíquota': pis ? parseFloat(getValue('pPIS', pis) || '0') : 0,
+            'PIS Valor': pis ? parseFloat(getValue('vPIS', pis) || '0') : 0,
+            
+            // COFINS
+            'COFINS CST': cofins ? getValue('CST', cofins) : '',
+            'COFINS Base de Cálculo': cofins ? parseFloat(getValue('vBC', cofins) || '0') : 0,
+            'COFINS Alíquota': cofins ? parseFloat(getValue('pCOFINS', cofins) || '0') : 0,
+            'COFINS Valor': cofins ? parseFloat(getValue('vCOFINS', cofins) || '0') : 0,
+        });
     }
 
     return { nota, itens };
@@ -132,17 +172,23 @@ const extractCteDataFromXml = (xmlContent: string) => {
     }
 
 
-    const getValue = (tag: string, context: Document | Element = xmlDoc) => context.getElementsByTagName(tag)[0]?.textContent || '';
+    const getValue = (tag: string, context: Element) => context.getElementsByTagName(tag)[0]?.textContent || '';
+    
+    const infCte = xmlDoc.getElementsByTagName('infCte')[0];
+    if(!infCte) return null;
 
-    const ide = xmlDoc.getElementsByTagName('ide')[0];
-    const vPrest = xmlDoc.getElementsByTagName('vPrest')[0];
+    const ide = infCte.getElementsByTagName('ide')[0];
+    const vPrest = infCte.getElementsByTagName('vPrest')[0];
     const protCTe = xmlDoc.getElementsByTagName('protCTe')[0];
-    const toma = xmlDoc.getElementsByTagName('toma')[0];
+    const toma = infCte.getElementsByTagName('toma')[0];
 
     if(!ide || !vPrest || !protCTe) return null;
+    
+    const infProt = protCTe.getElementsByTagName('infProt')[0];
+    if(!infProt) return null;
 
-    const chCTe = protCTe.getElementsByTagName('chCTe')[0]?.textContent || '';
-    const cStat = protCTe.getElementsByTagName('cStat')[0]?.textContent || '';
+    const chCTe = getValue('chCTe', infProt) || '';
+    const cStat = getValue('cStat', infProt) || '';
     const tomadorName = toma ? getValue('xNome', toma) : '';
 
     const nota = {
@@ -270,24 +316,28 @@ export default function Home() {
                     const fileContent = await file.text();
                     if (type === 'CTe-Entrada') {
                         const xmlData = extractCteDataFromXml(fileContent);
-                        if (xmlData) {
+                         if (xmlData && xmlData.nota) {
                             cteEntrada.push(xmlData.nota);
-                             if (xmlData.nota['Status']?.includes('Cancelada')) {
+                            if (xmlData.nota['Status']?.includes('Cancelada')) {
                                 canceledKeys.add(xmlData.nota['Chave de acesso']);
                             }
                         }
                     } else {
                         const xmlData = extractNfeDataFromXml(fileContent);
-                        if (xmlData) {
-                             if (xmlData.nota['Status']?.includes('Cancelada')) {
+                        if (xmlData && xmlData.nota) {
+                             if (xmlData.nota['Status']?.includes('Cancelada') || xmlData.nota['Status']?.includes('(Evento)')) {
                                 canceledKeys.add(xmlData.nota['Chave de acesso']);
                             }
                              if (type === 'NFe-Entrada') {
-                                if (xmlData.nota) nfeEntrada.push(xmlData.nota);
-                                if (xmlData.itens && xmlData.itens.length > 0) nfeItensEntrada.push(...xmlData.itens);
+                                nfeEntrada.push(xmlData.nota);
+                                if (xmlData.itens && xmlData.itens.length > 0) {
+                                    nfeItensEntrada.push(...xmlData.itens);
+                                }
                             } else { // Saida
-                                if (xmlData.nota) nfeSaida.push(xmlData.nota);
-                                if (xmlData.itens && xmlData.itens.length > 0) nfeItensSaida.push(...xmlData.itens);
+                                nfeSaida.push(xmlData.nota);
+                                if (xmlData.itens && xmlData.itens.length > 0) {
+                                    nfeItensSaida.push(...xmlData.itens);
+                                }
                             }
                         }
                     }
@@ -300,9 +350,9 @@ export default function Home() {
 
             dataFrames['NF-Stock NFE'] = nfeEntrada;
             dataFrames['NF-Stock CTE'] = cteEntrada;
-            dataFrames['NF-Stock Itens'] = nfeItensEntrada;
+            dataFrames['Itens de Entrada'] = nfeItensEntrada; // New raw items sheet
             dataFrames['NF-Stock Emitidas'] = nfeSaida;
-            dataFrames['NF-Stock Emitidas Itens'] = nfeItensSaida;
+            dataFrames['Itens de Saída'] = nfeItensSaida; // New raw items sheet
 
             for (const category in files) {
                 const fileList = files[category];
@@ -350,12 +400,11 @@ export default function Home() {
 
         setError(null);
         setValidating(true);
-        try {
-            const spedFileContent = await spedFile.text();
-            // Pass all notes (valid entries and exits) to the validation function
-            const allNotes = [...(results["Notas Válidas"] || []), ...(results["NF-Stock Emitidas"] || [])];
-            const resultData = await validateWithSped(results, spedFileContent, allNotes);
-
+        
+        const spedFileContent = await spedFile.text();
+        const allNotes = [...(results["Notas Válidas"] || []), ...(results["NF-Stock Emitidas"] || [])];
+        
+        validateWithSped(results, spedFileContent, allNotes).then(resultData => {
             if (resultData.error) throw new Error(resultData.error);
 
             sessionStorage.setItem('keyCheckResults', JSON.stringify(resultData.keyCheckResults || null));
@@ -363,14 +412,14 @@ export default function Home() {
             setKeyCheckResults(resultData.keyCheckResults || null);
             setSpedInfo(resultData.spedInfo || null);
             toast({ title: "Validação SPED Concluída", description: "A verificação das chaves foi finalizada." });
-        } catch(err: any) {
+        }).catch(err => {
              setError(err.message || "Ocorreu um erro desconhecido na validação.");
              setKeyCheckResults(null);
              setSpedInfo(null);
              toast({ variant: "destructive", title: "Erro na Validação SPED", description: err.message });
-        } finally {
+        }).finally(() => {
             setValidating(false);
-        }
+        });
     };
 
 
@@ -403,19 +452,21 @@ export default function Home() {
                 "Notas Válidas": "Notas Validas",
                 "Emissão Própria": "Emissao Propria",
                 "Notas Canceladas": "Notas Canceladas",
-                "Itens Válidos": "Itens Validos",
+                "Itens de Entrada": "Itens de Entrada",
                 "Itens de Saída": "Itens de Saida",
                 "Imobilizados": "Imobilizados",
                 "Chaves Válidas": "Chaves Validas",
             };
             const orderedSheetNames = [
-                "Notas Válidas", "Itens Válidos", "Emissão Própria", "NF-Stock Emitidas", "Itens de Saída", "Chaves Válidas", "Imobilizados", "Notas Canceladas",
+                "Notas Válidas", "Itens de Entrada", "Emissão Própria", "NF-Stock Emitidas", "Itens de Saída", "Chaves Válidas", "Imobilizados", "Notas Canceladas",
                 "NF-Stock NFE Operação Não Realizada", "NF-Stock NFE Operação Desconhecida", "NF-Stock CTE Desacordo de Serviço"
             ].filter(name => results[name] && results[name].length > 0);
 
             orderedSheetNames.forEach(sheetName => {
                 const worksheet = XLSX.utils.json_to_sheet(results[sheetName]);
-                worksheet['!cols'] = Object.keys(results[sheetName][0] || {}).map(() => ({ wch: 20 }));
+                if (results[sheetName].length > 0) {
+                    worksheet['!cols'] = Object.keys(results[sheetName][0] || {}).map(() => ({ wch: 20 }));
+                }
                 const excelSheetName = sheetNameMap[sheetName] || sheetName;
                 XLSX.utils.book_append_sheet(workbook, worksheet, excelSheetName);
             });
@@ -618,5 +669,3 @@ export default function Home() {
         </div>
     );
 }
-
-    

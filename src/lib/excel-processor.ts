@@ -50,8 +50,8 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>): D
         return row;
     });
 
-    const originalItensEntrada = (processedDfs["NF-Stock Itens"] || []).map(row => {
-        if (row && row["Número"] !== undefined && row["CPF/CNPJ"] !== undefined) {
+    const originalItensEntrada = (processedDfs["Itens de Entrada"] || []).map(row => {
+         if (row && row["Número"] !== undefined && row["CPF/CNPJ"] !== undefined) {
             const chaveUnica = cleanAndToStr(row["Número"]) + cleanAndToStr(row["CPF/CNPJ"]);
             return { "Chave Unica": chaveUnica, ...row };
         }
@@ -73,13 +73,8 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>): D
     
     // Step 2: Identify and separate exceptions
     const chavesUnicasARemover = new Set<string>();
-
-    // Add keys from cancellation events and status from XMLs to canceledKeys Set first
-    notasEntradaTemporaria.forEach(row => {
-        if (row && (row["Status"]?.includes('Cancelada') || canceledKeys.has(row['Chave de acesso']))) {
-            canceledKeys.add(row['Chave de acesso']);
-        }
-    });
+    
+    // Keys from cancellation events are already in canceledKeys set from page.tsx
 
     processedDfs["Notas Canceladas"] = notasEntradaTemporaria.filter(row => row && canceledKeys.has(row['Chave de acesso']));
     
@@ -112,45 +107,45 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>): D
     
     // Final valid entry notes
     processedDfs["Notas Válidas"] = notasEntradaTemporaria.filter(row => 
-        row && row["Chave Unica"] && !chavesUnicasARemover.has(cleanAndToStr(row["Chave Unica"]))
+        row && !canceledKeys.has(row['Chave de acesso']) && (!row["Chave Unica"] || !chavesUnicasARemover.has(cleanAndToStr(row["Chave Unica"])))
     );
     
     const chavesFinaisValidas = new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave Unica"])).filter(Boolean));
+    const chavesAcessoFinaisValidas = new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));
 
-    processedDfs["Itens Válidos"] = originalItensEntrada.filter(row => 
-        row && row["Chave Unica"] && chavesFinaisValidas.has(cleanAndToStr(row["Chave Unica"]))
+    processedDfs["Itens de Entrada"] = (dfs["Itens de Entrada"] || []).filter(row => 
+        row && chavesAcessoFinaisValidas.has(cleanAndToStr(row["Chave de acesso"]))
     );
 
     // Handle outgoing notes
     processedDfs["NF-Stock Emitidas"] = filterRows(processedDfs["NF-Stock Emitidas"] || []).filter(row => row && !canceledKeys.has(row['Chave de acesso']));
-    processedDfs["Itens de Saída"] = (processedDfs["NF-Stock Emitidas Itens"] || []).filter(item => item && !canceledKeys.has(item['Chave de acesso']));
+    const chavesEmitidasValidas = new Set(processedDfs["NF-Stock Emitidas"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));
+    processedDfs["Itens de Saída"] = (dfs["Itens de Saída"] || []).filter(item => item && chavesEmitidasValidas.has(item['Chave de acesso']));
     
-    // Logic for "Emissão Própria"
-    const cfopsProprios = new Set<string>();
-    if (processedDfs["Itens Válidos"]) {
-        processedDfs["Itens Válidos"].forEach(item => {
+    // Logic for "Emissão Própria" based on ENTRY notes
+    const chavesUnicasEmissaoPropria = new Set<string>();
+    if (processedDfs["Itens de Entrada"]) {
+        processedDfs["Itens de Entrada"].forEach(item => {
             const cfop = String(item.CFOP);
             if (cfop.startsWith('1') || cfop.startsWith('2')) {
-                const chaveUnica = cleanAndToStr(item["Chave Unica"]);
-                cfopsProprios.add(chaveUnica);
+                 const notaCorrespondente = processedDfs["Notas Válidas"].find(n => n['Chave de acesso'] === item['Chave de acesso']);
+                 if(notaCorrespondente && notaCorrespondente["Chave Unica"]) {
+                    chavesUnicasEmissaoPropria.add(cleanAndToStr(notaCorrespondente["Chave Unica"]));
+                 }
             }
         });
     }
     processedDfs["Emissão Própria"] = processedDfs["Notas Válidas"].filter(nota => {
         const chaveUnica = cleanAndToStr(nota["Chave Unica"]);
-        return cfopsProprios.has(chaveUnica);
+        return chavesUnicasEmissaoPropria.has(chaveUnica);
     });
 
-
-    const chavesRecebidasValidas = new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));
-    const chavesEmitidasValidas = new Set(processedDfs["NF-Stock Emitidas"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));
-
-    const combinedChavesValidas = new Set([...chavesRecebidasValidas, ...chavesEmitidasValidas]);
+    const combinedChavesValidas = new Set([...chavesAcessoFinaisValidas, ...chavesEmitidasValidas]);
     processedDfs["Chaves Válidas"] = Array.from(combinedChavesValidas).map(key => ({ "Chave de acesso": key }));
     
     // Immobilized assets - based on valid input items
-    if (processedDfs["Itens Válidos"] && processedDfs["Itens Válidos"].length > 0) {
-        processedDfs["Imobilizados"] = processedDfs["Itens Válidos"].filter(row => {
+    if (processedDfs["Itens de Entrada"] && processedDfs["Itens de Entrada"].length > 0) {
+        processedDfs["Imobilizados"] = processedDfs["Itens de Entrada"].filter(row => {
             if (!row || !row["Valor Unitário"]) return false;
             const valor = parseFloat(String(row["Valor Unitário"]).replace(',', '.'));
             return !isNaN(valor) && valor > 1200.00;
@@ -159,13 +154,13 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>): D
         processedDfs["Imobilizados"] = [];
     }
 
-    // Add CFOP Descriptions
-    for (const sheetName in processedDfs) {
+    // Add CFOP Descriptions to item sheets
+    ['Itens de Entrada', 'Itens de Saída'].forEach(sheetName => {
         const df = processedDfs[sheetName];
         if (df && df.length > 0 && df[0] && "CFOP" in df[0] && !("Descricao CFOP" in df[0])) {
             processedDfs[sheetName] = df.map(row => {
                 if (!row || !("CFOP" in row)) return row;
-
+                
                 const cfopCode = parseInt(cleanAndToStr(row["CFOP"]), 10);
                 const description = cfopDescriptions[cfopCode] || 'Descrição não encontrada';
                 
@@ -181,15 +176,11 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>): D
                 return newRow;
             });
         }
-    }
-    
+    });
+
     // Cleanup temporary dataframes
     delete processedDfs["NF-Stock NFE"];
     delete processedDfs["NF-Stock CTE"];
-    delete processedDfs["NF-Stock Itens"];
-    // Keep NF-Stock Emitidas and Itens de Saída for display
-    // delete processedDfs["NF-Stock Emitidas"];
-    delete processedDfs["NF-Stock Emitidas Itens"];
 
     return processedDfs;
 }
