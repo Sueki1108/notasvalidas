@@ -50,12 +50,13 @@ export default function MergerPage() {
         setProcessing(true);
 
         try {
-            const formData = new FormData();
-            files.forEach(file => {
-                formData.append('files', file);
-            });
-
-            const result = await mergeExcelFiles(formData);
+            const fileContents = await Promise.all(
+                files.map(file => 
+                    file.arrayBuffer().then(content => ({ name: file.name, content }))
+                )
+            );
+            
+            const result = await mergeExcelFiles(fileContents);
 
             if (result.error) {
                 throw new Error(result.error);
@@ -194,5 +195,3 @@ export default function MergerPage() {
         </div>
     );
 }
-
-    

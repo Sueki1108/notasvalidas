@@ -10,7 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { FileUploadForm, type FileList } from "@/components/app/file-upload-form";
 import { ResultsDisplay } from "@/components/app/results-display";
 import { KeyResultsDisplay } from "@/components/app/key-results-display";
-import { processPrimaryFiles, validateWithSped, type KeyCheckResult, type SpedInfo } from "@/app/actions";
+import { validateWithSped, type KeyCheckResult, type SpedInfo } from "@/app/actions";
+import { processDataFrames } from "@/lib/excel-processor";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -33,6 +34,89 @@ if (typeof window !== 'undefined' && !(window as any).__file_cache) {
 }
 const fileCache: FileList = typeof window !== 'undefined' ? (window as any).__file_cache : {};
 
+type DataFrames = { [key: string]: any[] };
+
+const extractNfeDataFromXml = (xmlContent: string) => {
+    const getValue = (tag: string) => (xmlContent.split(`<${tag}>`)[1] || '').split(`</${tag}>`)[0];
+    const getNestedValue = (parentTag: string, childTag: string) => {
+        const parentContent = xmlContent.split(`<${parentTag}>`)[1] || '';
+        return (parentContent.split(`<${childTag}>`)[1] || '').split(`</${childTag}>`)[0];
+    };
+    
+    const chNFe = getValue('chNFe');
+    
+    const nNF = getValue('nNF');
+    const dhEmi = getValue('dhEmi');
+    const vNF = getValue('vNF');
+    const cStat = getValue('cStat');
+    const emitCNPJ = getNestedValue('emit', 'CNPJ');
+    const emitXNome = getNestedValue('emit', 'xNome');
+    const destCNPJ = getNestedValue('dest', 'CNPJ');
+    const destXNome = getNestedValue('dest', 'xNome');
+    const tpNF = getValue('tpNF'); // 0 for entry, 1 for exit
+
+    const nota = {
+        'Chave de acesso': `NFe${chNFe}`,
+        'Número': nNF,
+        'Data de Emissão': dhEmi,
+        'Valor': parseFloat(vNF),
+        'Status': parseInt(cStat) === 100 ? 'Autorizadas' : (parseInt(cStat) === 101 ? 'Canceladas' : 'Outro Status'),
+        'Emitente CPF/CNPJ': emitCNPJ,
+        'Emitente': emitXNome,
+        'Destinatário CPF/CNPJ': destCNPJ,
+        'Destinatário': destXNome
+    };
+    
+    const isSaida = tpNF === '1';
+
+    const detSection = xmlContent.split('<det ');
+    const itens = detSection.slice(1).map(section => {
+        const prodSection = (section.split('<prod>')[1] || '').split('</prod>')[0];
+        const getProdValue = (tag: string) => (prodSection.split(`<${tag}>`)[1] || '').split(`</${tag}>`)[0];
+        return {
+            'Chave de acesso': `NFe${chNFe}`,
+            'Número': nNF,
+            'CPF/CNPJ': isSaida ? destCNPJ : emitCNPJ,
+            'CFOP': getProdValue('CFOP'),
+            'Código': getProdValue('cProd'),
+            'Descrição': getProdValue('xProd'),
+            'NCM': getProdValue('NCM'),
+            'Quantidade': parseFloat(getProdValue('qCom')),
+            'Valor Unitário': parseFloat(getProdValue('vUnCom')),
+            'Valor Total': parseFloat(getProdValue('vProd')),
+        };
+    });
+    
+    return { nota, itens, isSaida };
+}
+
+const extractCteDataFromXml = (xmlContent: string) => {
+    const getValue = (tag: string) => (xmlContent.split(`<${tag}>`)[1] || '').split(`</${tag}>`)[0];
+    const getNestedValue = (parentTag: string, childTag: string) => {
+        const parentContent = xmlContent.split(`<${parentTag}>`)[1] || '';
+        return (parentContent.split(`<${childTag}>`)[1] || '').split(`</${childTag}>`)[0];
+    };
+    
+    const chCTe = getValue('chCTe');
+    const nCT = getValue('nCT');
+    const dhEmi = getValue('dhEmi');
+    const vTPrest = getValue('vTPrest');
+    const cStat = getValue('cStat');
+    const tomaCNPJ = getNestedValue('toma', 'CNPJ') || getNestedValue('toma', 'CPF');
+    const tomaXNome = getNestedValue('toma', 'xNome');
+    
+    const nota = {
+        'Chave de acesso': `CTe${chCTe}`,
+        'Número': nCT,
+        'Data de Emissão': dhEmi,
+        'Valor da Prestação': parseFloat(vTPrest),
+        'Status': parseInt(cStat) === 100 ? 'Autorizadas' : 'Outro Status',
+        'Tomador CPF/CNPJ': tomaCNPJ,
+        'Tomador': tomaXNome,
+    };
+    
+    return { nota, isSaida: false }; // CTe is always "entrada" in this context
+}
 
 export default function Home() {
     const [step, setStep] = useState(1);
@@ -127,22 +211,62 @@ export default function Home() {
 
         setProcessing(true);
         try {
-            const formData = new FormData();
-            for (const name in files) {
-                const fileList = files[name];
-                if (fileList) {
-                    for (const file of fileList) {
-                        formData.append(name, file);
+            const dataFrames: DataFrames = {};
+            const nfeEntrada: any[] = [];
+            const nfeItensEntrada: any[] = [];
+            const cteEntrada: any[] = [];
+            const nfeSaida: any[] = [];
+            const nfeItensSaida: any[] = [];
+
+            for (const category in files) {
+                const fileList = files[category];
+                if (!fileList) continue;
+
+                for (const file of fileList) {
+                    if (file.name.toLowerCase().endsWith('.xml')) {
+                        const fileContent = await file.text();
+                         if (category === "XMLs de Entrada (NFe)") {
+                            const xmlData = extractNfeDataFromXml(fileContent);
+                            if(xmlData) {
+                                nfeEntrada.push(xmlData.nota);
+                                nfeItensEntrada.push(...xmlData.itens);
+                            }
+                        } else if (category === "XMLs de Entrada (CTe)") {
+                            const xmlData = extractCteDataFromXml(fileContent);
+                            if(xmlData) {
+                                cteEntrada.push(xmlData.nota);
+                            }
+                        } else if (category === "XMLs de Saída") {
+                            const xmlData = extractNfeDataFromXml(fileContent);
+                            if(xmlData) {
+                                nfeSaida.push(xmlData.nota);
+                                nfeItensSaida.push(...xmlData.itens);
+                            }
+                        }
+                    } else if (file.name.toLowerCase().endsWith('.xlsx')) {
+                         const sheetName = category;
+                        if (!dataFrames[sheetName]) dataFrames[sheetName] = [];
+                        const buffer = await file.arrayBuffer();
+                        const workbook = XLSX.read(buffer, { type: 'buffer' });
+                        for (const wsName of workbook.SheetNames) {
+                          const worksheet = workbook.Sheets[wsName];
+                          const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                          dataFrames[sheetName].push(...jsonData);
+                        }
                     }
                 }
             }
 
-            const resultData = await processPrimaryFiles(formData);
-            if (resultData.error) throw new Error(resultData.error);
+            dataFrames['NF-Stock NFE'] = nfeEntrada;
+            dataFrames['NF-Stock Itens'] = nfeItensEntrada;
+            dataFrames['NF-Stock CTE'] = cteEntrada;
+            dataFrames['NF-Stock Emitidas'] = nfeSaida;
+            dataFrames['NF-Stock Emitidas Itens'] = nfeItensSaida;
             
-            const data = resultData.data || null;
-            sessionStorage.setItem('processedData', JSON.stringify(data));
-            setResults(data);
+            const processedData = processDataFrames(dataFrames);
+
+            sessionStorage.setItem('processedData', JSON.stringify(processedData));
+            setResults(processedData);
             setStep(2); // Move to the next step
             toast({ title: "Processamento Concluído", description: "Os arquivos foram processados. Agora, carregue o arquivo SPED para validação." });
 
@@ -169,7 +293,8 @@ export default function Home() {
         setError(null);
         setValidating(true);
         try {
-            const resultData = await validateWithSped(results, spedFile);
+            const spedFileContent = await spedFile.text();
+            const resultData = await validateWithSped(results, spedFileContent);
             if (resultData.error) throw new Error(resultData.error);
 
             sessionStorage.setItem('keyCheckResults', JSON.stringify(resultData.keyCheckResults || null));
@@ -415,5 +540,3 @@ export default function Home() {
         </div>
     );
 }
-
-    

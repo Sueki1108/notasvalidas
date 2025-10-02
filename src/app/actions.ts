@@ -1,8 +1,6 @@
 // src/app/actions.ts
 'use server';
 
-import * as XLSX from 'xlsx';
-import { processDataFrames } from '@/lib/excel-processor';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 
@@ -60,150 +58,8 @@ const parseSpedInfo = (spedLine: string): SpedInfo | null => {
     return { cnpj, companyName, competence };
 };
 
-const extractNfeDataFromXml = (xmlContent: string) => {
-    const getValue = (tag: string) => (xmlContent.split(`<${tag}>`)[1] || '').split(`</${tag}>`)[0];
-    const getNestedValue = (parentTag: string, childTag: string) => {
-        const parentContent = xmlContent.split(`<${parentTag}>`)[1] || '';
-        return (parentContent.split(`<${childTag}>`)[1] || '').split(`</${childTag}>`)[0];
-    };
-    
-    const chNFe = getValue('chNFe');
-    
-    const nNF = getValue('nNF');
-    const dhEmi = getValue('dhEmi');
-    const vNF = getValue('vNF');
-    const cStat = getValue('cStat');
-    const emitCNPJ = getNestedValue('emit', 'CNPJ');
-    const emitXNome = getNestedValue('emit', 'xNome');
-    const destCNPJ = getNestedValue('dest', 'CNPJ');
-    const destXNome = getNestedValue('dest', 'xNome');
-    const tpNF = getValue('tpNF'); // 0 for entry, 1 for exit
-
-    const nota = {
-        'Chave de acesso': `NFe${chNFe}`,
-        'Número': nNF,
-        'Data de Emissão': dhEmi,
-        'Valor': parseFloat(vNF),
-        'Status': parseInt(cStat) === 100 ? 'Autorizadas' : (parseInt(cStat) === 101 ? 'Canceladas' : 'Outro Status'),
-        'Emitente CPF/CNPJ': emitCNPJ,
-        'Emitente': emitXNome,
-        'Destinatário CPF/CNPJ': destCNPJ,
-        'Destinatário': destXNome
-    };
-    
-    const isSaida = tpNF === '1';
-
-    const detSection = xmlContent.split('<det ');
-    const itens = detSection.slice(1).map(section => {
-        const prodSection = (section.split('<prod>')[1] || '').split('</prod>')[0];
-        const getProdValue = (tag: string) => (prodSection.split(`<${tag}>`)[1] || '').split(`</${tag}>`)[0];
-        return {
-            'Chave de acesso': `NFe${chNFe}`,
-            'Número': nNF,
-            'CPF/CNPJ': isSaida ? destCNPJ : emitCNPJ,
-            'CFOP': getProdValue('CFOP'),
-            'Código': getProdValue('cProd'),
-            'Descrição': getProdValue('xProd'),
-            'NCM': getProdValue('NCM'),
-            'Quantidade': parseFloat(getProdValue('qCom')),
-            'Valor Unitário': parseFloat(getProdValue('vUnCom')),
-            'Valor Total': parseFloat(getProdValue('vProd')),
-        };
-    });
-    
-    return { nota, itens, isSaida };
-}
-
-const extractCteDataFromXml = (xmlContent: string) => {
-    const getValue = (tag: string) => (xmlContent.split(`<${tag}>`)[1] || '').split(`</${tag}>`)[0];
-    const getNestedValue = (parentTag: string, childTag: string) => {
-        const parentContent = xmlContent.split(`<${parentTag}>`)[1] || '';
-        return (parentContent.split(`<${childTag}>`)[1] || '').split(`</${childTag}>`)[0];
-    };
-    
-    const chCTe = getValue('chCTe');
-    const nCT = getValue('nCT');
-    const dhEmi = getValue('dhEmi');
-    const vTPrest = getValue('vTPrest');
-    const cStat = getValue('cStat');
-    const tomaCNPJ = getNestedValue('toma', 'CNPJ') || getNestedValue('toma', 'CPF');
-    const tomaXNome = getNestedValue('toma', 'xNome');
-    
-    const nota = {
-        'Chave de acesso': `CTe${chCTe}`,
-        'Número': nCT,
-        'Data de Emissão': dhEmi,
-        'Valor da Prestação': parseFloat(vTPrest),
-        'Status': parseInt(cStat) === 100 ? 'Autorizadas' : 'Outro Status',
-        'Tomador CPF/CNPJ': tomaCNPJ,
-        'Tomador': tomaXNome,
-    };
-    
-    return { nota, isSaida: false }; // CTe is always "entrada" in this context
-}
-
-export async function processPrimaryFiles(formData: FormData) {
-  try {
-    const dataFrames: DataFrames = {};
-    
-    const nfeEntrada: any[] = [];
-    const nfeItensEntrada: any[] = [];
-    const cteEntrada: any[] = [];
-    const nfeSaida: any[] = [];
-    const nfeItensSaida: any[] = [];
-    
-    for (const [category, file] of formData.entries()) {
-        const fileContent = await (file as File).text();
-
-        if (category === "XMLs de Entrada (NFe)") {
-            const xmlData = extractNfeDataFromXml(fileContent);
-            if(xmlData) {
-                nfeEntrada.push(xmlData.nota);
-                nfeItensEntrada.push(...xmlData.itens);
-            }
-        } else if (category === "XMLs de Entrada (CTe)") {
-            const xmlData = extractCteDataFromXml(fileContent);
-            if(xmlData) {
-                cteEntrada.push(xmlData.nota);
-            }
-        } else if (category === "XMLs de Saída") {
-            const xmlData = extractNfeDataFromXml(fileContent);
-            if(xmlData) {
-                nfeSaida.push(xmlData.nota);
-                nfeItensSaida.push(...xmlData.itens);
-            }
-        } else { // Exception spreadsheets
-            const sheetName = category;
-            if (!dataFrames[sheetName]) dataFrames[sheetName] = [];
-            const buffer = await (file as File).arrayBuffer();
-            const workbook = XLSX.read(buffer, { type: 'buffer' });
-            for (const wsName of workbook.SheetNames) {
-              const worksheet = workbook.Sheets[wsName];
-              const jsonData = XLSX.utils.sheet_to_json(worksheet);
-              dataFrames[sheetName].push(...jsonData);
-            }
-        }
-    }
-    
-    dataFrames['NF-Stock NFE'] = nfeEntrada;
-    dataFrames['NF-Stock Itens'] = nfeItensEntrada;
-    dataFrames['NF-Stock CTE'] = cteEntrada;
-    dataFrames['NF-Stock Emitidas'] = nfeSaida;
-    dataFrames['NF-Stock Emitidas Itens'] = nfeItensSaida;
-    
-    const processedData = processDataFrames(dataFrames);
-    
-    return { data: processedData };
-
-  } catch (error: any) {
-    console.error('Error processing files:', error);
-    return { error: error.message || 'An unexpected error occurred during file processing.' };
-  }
-}
-
-export async function validateWithSped(processedData: DataFrames, spedFile: File) {
+export async function validateWithSped(processedData: DataFrames, spedFileContent: string) {
     try {
-        const spedFileContent = await spedFile.text();
         let spedInfo: SpedInfo | null = null;
         const allSpedKeys: string[] = [];
 
@@ -327,17 +183,13 @@ export async function addOrUpdateKeyComment(cnpj: string, key: string, comment: 
     }
 }
 
-export async function mergeExcelFiles(formData: FormData) {
+export async function mergeExcelFiles(files: { name: string, content: ArrayBuffer }[]) {
     try {
-        const fileEntries = formData.getAll('files') as File[];
         const mergedWorkbook = XLSX.utils.book_new();
-        
         const sheetsData: { [sheetName: string]: any[] } = {};
 
-        for (const file of fileEntries) {
-            const buffer = await file.arrayBuffer();
-            const workbook = XLSX.read(buffer, { type: 'buffer' });
-            
+        for (const file of files) {
+            const workbook = XLSX.read(file.content, { type: 'buffer' });
             for (const sheetName of workbook.SheetNames) {
                 if (!sheetsData[sheetName]) {
                     sheetsData[sheetName] = [];
@@ -365,7 +217,14 @@ export async function mergeExcelFiles(formData: FormData) {
         
         const buffer = XLSX.write(mergedWorkbook, { bookType: 'xlsx', type: 'array' });
         
-        const base64 = Buffer.from(buffer).toString('base64');
+        // Convert ArrayBuffer to base64
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        const len = bytes.byteLength;
+        for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        const base64 = btoa(binary);
         
         return { base64Data: base64 };
 
@@ -374,5 +233,3 @@ export async function mergeExcelFiles(formData: FormData) {
         return { error: error.message || "Ocorreu um erro ao agrupar as planilhas." };
     }
 }
-
-    
