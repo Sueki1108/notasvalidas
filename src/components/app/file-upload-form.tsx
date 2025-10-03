@@ -22,7 +22,7 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
         if (fileName.toLowerCase().includes('xml')) {
             return '.xml, text/xml';
         }
-        return ".xlsx,.xls,.csv,.ods,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/vnd.oasis.opendocument.spreadsheet";
+        return ".xlsx,.xls,.csv,.ods,.slk,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/vnd.oasis.opendocument.spreadsheet,text/x-slk";
     }
 
     const getDisplayName = (fileName: string) => {

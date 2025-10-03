@@ -182,7 +182,7 @@ export default function MergerPage() {
                                     className="sr-only"
                                     onChange={handleFileChange}
                                     multiple
-                                    accept=".xlsx,.xls,.csv,.ods,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/vnd.oasis.opendocument.spreadsheet"
+                                    accept=".xlsx,.xls,.csv,.ods,.slk,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/vnd.oasis.opendocument.spreadsheet,text/x-slk"
                                 />
                             </div>
 
@@ -229,5 +229,3 @@ export default function MergerPage() {
         </div>
     );
 }
-
-    

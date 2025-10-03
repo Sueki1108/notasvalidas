@@ -76,21 +76,20 @@ export default function SageItensNfPage() {
             for (const file of files) {
                 const sheetName = file.name.replace(/\.[^/.]+$/, "");
                 const fileExtension = file.name.split('.').pop()?.toLowerCase();
-                const content = await file.arrayBuffer();
                 
-                let df: any[][] = [];
-
                 let workbook;
-                if (fileExtension === 'csv') {
-                    const decoder = new TextDecoder('utf-8');
-                    const csvString = decoder.decode(content);
-                    workbook = XLSX.read(csvString, { type: 'string' });
+                if (fileExtension === 'slk' || fileExtension === 'csv') {
+                    // For text-based formats, read as text
+                    const textContent = await file.text();
+                    workbook = XLSX.read(textContent, { type: 'string' });
                 } else {
-                    workbook = XLSX.read(content, { type: 'buffer' });
+                    // For binary formats like xlsx, read as buffer
+                    const bufferContent = await file.arrayBuffer();
+                    workbook = XLSX.read(bufferContent, { type: 'buffer' });
                 }
 
                 const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                df = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                const df: any[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
 
 
                 // Convert to array of objects with new headers
@@ -248,7 +247,7 @@ export default function SageItensNfPage() {
                                     <UploadCloud className="h-12 w-12 text-muted-foreground" />
                                     <p className="mt-4 font-semibold">Clique para carregar as planilhas</p>
                                     <p className="text-sm text-muted-foreground">
-                                        Selecione múltiplos arquivos (.xlsx, .csv)
+                                        Selecione múltiplos arquivos (.xlsx, .csv, .slk)
                                     </p>
                                 </label>
                                 <input
@@ -259,7 +258,7 @@ export default function SageItensNfPage() {
                                     className="sr-only"
                                     onChange={handleFileChange}
                                     multiple
-                                    accept=".xlsx,.xls,.csv,.ods,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/vnd.oasis.opendocument.spreadsheet"
+                                    accept=".xlsx,.xls,.csv,.ods,.slk,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/vnd.oasis.opendocument.spreadsheet,text/x-slk"
                                 />
                             </div>
 
@@ -326,5 +325,3 @@ export default function SageItensNfPage() {
         </div>
     );
 }
-
-    
