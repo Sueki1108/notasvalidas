@@ -48,21 +48,30 @@ const extractNfeDataFromXml = (xmlContent: string) => {
 
     const getValue = (tag: string, context: Element | null) => context?.getElementsByTagName(tag)[0]?.textContent || '';
     
-    // Check if it's a cancellation event XML
+    // Check if it's an event XML
     const procEventoNFe = xmlDoc.getElementsByTagName('procEventoNFe')[0];
     if (procEventoNFe) {
         const infEvento = procEventoNFe.getElementsByTagName('infEvento')[0];
         if (infEvento) {
             const chNFe = getValue('chNFe', infEvento) || '';
             const tpEvento = getValue('tpEvento', infEvento) || '';
-            // 110111 is cancellation event
-            if (tpEvento === '110111') {
-                return {
-                    nota: { 'Chave de acesso': `NFe${chNFe}`, 'Status': 'Cancelada (Evento)' },
-                    isCancellationEvent: true,
-                    canceledKey: `NFe${chNFe}`,
-                    itens: []
-                };
+            const descEvento = infEvento.getElementsByTagName('descEvento')[0]?.textContent || '';
+
+            // Event type codes
+            const CANCELAMENTO = '110111';
+            const OP_NAO_REALIZADA = '210240';
+            const DESCONHECIMENTO = '411500';
+
+            switch (tpEvento) {
+                case CANCELAMENTO:
+                    return { isEvent: true, eventType: 'Cancelamento', canceledKey: `NFe${chNFe}` };
+                case OP_NAO_REALIZADA:
+                    return { isEvent: true, eventType: 'OperacaoNaoRealizada', exceptionKey: `NFe${chNFe}` };
+                case DESCONHECIMENTO:
+                     return { isEvent: true, eventType: 'Desconhecimento', exceptionKey: `NFe${chNFe}` };
+                default:
+                    // Other events like Carta de Correção are ignored as they don't invalidate the NF-e
+                    return null; 
             }
         }
         return null; // Not a relevant event
@@ -178,6 +187,22 @@ const extractCteDataFromXml = (xmlContent: string) => {
 
     const getValue = (tag: string, context: Element | null) => context?.getElementsByTagName(tag)[0]?.textContent || '';
     
+    // Check for CTe Event
+    const eventoCTe = xmlDoc.getElementsByTagName('eventoCTe')[0];
+    if (eventoCTe) {
+        const infEvento = eventoCTe.getElementsByTagName('infEvento')[0];
+        if (infEvento) {
+            const chCTe = getValue('chCTe', infEvento);
+            const tpEvento = getValue('tpEvento', infEvento);
+
+            // Prestação de Serviço em Desacordo
+            if (tpEvento === '610110') {
+                 return { isEvent: true, eventType: 'Desacordo', exceptionKey: `CTe${chCTe}` };
+            }
+        }
+        return null; // Ignore other CTe events
+    }
+    
     const infCte = xmlDoc.getElementsByTagName('infCte')[0];
     if(!infCte) return null;
 
@@ -249,9 +274,7 @@ export default function Home() {
             const input = document.querySelector(`input[name="SPED TXT"]`) as HTMLInputElement;
             if (input) input.value = "";
         } else {
-            const newFiles = { ...files };
-            delete newFiles[fileName];
-            setFiles(newFiles);
+            setFiles(prev => ({...prev, [fileName]: null}));
             const input = document.querySelector(`input[name="${fileName}"]`) as HTMLInputElement;
             if (input) input.value = "";
         }
@@ -269,78 +292,100 @@ export default function Home() {
         setProcessing(true);
         try {
             const dataFrames: DataFrames = {};
-            const nfeEntrada: any[] = [];
-            const nfeItensEntrada: any[] = [];
-            const cteEntrada: any[] = [];
-            const nfeSaida: any[] = [];
-            const nfeItensSaida: any[] = [];
+            const allNfe: any[] = [];
+            const allNfeItens: any[] = [];
+            const allCte: any[] = [];
             const canceledKeys = new Set<string>();
+            const exceptionKeys = {
+                OperacaoNaoRealizada: new Set<string>(),
+                Desconhecimento: new Set<string>(),
+                Desacordo: new Set<string>(),
+            }
 
-            const processXmls = async (fileList: File[], type: 'NFe-Entrada' | 'CTe-Entrada' | 'Saida') => {
+            const processXmlFiles = async (fileList: File[], type: 'NFe' | 'CTe') => {
                  for (const file of fileList) {
                     const fileContent = await file.text();
-                    if (type === 'CTe-Entrada') {
-                        const xmlData = extractCteDataFromXml(fileContent);
-                         if (xmlData && xmlData.nota) {
-                            cteEntrada.push(xmlData.nota);
-                            if (xmlData.nota['Status']?.includes('Cancelada')) {
-                                canceledKeys.add(xmlData.nota['Chave de acesso']);
+                    const xmlData = type === 'NFe' ? extractNfeDataFromXml(fileContent) : extractCteDataFromXml(fileContent);
+
+                    if (!xmlData) continue;
+
+                    if (xmlData.isEvent) {
+                        if (xmlData.canceledKey) {
+                            canceledKeys.add(xmlData.canceledKey);
+                        }
+                        if (xmlData.exceptionKey) {
+                             if (xmlData.eventType === 'OperacaoNaoRealizada') {
+                                exceptionKeys.OperacaoNaoRealizada.add(xmlData.exceptionKey);
+                            } else if (xmlData.eventType === 'Desconhecimento') {
+                                exceptionKeys.Desconhecimento.add(xmlData.exceptionKey);
+                            } else if (xmlData.eventType === 'Desacordo') {
+                                exceptionKeys.Desacordo.add(xmlData.exceptionKey);
                             }
                         }
-                    } else {
-                        const xmlData = extractNfeDataFromXml(fileContent);
-                        if (xmlData && xmlData.nota) {
-                             if (xmlData.isCancellationEvent && xmlData.canceledKey) {
-                                canceledKeys.add(xmlData.canceledKey);
-                            } else if (xmlData.nota['Status']?.includes('Cancelada')) {
-                                canceledKeys.add(xmlData.nota['Chave de acesso']);
-                            }
-                             if (type === 'NFe-Entrada') {
-                                if (xmlData.nota) nfeEntrada.push(xmlData.nota);
-                                if (xmlData.itens && xmlData.itens.length > 0) {
-                                    nfeItensEntrada.push(...xmlData.itens);
-                                }
-                            } else { // Saida
-                                if (xmlData.nota) nfeSaida.push(xmlData.nota);
-                                if (xmlData.itens && xmlData.itens.length > 0) {
-                                    nfeItensSaida.push(...xmlData.itens);
-                                }
-                            }
+                    } else if (xmlData.nota) {
+                        if (type === 'NFe') {
+                            allNfe.push(xmlData.nota);
+                            if (xmlData.itens) allNfeItens.push(...xmlData.itens);
+                        } else {
+                            allCte.push(xmlData.nota);
+                        }
+                         if (xmlData.nota['Status']?.includes('Cancelada')) {
+                            canceledKeys.add(xmlData.nota['Chave de acesso']);
                         }
                     }
                 }
             };
+            
+            // Process ALL XML files from all categories
+            if (files["XMLs de Entrada (NFe)"]) await processXmlFiles(files["XMLs de Entrada (NFe)"]!, 'NFe');
+            if (files["XMLs de Entrada (CTe)"]) await processXmlFiles(files["XMLs de Entrada (CTe)"]!, 'CTe');
+            if (files["XMLs de Saída"]) await processXmlFiles(files["XMLs de Saída"]!, 'NFe');
+            if (files["NF-Stock NFE Operação Não Realizada"]) await processXmlFiles(files["NF-Stock NFE Operação Não Realizada"]!, 'NFe');
+            if (files["NF-Stock NFE Operação Desconhecida"]) await processXmlFiles(files["NF-Stock NFE Operação Desconhecida"]!, 'NFe');
+            if (files["NF-Stock CTE Desacordo de Serviço"]) await processXmlFiles(files["NF-Stock CTE Desacordo de Serviço"]!, 'CTe');
 
-            if (files["XMLs de Entrada (NFe)"]) await processXmls(files["XMLs de Entrada (NFe)"]!, 'NFe-Entrada');
-            if (files["XMLs de Entrada (CTe)"]) await processXmls(files["XMLs de Entrada (CTe)"]!, 'CTe-Entrada');
-            if (files["XMLs de Saída"]) await processXmls(files["XMLs de Saída"]!, 'Saida');
+            // Assign raw extracted data
+            dataFrames['NF-Stock NFE'] = allNfe;
+            dataFrames['NF-Stock CTE'] = allCte;
+            dataFrames['Itens de Entrada'] = allNfeItens.filter(item => { // Assume all items are initially 'entrada'
+                const nota = allNfe.find(n => n['Chave de acesso'] === item['Chave de acesso']);
+                return nota && nota['Emitente CPF/CNPJ'] !== spedInfo?.cnpj; // Simple check for now
+            });
+             dataFrames['Itens de Saída'] = allNfeItens.filter(item => {
+                const nota = allNfe.find(n => n['Chave de acesso'] === item['Chave de acesso']);
+                return nota && nota['Emitente CPF/CNPJ'] === spedInfo?.cnpj; // Simple check
+            });
 
-            dataFrames['NF-Stock NFE'] = nfeEntrada;
-            dataFrames['NF-Stock CTE'] = cteEntrada;
-            dataFrames['Itens de Entrada'] = nfeItensEntrada; // New raw items sheet
-            dataFrames['NF-Stock Emitidas'] = nfeSaida;
-            dataFrames['Itens de Saída'] = nfeItensSaida; // New raw items sheet
 
-            for (const category in files) {
-                const fileList = files[category];
-                if (!fileList || category.includes('XML')) continue;
+            // Handle Excel-based exceptions
+            const handleExcelExceptions = async (sheetName: string, exceptionSet: Set<string>) => {
+                const fileList = files[sheetName];
+                if (!fileList || !fileList.some(f => f.name.toLowerCase().endsWith('.xlsx'))) return;
 
                 for (const file of fileList) {
                     if (file.name.toLowerCase().endsWith('.xlsx')) {
-                         const sheetName = category;
-                        if (!dataFrames[sheetName]) dataFrames[sheetName] = [];
                         const buffer = await file.arrayBuffer();
                         const workbook = XLSX.read(buffer, { type: 'buffer' });
                         for (const wsName of workbook.SheetNames) {
                           const worksheet = workbook.Sheets[wsName];
-                          const jsonData = XLSX.utils.sheet_to_json(worksheet);
-                          dataFrames[sheetName].push(...jsonData);
+                          const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
+                          jsonData.forEach(row => {
+                              const key = row['Chave de Acesso'] || row['Chave'];
+                              if (key) exceptionSet.add(key.startsWith('NFe') || key.startsWith('CTe') ? key : `NFe${key}`);
+                          });
                         }
                     }
                 }
-            }
+            };
+            
+            await handleExcelExceptions("NF-Stock NFE Operação Não Realizada", exceptionKeys.OperacaoNaoRealizada);
+            await handleExcelExceptions("NF-Stock NFE Operação Desconhecida", exceptionKeys.Desconhecimento);
+            await handleExcelExceptions("NF-Stock CTE Desacordo de Serviço", exceptionKeys.Desacordo);
 
-            const processedData = processDataFrames(dataFrames, canceledKeys);
+
+            const processedData = processDataFrames({
+                ...dataFrames,
+            }, canceledKeys, exceptionKeys);
 
             setResults(processedData);
             toast({ title: "Processamento Concluído", description: "Os arquivos foram processados. Vá para a aba de Validação SPED." });
@@ -660,5 +705,3 @@ export default function Home() {
         </div>
     );
 }
-
-    
