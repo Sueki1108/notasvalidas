@@ -1,9 +1,9 @@
 // src/app/page.tsx
 "use client";
 
-import { useState, useEffect, ChangeEvent } from "react";
+import { useState, ChangeEvent } from "react";
 import * as XLSX from "xlsx";
-import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown } from "lucide-react";
+import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,12 +55,12 @@ const extractNfeDataFromXml = (xmlContent: string) => {
         if (infEvento) {
             const chNFe = getValue('chNFe', infEvento) || '';
             const tpEvento = getValue('tpEvento', infEvento) || '';
-            const cStatEvento = getValue('cStat', infEvento) || '';
-
-            // 110111 is cancellation event, 135 or 101 is success status for the event
-            if (tpEvento === '110111' && (cStatEvento === '135' || cStatEvento === '101')) {
+            // 110111 is cancellation event
+            if (tpEvento === '110111') {
                 return {
                     nota: { 'Chave de acesso': `NFe${chNFe}`, 'Status': 'Cancelada (Evento)' },
+                    isCancellationEvent: true,
+                    canceledKey: `NFe${chNFe}`,
                     itens: []
                 };
             }
@@ -290,7 +290,9 @@ export default function Home() {
                     } else {
                         const xmlData = extractNfeDataFromXml(fileContent);
                         if (xmlData && xmlData.nota) {
-                             if (xmlData.nota['Status']?.includes('Cancelada') || xmlData.nota['Status']?.includes('(Evento)')) {
+                             if (xmlData.isCancellationEvent && xmlData.canceledKey) {
+                                canceledKeys.add(xmlData.canceledKey);
+                            } else if (xmlData.nota['Status']?.includes('Cancelada')) {
                                 canceledKeys.add(xmlData.nota['Chave de acesso']);
                             }
                              if (type === 'NFe-Entrada') {
@@ -469,7 +471,7 @@ export default function Home() {
                                     <Link href="/merger" className="flex items-center gap-2 w-full"><Group />Agrupador de Planilhas</Link>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem asChild>
-                                    <Link href="/sage-itens-nf" className="flex items-center gap-2 w-full"><FileText />Sage - Itens da NF</Link>
+                                    <Link href="/sage-itens-nf" className="flex items-center gap-2 w-full"><FileTextIcon />Sage - Itens da NF</Link>
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>

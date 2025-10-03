@@ -47,15 +47,8 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>): D
             return { "Chave Unica": chaveUnica, ...row };
         }
         return row;
-    });
+    }).filter(row => row);
 
-    const originalItensEntrada = (processedDfs["Itens de Entrada"] || []).map(row => {
-         if (row && row["Número"] !== undefined && row["CPF/CNPJ"] !== undefined) {
-            const chaveUnica = cleanAndToStr(row["Número"]) + cleanAndToStr(row["CPF/CNPJ"]);
-            return { "Chave Unica": chaveUnica, ...row };
-        }
-        return row;
-    });
     
     // Filter out total rows
     const phrasesToRemove = ["TOTAL", "Valor total das notas", "Valor Total da Prestação"];
@@ -73,8 +66,6 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>): D
     // Step 2: Identify and separate exceptions
     const chavesUnicasARemover = new Set<string>();
     
-    // Keys from cancellation events are already in canceledKeys set from page.tsx
-
     processedDfs["Notas Canceladas"] = notasEntradaTemporaria.filter(row => row && canceledKeys.has(row['Chave de acesso']));
     
     processedDfs["Notas Canceladas"].forEach(row => {
@@ -116,10 +107,19 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>): D
     );
 
     // Handle outgoing notes
-    processedDfs["NF-Stock Emitidas"] = filterRows(processedDfs["NF-Stock Emitidas"] || []).filter(row => row && !canceledKeys.has(row['Chave de acesso']));
+    const notasSaidaTemporaria = filterRows(processedDfs["NF-Stock Emitidas"] || []);
+    processedDfs["NF-Stock Emitidas"] = notasSaidaTemporaria.filter(row => row && !canceledKeys.has(row['Chave de acesso']));
     const chavesEmitidasValidas = new Set(processedDfs["NF-Stock Emitidas"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));
     processedDfs["Itens de Saída"] = (dfs["Itens de Saída"] || []).filter(item => item && chavesEmitidasValidas.has(item['Chave de acesso']));
     
+    // Add canceled outgoing notes to the "Notas Canceladas" sheet
+    const notasSaidaCanceladas = notasSaidaTemporaria.filter(row => row && canceledKeys.has(row['Chave de acesso']));
+    if (!processedDfs["Notas Canceladas"]) {
+        processedDfs["Notas Canceladas"] = [];
+    }
+    processedDfs["Notas Canceladas"].push(...notasSaidaCanceladas);
+
+
     // Logic for "Emissão Própria" based on ENTRY notes
     const chavesUnicasEmissaoPropria = new Set<string>();
     if (processedDfs["Itens de Entrada"]) {
