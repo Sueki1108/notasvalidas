@@ -149,6 +149,9 @@ export default function UnifyFoldersPage() {
                                  <DropdownMenuItem asChild>
                                     <Link href="/extract-cte" className="flex items-center gap-2 w-full"><Search />Extrair CT-e</Link>
                                 </DropdownMenuItem>
+                                 <DropdownMenuItem asChild>
+                                    <Link href="/returns" className="flex items-center gap-2 w-full"><FileText />Devoluções</Link>
+                                </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                         <Button variant="ghost" asChild>
@@ -234,3 +237,4 @@ export default function UnifyFoldersPage() {
         </div>
     );
 }
+

@@ -629,3 +629,108 @@ export async function extractCteData(files: { name: string, content: string }[])
         return { error: error.message || "Ocorreu um erro ao extrair os dados." };
     }
 }
+
+export async function extractReturnData(files: { name: string; content: string }[]) {
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: '@_',
+    textNodeName: '_text',
+    isArray: (name, jpath) => {
+      return jpath === 'nfeProc.NFe.infNFe.det';
+    },
+  });
+
+  const dados_por_item: any[] = [];
+
+  for (const file of files) {
+    try {
+      const jsonObj = parser.parse(file.content);
+      const nfeProc = jsonObj.nfeProc;
+      const infNFe = nfeProc?.NFe?.infNFe;
+      if (!infNFe) continue;
+
+      const dados_nf_base: any = { Arquivo: file.name };
+      
+      dados_nf_base['nNF'] = infNFe.ide?.nNF;
+      dados_nf_base['emit_xNome'] = infNFe.emit?.xNome;
+      dados_nf_base['chNFe'] = nfeProc.protNFe?.infProt?.chNFe;
+      
+      const icmsTot = infNFe.total?.ICMSTot;
+      dados_nf_base['vNF'] = icmsTot?.vNF;
+      dados_nf_base['vICMS'] = icmsTot?.vICMS;
+      dados_nf_base['vST'] = icmsTot?.vST;
+      dados_nf_base['vIPI'] = icmsTot?.vIPI;
+      dados_nf_base['vPISNF'] = icmsTot?.vPIS;
+      dados_nf_base['vCOFINSNF'] = icmsTot?.vCOFINS;
+      dados_nf_base['vOutro'] = icmsTot?.vOutro;
+      
+      let chaves_ref: string[] = [];
+      if (infNFe.ide?.NFref) {
+        if(Array.isArray(infNFe.ide.NFref)) {
+            chaves_ref = infNFe.ide.NFref.map((ref: any) => ref.refNFe).filter(Boolean);
+        } else if (infNFe.ide.NFref.refNFe) {
+            chaves_ref.push(infNFe.ide.NFref.refNFe);
+        }
+      }
+      dados_nf_base['refNFe'] = chaves_ref.join('; ');
+
+      const detalhes = infNFe.det;
+      if (detalhes) {
+        for (const item of detalhes) {
+          const dados_item = { ...dados_nf_base };
+          const prod = item.prod;
+          const imposto = item.imposto;
+
+          dados_item['xProd'] = prod?.xProd;
+          dados_item['CFOP'] = prod?.CFOP;
+          dados_item['qCom'] = prod?.qCom;
+          dados_item['vUnCom'] = prod?.vUnCom;
+          dados_item['vProdItem'] = prod?.vProd;
+          
+          dados_item['vICMSItem'] = imposto?.ICMS ? (Object.values(imposto.ICMS)[0] as any)?.vICMS : null;
+          dados_item['vSTItem'] = imposto?.ICMSST?.vICMSST;
+          dados_item['vPISItem'] = imposto?.PIS?.PISOutr?.vPIS;
+          dados_item['vCOFINSItem'] = imposto?.COFINS?.COFINSOutr?.vCOFINS;
+          dados_item['vIPIItem'] = imposto?.IPI ? (Object.values(imposto.IPI)[0] as any)?.vIPI : null;
+          dados_item['vIPIDevol'] = imposto?.impostoDevol?.IPI?.vIPIDevol;
+
+          dados_por_item.push(dados_item);
+        }
+      }
+    } catch (e: any) {
+      console.error(`Error processing file ${file.name}:`, e);
+      // Optional: Add error information to the output if needed
+    }
+  }
+
+  // Formatting and creating Excel
+  const df = dados_por_item.map(row => ({
+    ...row,
+    nNF: parseInt(row.nNF) || 0,
+    vNF: parseFloat(String(row.vNF).replace(',', '.')) || 0,
+    vICMS: parseFloat(String(row.vICMS).replace(',', '.')) || 0,
+    vST: parseFloat(String(row.vST).replace(',', '.')) || 0,
+    vIPI: parseFloat(String(row.vIPI).replace(',', '.')) || 0,
+    vPISNF: parseFloat(String(row.vPISNF).replace(',', '.')) || 0,
+    vCOFINSNF: parseFloat(String(row.vCOFINSNF).replace(',', '.')) || 0,
+    vOutro: parseFloat(String(row.vOutro).replace(',', '.')) || 0,
+    qCom: parseFloat(String(row.qCom).replace(',', '.')) || 0,
+    vUnCom: parseFloat(String(row.vUnCom).replace(',', '.')) || 0,
+    vProdItem: parseFloat(String(row.vProdItem).replace(',', '.')) || 0,
+    vICMSItem: parseFloat(String(row.vICMSItem).replace(',', '.')) || 0,
+    vSTItem: parseFloat(String(row.vSTItem).replace(',', '.')) || 0,
+    vPISItem: parseFloat(String(row.vPISItem).replace(',', '.')) || 0,
+    vCOFINSItem: parseFloat(String(row.vCOFINSItem).replace(',', '.')) || 0,
+    vIPIItem: parseFloat(String(row.vIPIItem).replace(',', '.')) || 0,
+    vIPIDevol: parseFloat(String(row.vIPIDevol).replace(',', '.')) || 0,
+  }));
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(df);
+  XLSX.utils.book_append_sheet(wb, ws, 'Dados');
+
+  const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const base64 = Buffer.from(buffer).toString('base64');
+  
+  return { base64Data: base64 };
+}
