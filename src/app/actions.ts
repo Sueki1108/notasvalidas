@@ -24,6 +24,8 @@ export type KeyInfo = {
     partnerName?: string;
     emissionDate?: string;
     value?: number;
+    docType?: 'NFe' | 'CTe';
+    direction?: 'Entrada' | 'Saída';
 };
 
 
@@ -99,14 +101,19 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
     if (parts.length > 9 && parts[1] === 'C100') {
         const docStatus = parts[5]; // 00: Regular, 02: Cancelado
         const key = parts[9];
+        const directionValue = parts[2]; // 0: Entrada, 1: Saída
         
         if (!key || key.length !== 44) return null;
+
+        const direction = directionValue === '0' ? 'Entrada' : 'Saída';
 
         // If document is canceled, denegated, or inutilized
         if (['02', '03', '04', '05'].includes(docStatus)) {
             return {
                 key,
-                comment: 'Documento Cancelado/Denegado no SPED'
+                comment: 'Documento Cancelado/Denegado no SPED',
+                docType: 'NFe',
+                direction
             };
         }
         
@@ -120,7 +127,9 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
             key,
             value,
             emissionDate: emissionDate ? `${emissionDate.substring(0,2)}/${emissionDate.substring(2,4)}/${emissionDate.substring(4,8)}` : '',
-            partnerName
+            partnerName,
+            docType: 'NFe',
+            direction
         };
     }
     // Validation for a D100 line (CTe)
@@ -130,13 +139,16 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
         const emissionDate = parts[9]; // DDMMYYYY
         const partnerCode = parts[3]; // Emitente do CTe (COD_PART)
         const partnerName = participants.get(partnerCode) || '';
+        const directionValue = parts[2]; // 0: Entrada, 1: Saída
 
         if (key && key.length === 44) {
             return {
                 key,
                 value,
                 emissionDate: emissionDate ? `${emissionDate.substring(0,2)}/${emissionDate.substring(2,4)}/${emissionDate.substring(4,8)}` : '',
-                partnerName
+                partnerName,
+                docType: 'CTe',
+                direction: directionValue === '0' ? 'Entrada' : 'Saída'
             };
         }
     }
@@ -184,12 +196,16 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                 .filter(key => !keysInTxt.has(key))
                 .map(key => {
                     const note = allNotesMap.get(key);
+                    const isNFe = note && note['Chave de acesso'].startsWith('NFe');
+                    const isSaida = note && spedInfo && note['Emitente CPF/CNPJ'] === spedInfo.cnpj;
                     return {
                         key: key,
                         origin: 'planilha' as 'planilha',
                         partnerName: note?.['Fornecedor/Cliente'] || '',
                         emissionDate: note?.['Data de Emissão'] || '',
-                        value: note?.['Valor'] || 0
+                        value: note?.['Valor'] || 0,
+                        docType: isNFe ? 'NFe' : 'CTe',
+                        direction: isSaida ? 'Saída' : 'Entrada'
                     }
                 });
 
@@ -203,7 +219,9 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                         partnerName: spedData?.partnerName || '',
                         emissionDate: spedData?.emissionDate || '',
                         value: spedData?.value || 0,
-                        comment: spedData?.comment || ''
+                        comment: spedData?.comment || '',
+                        docType: spedData?.docType,
+                        direction: spedData?.direction
                     }
                 });
             
@@ -223,6 +241,8 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                 .map((key: string) => {
                     const cleanKey = key.replace(/^NFe|^_|^CTe_/, '');
                     const note = allNotesMap.get(cleanKey);
+                    const isNFe = key.startsWith('NFe');
+                    const isSaida = note && spedInfo && note['Emitente CPF/CNPJ'] === spedInfo.cnpj;
                     return {
                         key: cleanKey,
                         origin: 'planilha',
@@ -230,7 +250,9 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                         comment: '',
                         partnerName: note?.['Fornecedor/Cliente'] || '',
                         emissionDate: note?.['Data de Emissão'] || '',
-                        value: note?.['Valor'] || 0
+                        value: note?.['Valor'] || 0,
+                        docType: isNFe ? 'NFe' : 'CTe',
+                        direction: isSaida ? 'Saída' : 'Entrada'
                     };
                 });
             

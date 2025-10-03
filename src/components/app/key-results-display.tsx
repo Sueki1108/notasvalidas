@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { KeyCheckResult, KeyInfo } from "@/app/actions";
+import { Badge } from "@/components/ui/badge";
 
 interface KeyItemRowProps {
     item: KeyInfo;
@@ -73,6 +74,14 @@ const KeyItemRow = ({ item, cnpj }: KeyItemRowProps) => {
                     <Copy className="h-3 w-3" />
                 </Button>
             </TableCell>
+            <TableCell>
+                <Badge variant={item.docType === 'NFe' ? 'default' : 'secondary'}>{item.docType || 'N/A'}</Badge>
+            </TableCell>
+            <TableCell>
+                <Badge variant={item.direction === 'Entrada' ? 'outline' : 'default'} className={item.direction === 'Entrada' ? 'border-blue-500 text-blue-500' : 'bg-orange-500'}>
+                    {item.direction || 'N/A'}
+                </Badge>
+            </TableCell>
             <TableCell>{item.partnerName || 'N/A'}</TableCell>
             <TableCell>{formatDate(item.emissionDate)}</TableCell>
             <TableCell className="text-right">
@@ -129,12 +138,14 @@ const KeyTable = ({ title, description, keys, cnpj, filename }: KeyTableProps) =
         }
         const data = keys.map(item => ({ 
             "Chave de acesso": item.key.replace(/^NFe|^CTe/, ''),
+            "Tipo": item.docType,
+            "Direção": item.direction,
             "Fornecedor/Cliente": item.partnerName,
             "Data de Emissão": item.emissionDate,
             "Valor": item.value
         }));
         const worksheet = XLSX.utils.json_to_sheet(data);
-        worksheet['!cols'] = [{ wch: 50 }, { wch: 40 }, { wch: 15 }, { wch: 15 }];
+        worksheet['!cols'] = [{ wch: 50 }, { wch: 10 }, { wch: 10 }, { wch: 40 }, { wch: 15 }, { wch: 15 }];
 
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Chaves");
@@ -162,6 +173,8 @@ const KeyTable = ({ title, description, keys, cnpj, filename }: KeyTableProps) =
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Chave</TableHead>
+                                <TableHead>Tipo</TableHead>
+                                <TableHead>Direção</TableHead>
                                 <TableHead>Fornecedor/Cliente</TableHead>
                                 <TableHead>Data Emissão</TableHead>
                                 <TableHead className="text-right">Valor</TableHead>
