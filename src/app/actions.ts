@@ -73,12 +73,14 @@ const parseSpedInfo = (spedLine: string): SpedInfo | null => {
 
 const parseSpedLineForData = (line: string): Partial<KeyInfo> | null => {
     const parts = line.split('|');
+    
     // Basic validation for a C100 line (NFe)
-    if (parts.length > 9 && (parts[1] === 'C100')) {
+    if (parts.length > 9 && parts[1] === 'C100') {
         const key = parts[9];
         const value = parseFloat(parts[23] || '0');
         const emissionDate = parts[10]; // DDMMYYYY
-        const partnerName = parts[14] || '';
+        // For NFe, partner is in field 14 or 18 (emit or dest)
+        const partnerName = parts[14] || parts[18] || ''; 
 
         if (key && key.length === 44) {
             return {
@@ -89,7 +91,23 @@ const parseSpedLineForData = (line: string): Partial<KeyInfo> | null => {
             };
         }
     }
-    // Add parsing for other types like CTe if needed
+    // Validation for a D100 line (CTe)
+    else if (parts.length > 9 && parts[1] === 'D100') {
+        const key = parts[9];
+        const value = parseFloat(parts[16] || '0'); // vTPrest
+        const emissionDate = parts[10]; // DDMMYYYY
+        // For CTe, partner is usually the sender (remetente) or receiver (destinatario)
+        const partnerName = parts[13] || parts[17] || ''; 
+
+        if (key && key.length === 44) {
+            return {
+                key,
+                value,
+                emissionDate: emissionDate ? `${emissionDate.substring(0,2)}/${emissionDate.substring(2,4)}/${emissionDate.substring(4,8)}` : '',
+                partnerName
+            };
+        }
+    }
     return null;
 }
 
@@ -300,5 +318,7 @@ export async function mergeExcelFiles(files: { name: string, content: ArrayBuffe
         return { error: error.message || "Ocorreu um erro ao agrupar as planilhas." };
     }
 }
+
+    
 
     
