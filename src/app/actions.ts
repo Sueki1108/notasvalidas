@@ -1,4 +1,3 @@
-
 // src/app/actions.ts
 'use server';
 
@@ -6,6 +5,7 @@ import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
+import { XMLParser } from 'fast-xml-parser';
 
 // Type for the file data structure expected by the processor
 type DataFrames = { [key: string]: any[] };
@@ -302,13 +302,17 @@ export async function mergeExcelFiles(files: { name: string, content: ArrayBuffe
             const workbook = XLSX.read(file.content, { type: 'buffer' });
             for (const sheetName of workbook.SheetNames) {
                 const worksheet = workbook.Sheets[sheetName];
-                // Using header: 1 to get an array of arrays
                 const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
 
                 if (!sheetsData[sheetName]) {
                     sheetsData[sheetName] = [];
                 }
-                sheetsData[sheetName].push(...jsonData);
+                // Push all rows except the header of subsequent files for the same sheet
+                if (sheetsData[sheetName].length === 0) {
+                     sheetsData[sheetName].push(...jsonData);
+                } else {
+                     sheetsData[sheetName].push(...jsonData.slice(1));
+                }
             }
         }
 
@@ -316,37 +320,10 @@ export async function mergeExcelFiles(files: { name: string, content: ArrayBuffe
             return { error: "Nenhuma planilha encontrada nos arquivos carregados." };
         }
 
-        // Process merged data to remove duplicate headers
+        // Create new worksheets from the merged data
         for (const sheetName in sheetsData) {
-            const allRows = sheetsData[sheetName];
-            if (allRows.length > 0) {
-                const header = allRows[0];
-                const uniqueRows = [header];
-                const seenRows = new Set([JSON.stringify(header)]);
-
-                for (let i = 1; i < allRows.length; i++) {
-                    const rowString = JSON.stringify(allRows[i]);
-                    // If it's a header row, we only add it if it's the very first one
-                    if(JSON.stringify(allRows[i]) === JSON.stringify(header)) {
-                         continue;
-                    }
-                    if (!seenRows.has(rowString)) {
-                        uniqueRows.push(allRows[i]);
-                        seenRows.add(rowString);
-                    }
-                }
-                
-                // Keep only the first header
-                const finalRows = [uniqueRows[0]];
-                for (let i = 1; i < uniqueRows.length; i++) {
-                    if (JSON.stringify(uniqueRows[i]) !== JSON.stringify(header)) {
-                        finalRows.push(uniqueRows[i]);
-                    }
-                }
-
-                const newWorksheet = XLSX.utils.aoa_to_sheet(finalRows);
-                XLSX.utils.book_append_sheet(mergedWorkbook, newWorksheet, sheetName);
-            }
+            const newWorksheet = XLSX.utils.aoa_to_sheet(sheetsData[sheetName]);
+            XLSX.utils.book_append_sheet(mergedWorkbook, newWorksheet, sheetName);
         }
 
         if (mergedWorkbook.SheetNames.length === 0) {
@@ -396,5 +373,138 @@ export async function unifyZipFiles(files: { name: string, content: string }[]) 
     } catch (error: any) {
         console.error("Erro ao unificar arquivos ZIP:", error);
         return { error: error.message || "Ocorreu um erro ao unificar os arquivos." };
+    }
+}
+
+// --- Logic for 'Extrair NF-e' Tool ---
+
+const SPECIFIC_TAGS_MAP: { [key: string]: string[] } = {
+    "Número NF-e": ["nfeProc", "NFe", "infNFe", "ide", "nNF"],
+    "Chave NF-e": ["nfeProc", "protNFe", "infProt", "chNFe"],
+    "Valor Total Nota": ["nfeProc", "NFe", "infNFe", "total", "ICMSTot", "vNF"],
+    "Valor ICMS": ["nfeProc", "NFe", "infNFe", "total", "ICMSTot", "vICMS"],
+    "Valor Total IPI": ["nfeProc", "NFe", "infNFe", "total", "ICMSTot", "vIPI"],
+    "Valor Total PIS": ["nfeProc", "NFe", "infNFe", "total", "ICMSTot", "vPIS"],
+    "Valor Total COFINS": ["nfeProc", "NFe", "infNFe", "total", "ICMSTot", "vCOFINS"],
+    "Valor Total Tributos": ["nfeProc", "NFe", "infNFe", "total", "ICMSTot", "vTotTrib"],
+    "Data de Emissão": ["nfeProc", "NFe", "infNFe", "ide", "dhEmi"]
+};
+
+const COLUMNS_TO_FORMAT_DECIMAL = [
+    "Valor Total Nota",
+    "Valor ICMS",
+    "Valor Total IPI",
+    "Valor Total PIS",
+    "Valor Total COFINS",
+    "Valor Total Tributos"
+];
+
+function getValueByPath(obj: any, path: string[]): string {
+    let current = obj;
+    for (const key of path) {
+        if (current && typeof current === 'object' && key in current) {
+            current = current[key];
+        } else {
+            return 'N/A';
+        }
+    }
+    return current !== undefined && current !== null ? String(current) : 'N/A';
+}
+
+function flattenObject(obj: any, parentKey = '', res: { [key: string]: any } = {}) {
+    for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            const propName = parentKey ? `${parentKey}/${key}` : key;
+            if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+                flattenObject(obj[key], propName, res);
+            } else if (Array.isArray(obj[key])) {
+                 // For simplicity, we can stringify arrays or handle them as needed.
+                 // Here, we'll just join them. A more complex handler might be needed for nested arrays.
+                 res[propName] = obj[key].map((item: any) => typeof item === 'object' ? JSON.stringify(item) : item).join('; ');
+            }
+            else {
+                res[propName] = obj[key];
+            }
+        }
+    }
+    return res;
+}
+
+
+export async function extractNfeData(files: { name: string, content: string }[]) {
+     try {
+        const parser = new XMLParser({
+            ignoreAttributes: false,
+            attributeNamePrefix: "@_",
+        });
+
+        const dadosCompletos: any[] = [];
+        const dadosEspecificos: any[] = [];
+
+        for (const file of files) {
+            try {
+                const jsonObj = parser.parse(file.content);
+
+                // --- DADOS COMPLETOS ---
+                const flatData = flattenObject(jsonObj);
+                flatData['Arquivo'] = file.name;
+                dadosCompletos.push(flatData);
+                
+                // --- DADOS ESPECIFICOS ---
+                const specificData: { [key: string]: string } = { 'Arquivo': file.name };
+                for (const colName in SPECIFIC_TAGS_MAP) {
+                    let value = getValueByPath(jsonObj, SPECIFIC_TAGS_MAP[colName]);
+                    if (COLUMNS_TO_FORMAT_DECIMAL.includes(colName) && value && value !== 'N/A') {
+                        value = value.replace('.', ',');
+                    }
+                    specificData[colName] = value;
+                }
+                dadosEspecificos.push(specificData);
+
+            } catch (e: any) {
+                 console.error(`Error processing file ${file.name}:`, e);
+                 // Add placeholder for corrupted file to maintain row alignment
+                 dadosCompletos.push({ 'Arquivo': file.name, 'Erro_Processamento': `Erro de Sintaxe XML: ${e.message}` });
+                 const errorRow: { [key: string]: string } = { 'Arquivo': file.name };
+                 Object.keys(SPECIFIC_TAGS_MAP).forEach(key => errorRow[key] = 'ERRO XML');
+                 dadosEspecificos.push(errorRow);
+            }
+        }
+
+        const wb = XLSX.utils.book_new();
+
+        // Aba 'Dados Completos XML'
+        if (dadosCompletos.length > 0) {
+            const wsCompletos = XLSX.utils.json_to_sheet(dadosCompletos);
+            XLSX.utils.book_append_sheet(wb, wsCompletos, 'Dados Completos XML');
+        }
+        
+        // Aba 'Dados NF-e'
+        if (dadosEspecificos.length > 0) {
+            const finalCols = ['Arquivo', ...Object.keys(SPECIFIC_TAGS_MAP)];
+            const reorderedDadosEspecificos = dadosEspecificos.map(row => {
+                const newRow: {[key: string]: any} = {};
+                finalCols.forEach(col => newRow[col] = row[col] || 'N/A');
+                return newRow;
+            })
+            const wsEspecificos = XLSX.utils.json_to_sheet(reorderedDadosEspecificos, { header: finalCols });
+            XLSX.utils.book_append_sheet(wb, wsEspecificos, 'Dados NF-e');
+        }
+
+        const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+
+        // Convert ArrayBuffer to base64
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        const base64 = btoa(binary);
+
+        return { base64Data: base64 };
+
+    } catch (error: any) {
+        console.error("Erro ao extrair dados de NF-e:", error);
+        return { error: error.message || "Ocorreu um erro ao extrair os dados." };
     }
 }

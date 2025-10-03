@@ -1,10 +1,10 @@
-// src/app/unify-folders/page.tsx
+// src/app/extract-nfe/page.tsx
 "use client";
 
 import * as React from "react";
 import { useState, type ChangeEvent } from "react";
 import Link from 'next/link';
-import { Sheet, UploadCloud, FolderSync, Download, Trash2, File as FileIcon, Loader2, History, ChevronDown, FileText, Group, Search } from "lucide-react";
+import { Sheet, UploadCloud, Download, Trash2, File as FileIcon, Loader2, History, Group, ChevronDown, FileText, FolderSync, Search } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,9 +15,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { unifyZipFiles } from "@/app/actions";
+import { extractNfeData } from "@/app/actions";
 
-export default function UnifyFoldersPage() {
+export default function ExtractNfePage() {
     const [files, setFiles] = useState<File[]>([]);
     const [processing, setProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -37,7 +37,7 @@ export default function UnifyFoldersPage() {
         }
         toast({
             title: "Arquivos removidos",
-            description: "A lista de arquivos .zip foi limpa.",
+            description: "A lista de arquivos XML foi limpa.",
         });
     };
 
@@ -46,7 +46,7 @@ export default function UnifyFoldersPage() {
             toast({
                 variant: "destructive",
                 title: "Nenhum Arquivo",
-                description: "Por favor, carregue pelo menos um arquivo .zip.",
+                description: "Por favor, carregue pelo menos um arquivo XML.",
             });
             return;
         }
@@ -56,24 +56,12 @@ export default function UnifyFoldersPage() {
 
         try {
             const fileContents = await Promise.all(
-                files.map(file => {
-                    return new Promise<{ name: string, content: string }>((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                             if (event.target?.result) {
-                                const content = (event.target.result as string).split(',')[1];
-                                resolve({ name: file.name, content });
-                            } else {
-                                reject(new Error(`Falha ao ler o arquivo ${file.name}`));
-                            }
-                        };
-                        reader.onerror = () => reject(new Error(`Erro ao ler o arquivo ${file.name}`));
-                        reader.readAsDataURL(file);
-                    });
-                })
+                files.map(file => 
+                    file.text().then(content => ({ name: file.name, content }))
+                )
             );
             
-            const result = await unifyZipFiles(fileContents);
+            const result = await extractNfeData(fileContents);
 
             if (result.error) {
                 throw new Error(result.error);
@@ -86,18 +74,18 @@ export default function UnifyFoldersPage() {
                     byteNumbers[i] = byteCharacters.charCodeAt(i);
                 }
                 const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], { type: 'application/zip' });
+                const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = 'arquivos_unificados.zip';
+                link.download = 'dados_nfe_extraidos.xlsx';
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
                 
                 toast({
-                    title: "Unificação Concluída",
-                    description: "O download do seu arquivo .zip unificado foi iniciado.",
+                    title: "Extração Concluída",
+                    description: "O download da sua planilha com os dados da NF-e foi iniciado.",
                 });
             }
 
@@ -106,14 +94,13 @@ export default function UnifyFoldersPage() {
             setError(errorMessage);
             toast({
                 variant: "destructive",
-                title: "Erro na Unificação",
+                title: "Erro na Extração",
                 description: errorMessage,
             });
         } finally {
             setProcessing(false);
         }
     };
-
 
     return (
         <div className="min-h-screen bg-background text-foreground">
@@ -125,7 +112,7 @@ export default function UnifyFoldersPage() {
                             <h1 className="text-xl font-bold font-headline">Excel Workflow Automator</h1>
                         </Link>
                     </div>
-                    <nav className="flex items-center gap-4">
+                     <nav className="flex items-center gap-4">
                         <Button variant="ghost" asChild>
                             <Link href="/">Processamento Principal</Link>
                         </Button>
@@ -140,10 +127,10 @@ export default function UnifyFoldersPage() {
                                 <DropdownMenuItem asChild>
                                     <Link href="/sage-itens-nf" className="flex items-center gap-2 w-full"><FileText />Sage - Itens da NF</Link>
                                 </DropdownMenuItem>
-                                 <DropdownMenuItem asChild>
+                                <DropdownMenuItem asChild>
                                     <Link href="/unify-folders" className="flex items-center gap-2 w-full"><FolderSync />Unificar Pastas</Link>
                                 </DropdownMenuItem>
-                                 <DropdownMenuItem asChild>
+                                <DropdownMenuItem asChild>
                                     <Link href="/extract-nfe" className="flex items-center gap-2 w-full"><Search />Extrair NF-e</Link>
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -160,10 +147,10 @@ export default function UnifyFoldersPage() {
                      <Card className="shadow-lg">
                         <CardHeader>
                             <div className="flex items-center gap-3">
-                                <FolderSync className="h-8 w-8 text-primary" />
+                                <Search className="h-8 w-8 text-primary" />
                                 <div>
-                                    <CardTitle className="font-headline text-2xl">Unificador de Pastas</CardTitle>
-                                    <CardDescription>Carregue múltiplos arquivos .zip para extrair e unificar seu conteúdo em um único download.</CardDescription>
+                                    <CardTitle className="font-headline text-2xl">Extrair Dados de NF-e</CardTitle>
+                                    <CardDescription>Carregue arquivos XML para extrair dados completos e específicos em uma planilha Excel.</CardDescription>
                                 </div>
                             </div>
                         </CardHeader>
@@ -171,7 +158,7 @@ export default function UnifyFoldersPage() {
                             <div className="relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-secondary/50 p-8 transition-all">
                                 <label htmlFor="file-upload" className="flex h-full w-full cursor-pointer flex-col items-center justify-center text-center">
                                     <UploadCloud className="h-12 w-12 text-muted-foreground" />
-                                    <p className="mt-4 font-semibold">Clique para carregar arquivos .zip</p>
+                                    <p className="mt-4 font-semibold">Clique para carregar arquivos XML</p>
                                     <p className="text-sm text-muted-foreground">
                                         Você pode selecionar múltiplos arquivos
                                     </p>
@@ -184,7 +171,7 @@ export default function UnifyFoldersPage() {
                                     className="sr-only"
                                     onChange={handleFileChange}
                                     multiple
-                                    accept=".zip,application/zip"
+                                    accept=".xml, text/xml"
                                 />
                             </div>
 
@@ -212,7 +199,7 @@ export default function UnifyFoldersPage() {
 
                             <div className="flex flex-col gap-2 sm:flex-row">
                                 <Button onClick={handleSubmit} disabled={processing || files.length === 0} className="flex-grow">
-                                    {processing ? <><Loader2 className="animate-spin" /> Processando...</> : <><Download /> Unificar e Baixar</>}
+                                    {processing ? <><Loader2 className="animate-spin" /> Processando...</> : <><Download /> Extrair e Baixar</>}
                                 </Button>
                                 <Button onClick={handleClearFiles} variant="destructive" className="flex-shrink-0" disabled={files.length === 0}>
                                 <Trash2 /> Limpar Arquivos

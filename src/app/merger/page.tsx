@@ -4,7 +4,7 @@
 import * as React from "react";
 import { useState, type ChangeEvent } from "react";
 import Link from 'next/link';
-import { Sheet, UploadCloud, Group, Download, Trash2, File, Loader2, History, ChevronDown, FileText, FolderSync } from "lucide-react";
+import { Sheet, UploadCloud, Group, Download, Trash2, File, Loader2, History, ChevronDown, FileText, FolderSync, Search } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -131,6 +131,9 @@ export default function MergerPage() {
                                 </DropdownMenuItem>
                                 <DropdownMenuItem asChild>
                                     <Link href="/unify-folders" className="flex items-center gap-2 w-full"><FolderSync />Unificar Pastas</Link>
+                                </DropdownMenuItem>
+                                 <DropdownMenuItem asChild>
+                                    <Link href="/extract-nfe" className="flex items-center gap-2 w-full"><Search />Extrair NF-e</Link>
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
