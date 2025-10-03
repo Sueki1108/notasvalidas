@@ -642,54 +642,6 @@ export default function Home() {
                                     )}
                                 </CardContent>
                             </Card>
-
-                             {processing && (
-                                <Card className="shadow-lg mt-8">
-                                    <CardHeader>
-                                        <div className="flex items-center gap-3">
-                                            <BrainCircuit className="h-8 w-8 text-primary animate-pulse" />
-                                            <div>
-                                                <CardTitle className="font-headline text-2xl">Processando Arquivos...</CardTitle>
-                                                <CardDescription>Aguarde enquanto os dados primários são analisados.</CardDescription>
-                                            </div>
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                       <Skeleton className="h-8 w-full" />
-                                       <Skeleton className="h-32 w-full" />
-                                    </CardContent>
-                                </Card>
-                            )}
-
-                             {error && (
-                                <Alert variant="destructive" className="mt-8">
-                                    <FileText className="h-4 w-4" />
-                                    <AlertTitle>Erro</AlertTitle>
-                                    <AlertDescription>{error}</AlertDescription>
-                                </Alert>
-                            )}
-
-                            {results && (
-                                <Card className="shadow-lg mt-8">
-                                    <CardHeader>
-                                        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <FileText className="h-8 w-8 text-primary" />
-                                                <div>
-                                                    <CardTitle className="font-headline text-2xl">Resultados do Processamento</CardTitle>
-                                                    <CardDescription>Visualize e baixe os dados processados.</CardDescription>
-                                                </div>
-                                            </div>
-                                            <Button onClick={handleDownload} disabled={!results}>
-                                                Baixar Planilha (.xlsx)
-                                            </Button>
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <ResultsDisplay results={results} />
-                                    </CardContent>
-                                </Card>
-                            )}
                         </TabsContent>
                         <TabsContent value="validate" className="mt-6">
                             <Card className="shadow-lg">
@@ -715,7 +667,7 @@ export default function Home() {
                                 </CardContent>
                             </Card>
 
-                            {validating && (
+                             {validating && (
                                 <Card className="shadow-lg mt-8">
                                     <CardHeader>
                                         <div className="flex items-center gap-3">
@@ -751,6 +703,54 @@ export default function Home() {
                             )}
                         </TabsContent>
                     </Tabs>
+                    
+                    {processing && (
+                        <Card className="shadow-lg mt-8">
+                            <CardHeader>
+                                <div className="flex items-center gap-3">
+                                    <BrainCircuit className="h-8 w-8 text-primary animate-pulse" />
+                                    <div>
+                                        <CardTitle className="font-headline text-2xl">Processando Arquivos...</CardTitle>
+                                        <CardDescription>Aguarde enquanto os dados primários são analisados.</CardDescription>
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                               <Skeleton className="h-8 w-full" />
+                               <Skeleton className="h-32 w-full" />
+                            </CardContent>
+                        </Card>
+                    )}
+
+                     {error && (
+                        <Alert variant="destructive" className="mt-8">
+                            <FileText className="h-4 w-4" />
+                            <AlertTitle>Erro</AlertTitle>
+                            <AlertDescription>{error}</AlertDescription>
+                        </Alert>
+                    )}
+
+                    {results && (
+                        <Card className="shadow-lg mt-8">
+                            <CardHeader>
+                                <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <FileText className="h-8 w-8 text-primary" />
+                                        <div>
+                                            <CardTitle className="font-headline text-2xl">Resultados do Processamento</CardTitle>
+                                            <CardDescription>Visualize e baixe os dados processados.</CardDescription>
+                                        </div>
+                                    </div>
+                                    <Button onClick={handleDownload} disabled={!results}>
+                                        Baixar Planilha (.xlsx)
+                                    </Button>
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                <ResultsDisplay results={results} />
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
             </main>
 
