@@ -95,13 +95,36 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>): D
         }
     });
     
-    // Final valid entry notes
+    // Step 3: Identify "Emissão Própria" from the temporary entry notes
+    const chavesAcessoEmissaoPropria = new Set<string>();
+    const cfopsEmissaoPropria = [
+        1201, 1202, 1203, 1204, 1208, 1209, 1410, 1411,
+        2201, 2202, 2203, 2204, 2208, 2209, 2410, 2411
+    ];
+
+    if (processedDfs["Itens de Entrada"]) {
+        processedDfs["Itens de Entrada"].forEach(item => {
+            if (item && item.CFOP && cfopsEmissaoPropria.includes(parseInt(String(item.CFOP), 10))) {
+                chavesAcessoEmissaoPropria.add(cleanAndToStr(item['Chave de acesso']));
+            }
+        });
+    }
+
+    processedDfs["Emissão Própria"] = notasEntradaTemporaria.filter(nota => 
+        nota && chavesAcessoEmissaoPropria.has(cleanAndToStr(nota['Chave de acesso']))
+    );
+
+    // Final valid entry notes - MUST NOT include canceled, exceptions, or own emissions.
     processedDfs["Notas Válidas"] = notasEntradaTemporaria.filter(row => 
-        row && !canceledKeys.has(row['Chave de acesso']) && (!row["Chave Unica"] || !chavesUnicasARemover.has(cleanAndToStr(row["Chave Unica"])))
+        row && 
+        !canceledKeys.has(row['Chave de acesso']) &&
+        (!row["Chave Unica"] || !chavesUnicasARemover.has(cleanAndToStr(row["Chave Unica"]))) &&
+        !chavesAcessoEmissaoPropria.has(cleanAndToStr(row['Chave de acesso']))
     );
     
     const chavesAcessoFinaisValidas = new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));
 
+    // Filter entry items to only include items from "Notas Válidas"
     processedDfs["Itens de Entrada"] = (dfs["Itens de Entrada"] || []).filter(row => 
         row && chavesAcessoFinaisValidas.has(cleanAndToStr(row["Chave de acesso"]))
     );
@@ -119,25 +142,7 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>): D
     }
     processedDfs["Notas Canceladas"].push(...notasSaidaCanceladas);
 
-
-    // Logic for "Emissão Própria" based on ENTRY notes
-    const chavesUnicasEmissaoPropria = new Set<string>();
-    if (processedDfs["Itens de Entrada"]) {
-        processedDfs["Itens de Entrada"].forEach(item => {
-             const notaCorrespondente = processedDfs["Notas Válidas"].find(n => n['Chave de acesso'] === item['Chave de acesso']);
-             if(notaCorrespondente && notaCorrespondente["Chave Unica"]) {
-                 const cfop = String(item.CFOP);
-                 if (cfop.startsWith('1') || cfop.startsWith('2')) {
-                    chavesUnicasEmissaoPropria.add(cleanAndToStr(notaCorrespondente["Chave Unica"]));
-                 }
-             }
-        });
-    }
-    processedDfs["Emissão Própria"] = processedDfs["Notas Válidas"].filter(nota => {
-        const chaveUnica = cleanAndToStr(nota["Chave Unica"]);
-        return chavesUnicasEmissaoPropria.has(chaveUnica);
-    });
-
+    // "Chaves Válidas" should only contain keys from valid entry and valid issued notes
     const combinedChavesValidas = new Set([...chavesAcessoFinaisValidas, ...chavesEmitidasValidas]);
     processedDfs["Chaves Válidas"] = Array.from(combinedChavesValidas).map(key => ({ "Chave de acesso": key }));
     
