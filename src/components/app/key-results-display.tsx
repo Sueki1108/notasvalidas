@@ -190,14 +190,14 @@ export function KeyResultsDisplay({ results, cnpj }: KeyResultsDisplayProps) {
     return (
         <div className="space-y-8">
             <KeyTable
-                title="Chaves da Planilha/XML NÃO ENCONTRADAS no SPED"
+                title="Chaves Válidas não encontradas no SPED"
                 description="Estas chaves estavam em seus arquivos mas não no SPED TXT."
                 keys={results.keysNotFoundInTxt || []}
                 cnpj={cnpj}
                 filename="chaves_nao_encontradas_no_sped.xlsx"
             />
             <KeyTable
-                title="Chaves do SPED NÃO ENCONTRADAS na Planilha/XML"
+                title="Chaves do SPED não encontradas em Chaves Válidas"
                 description="Estas chaves estavam no seu arquivo SPED TXT mas não nos arquivos primários."
                 keys={results.keysInTxtNotInSheet || []}
                 cnpj={cnpj}
