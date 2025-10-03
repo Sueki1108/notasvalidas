@@ -109,7 +109,6 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>): D
         row && !canceledKeys.has(row['Chave de acesso']) && (!row["Chave Unica"] || !chavesUnicasARemover.has(cleanAndToStr(row["Chave Unica"])))
     );
     
-    const chavesFinaisValidas = new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave Unica"])).filter(Boolean));
     const chavesAcessoFinaisValidas = new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));
 
     processedDfs["Itens de Entrada"] = (dfs["Itens de Entrada"] || []).filter(row => 
@@ -125,13 +124,13 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>): D
     const chavesUnicasEmissaoPropria = new Set<string>();
     if (processedDfs["Itens de Entrada"]) {
         processedDfs["Itens de Entrada"].forEach(item => {
-            const cfop = String(item.CFOP);
-            if (cfop.startsWith('1') || cfop.startsWith('2')) {
-                 const notaCorrespondente = processedDfs["Notas Válidas"].find(n => n['Chave de acesso'] === item['Chave de acesso']);
-                 if(notaCorrespondente && notaCorrespondente["Chave Unica"]) {
+             const notaCorrespondente = processedDfs["Notas Válidas"].find(n => n['Chave de acesso'] === item['Chave de acesso']);
+             if(notaCorrespondente && notaCorrespondente["Chave Unica"]) {
+                 const cfop = String(item.CFOP);
+                 if (cfop.startsWith('1') || cfop.startsWith('2')) {
                     chavesUnicasEmissaoPropria.add(cleanAndToStr(notaCorrespondente["Chave Unica"]));
                  }
-            }
+             }
         });
     }
     processedDfs["Emissão Própria"] = processedDfs["Notas Válidas"].filter(nota => {

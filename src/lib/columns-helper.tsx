@@ -9,9 +9,19 @@ export function getColumns<TData>(data: TData[]): ColumnDef<TData>[] {
     return []
   }
 
-  const keys = Object.keys(data[0] as object) as (keyof TData)[]
+  const firstRowKeys = Object.keys(data[0] as object) as (keyof TData)[]
+  
+  // Custom order: 'Número da NF' should be second.
+  const customOrder = ['Chave de acesso', 'Número da NF'];
+  
+  const orderedKeys = [
+      ...customOrder,
+      ...firstRowKeys.filter(key => !customOrder.includes(String(key)))
+  ];
 
-  return keys.map((key) => ({
+  const finalKeys = orderedKeys.filter(key => firstRowKeys.includes(key as any));
+
+  return finalKeys.map((key) => ({
     accessorKey: key,
     header: ({ column }) => {
       return (

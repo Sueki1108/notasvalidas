@@ -83,12 +83,12 @@ const extractNfeDataFromXml = (xmlContent: string) => {
     const chNFe = infProt ? getValue('chNFe', infProt) : infNFe.getAttribute('Id')?.replace('NFe', '') || '';
     const cStat = infProt ? getValue('cStat', infProt) : '0';
 
-
+    const numeroNF = getValue('nNF', ide);
     const isSaida = getValue('tpNF', ide) === '1';
 
     const nota = {
         'Chave de acesso': `NFe${chNFe}`,
-        'Número': getValue('nNF', ide),
+        'Número': numeroNF,
         'Data de Emissão': getValue('dhEmi', ide),
         'Valor': getValue('vNF', total),
         'Status': parseInt(cStat) === 100 ? 'Autorizadas' : (parseInt(cStat) === 101 ? 'Canceladas' : `Status ${cStat}`),
@@ -115,6 +115,7 @@ const extractNfeDataFromXml = (xmlContent: string) => {
 
         itens.push({
             'Chave de acesso': `NFe${chNFe}`,
+            'Número da NF': numeroNF,
             'Número do Item': det.getAttribute('nItem'),
             'Código do Produto': getValue('cProd', prod),
             'Descrição do Produto': getValue('xProd', prod),
@@ -351,7 +352,7 @@ export default function Home() {
         }
     };
 
-    async function handleValidateWithSped() {
+    const handleValidateWithSped = async () => {
         if (!spedFile) {
             toast({ variant: "destructive", title: "Arquivo SPED Ausente", description: "Por favor, carregue o arquivo SPED TXT." });
             return;
@@ -363,24 +364,27 @@ export default function Home() {
 
         setError(null);
         setValidating(true);
-        
-        const spedFileContent = await spedFile.text();
-        const allNotes = [...(results["Notas Válidas"] || []), ...(results["NF-Stock Emitidas"] || [])];
-        
-        validateWithSped(results, spedFileContent, allNotes).then(resultData => {
-            if (resultData.error) throw new Error(resultData.error);
+        try {
+            const spedFileContent = await spedFile.text();
+            const allNotes = [...(results["Notas Válidas"] || []), ...(results["NF-Stock Emitidas"] || [])];
+            
+            const resultData = await validateWithSped(results, spedFileContent, allNotes);
+
+            if (resultData.error) {
+                throw new Error(resultData.error);
+            }
 
             setKeyCheckResults(resultData.keyCheckResults || null);
             setSpedInfo(resultData.spedInfo || null);
             toast({ title: "Validação SPED Concluída", description: "A verificação das chaves foi finalizada." });
-        }).catch(err => {
+        } catch (err: any) {
              setError(err.message || "Ocorreu um erro desconhecido na validação.");
              setKeyCheckResults(null);
              setSpedInfo(null);
              toast({ variant: "destructive", title: "Erro na Validação SPED", description: err.message });
-        }).finally(() => {
+        } finally {
             setValidating(false);
-        });
+        }
     };
 
 
