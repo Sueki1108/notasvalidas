@@ -7,7 +7,7 @@ import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Sheet, History, Search, ArrowLeft, CheckCircle, XCircle, MessageSquare, Group, FileText, ChevronDown, FolderSync, Replace } from "lucide-react";
+import { Loader2, Sheet, History, Search, ArrowLeft, CheckCircle, XCircle, MessageSquare, Group, FileText, ChevronDown, FolderSync, Replace, Copy } from "lucide-react";
 import Link from 'next/link';
 import {
   DropdownMenu,
@@ -30,6 +30,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { formatCnpj } from "@/lib/utils";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 import type { KeyInfo } from "@/app/actions";
 
 
@@ -55,6 +56,50 @@ type Verification = {
   stats: VerificationStats;
 };
 
+
+const DetailRow = ({ item }: { item: VerificationKey }) => {
+    const { toast } = useToast();
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text).then(() => {
+            toast({ title: "Chave copiada!" });
+        });
+    };
+
+    const formatDate = (dateStr: string | undefined) => {
+        if (!dateStr) return 'N/A';
+        if (dateStr.includes('T')) return new Date(dateStr).toLocaleDateString('pt-BR');
+        if (dateStr.length === 8 && /^\d+$/.test(dateStr)) return `${dateStr.substring(0, 2)}/${dateStr.substring(2, 4)}/${dateStr.substring(4, 8)}`;
+        return dateStr;
+    };
+    
+    return (
+        <TableRow>
+            <TableCell className="font-mono text-xs break-all">
+                {item.key}
+                <Button size="icon" variant="ghost" className="h-6 w-6 ml-2" onClick={() => copyToClipboard(item.key)}>
+                    <Copy className="h-3 w-3" />
+                </Button>
+            </TableCell>
+            <TableCell><Badge variant={item.docType === 'NFe' ? 'default' : 'secondary'}>{item.docType || 'N/A'}</Badge></TableCell>
+            <TableCell><Badge variant={item.direction === 'Entrada' ? 'outline' : 'default'} className={item.direction === 'Entrada' ? 'border-blue-500 text-blue-500' : 'bg-orange-500'}>{item.direction || 'N/A'}</Badge></TableCell>
+            <TableCell>{item.partnerName || 'N/A'}</TableCell>
+            <TableCell>{formatDate(item.emissionDate)}</TableCell>
+            <TableCell className="text-right">{item.value ? item.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'N/A'}</TableCell>
+            <TableCell>
+                {item.comment && (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <MessageSquare className="h-5 w-5 text-blue-600" />
+                        </TooltipTrigger>
+                        <TooltipContent><p>{item.comment}</p></TooltipContent>
+                    </Tooltip>
+                )}
+            </TableCell>
+        </TableRow>
+    )
+}
+
+
 export default function HistoryPage() {
     const [verifications, setVerifications] = useState<Verification[]>([]);
     const [loading, setLoading] = useState(true);
@@ -64,6 +109,7 @@ export default function HistoryPage() {
         if (!selectedVerification || !selectedVerification.keys) {
             return { foundInBoth: [], onlyInSheet: [], onlyInSped: [] };
         }
+        
         return {
             foundInBoth: selectedVerification.keys.filter(k => k.origin === 'planilha' && k.foundInSped),
             onlyInSheet: selectedVerification.keys.filter(k => k.origin === 'planilha' && !k.foundInSped),
@@ -252,7 +298,7 @@ export default function HistoryPage() {
                          <div className="space-y-4">
                             <ScrollArea className="h-96 w-full pr-4">
                                <TooltipProvider>
-                                <Accordion type="single" collapsible defaultValue="item-1" className="w-full">
+                                <Accordion type="single" collapsible defaultValue="item-2" className="w-full">
                                     <AccordionItem value="item-1">
                                         <AccordionTrigger className="font-semibold">
                                             <div className="flex items-center gap-2">
@@ -262,19 +308,12 @@ export default function HistoryPage() {
                                         </AccordionTrigger>
                                         <AccordionContent>
                                             {groupedKeys.foundInBoth.length > 0 ? (
-                                                <ul className="space-y-2 pt-2">
-                                                    {groupedKeys.foundInBoth.map((item, index) => (
-                                                        <li key={index} className="flex items-center justify-between gap-4 rounded-md bg-secondary/50 p-2 font-mono text-sm">
-                                                            <span>{item.key}</span>
-                                                            {item.comment && (
-                                                                <Tooltip>
-                                                                    <TooltipTrigger><MessageSquare className="h-5 w-5 text-blue-600" /></TooltipTrigger>
-                                                                    <TooltipContent><p>{item.comment}</p></TooltipContent>
-                                                                </Tooltip>
-                                                            )}
-                                                        </li>
-                                                    ))}
-                                                </ul>
+                                                <Table>
+                                                    <TableHeader><TableRow><TableHead>Chave</TableHead><TableHead>Tipo</TableHead><TableHead>Direção</TableHead><TableHead>Parceiro</TableHead><TableHead>Emissão</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Comentário</TableHead></TableRow></TableHeader>
+                                                    <TableBody>
+                                                    {groupedKeys.foundInBoth.map((item, index) => <DetailRow key={index} item={item} />)}
+                                                    </TableBody>
+                                                </Table>
                                             ) : <p className="pt-2 text-sm text-muted-foreground">Nenhuma chave encontrada em ambas as fontes.</p>}
                                         </AccordionContent>
                                     </AccordionItem>
@@ -287,19 +326,12 @@ export default function HistoryPage() {
                                         </AccordionTrigger>
                                         <AccordionContent>
                                             {groupedKeys.onlyInSheet.length > 0 ? (
-                                                <ul className="space-y-2 pt-2">
-                                                    {groupedKeys.onlyInSheet.map((item, index) => (
-                                                        <li key={index} className="flex items-center justify-between gap-4 rounded-md bg-secondary/50 p-2 font-mono text-sm">
-                                                            <span>{item.key}</span>
-                                                            {item.comment && (
-                                                                <Tooltip>
-                                                                    <TooltipTrigger><MessageSquare className="h-5 w-5 text-blue-600" /></TooltipTrigger>
-                                                                    <TooltipContent><p>{item.comment}</p></TooltipContent>
-                                                                </Tooltip>
-                                                            )}
-                                                        </li>
-                                                    ))}
-                                                </ul>
+                                                <Table>
+                                                    <TableHeader><TableRow><TableHead>Chave</TableHead><TableHead>Tipo</TableHead><TableHead>Direção</TableHead><TableHead>Parceiro</TableHead><TableHead>Emissão</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Comentário</TableHead></TableRow></TableHeader>
+                                                    <TableBody>
+                                                        {groupedKeys.onlyInSheet.map((item, index) => <DetailRow key={index} item={item} />)}
+                                                    </TableBody>
+                                                </Table>
                                             ) : <p className="pt-2 text-sm text-muted-foreground">Nenhuma chave encontrada apenas na planilha.</p>}
                                         </AccordionContent>
                                     </AccordionItem>
@@ -312,19 +344,12 @@ export default function HistoryPage() {
                                         </AccordionTrigger>
                                         <AccordionContent>
                                             {groupedKeys.onlyInSped.length > 0 ? (
-                                                 <ul className="space-y-2 pt-2">
-                                                    {groupedKeys.onlyInSped.map((item, index) => (
-                                                         <li key={index} className="flex items-center justify-between gap-4 rounded-md bg-secondary/50 p-2 font-mono text-sm">
-                                                            <span>{item.key}</span>
-                                                            {item.comment && (
-                                                                <Tooltip>
-                                                                    <TooltipTrigger><MessageSquare className="h-5 w-5 text-blue-600" /></TooltipTrigger>
-                                                                    <TooltipContent><p>{item.comment}</p></TooltipContent>
-                                                                </Tooltip>
-                                                            )}
-                                                        </li>
-                                                    ))}
-                                                </ul>
+                                                <Table>
+                                                    <TableHeader><TableRow><TableHead>Chave</TableHead><TableHead>Tipo</TableHead><TableHead>Direção</TableHead><TableHead>Parceiro</TableHead><TableHead>Emissão</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Comentário</TableHead></TableRow></TableHeader>
+                                                    <TableBody>
+                                                        {groupedKeys.onlyInSped.map((item, index) => <DetailRow key={index} item={item} />)}
+                                                    </TableBody>
+                                                </Table>
                                             ) : <p className="pt-2 text-sm text-muted-foreground">Nenhuma chave encontrada apenas no SPED.</p>}
                                         </AccordionContent>
                                     </AccordionItem>
@@ -348,5 +373,3 @@ export default function HistoryPage() {
         </div>
     );
 }
-
-    
