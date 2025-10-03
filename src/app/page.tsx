@@ -29,6 +29,12 @@ import { AppContext } from "@/context/AppContext";
 
 type DataFrames = { [key: string]: any[] };
 
+const normalizeKey = (key: any): string => {
+    if (!key) return '';
+    return String(key).replace(/\D/g, '').trim();
+}
+
+
 const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlContent, "application/xml");
@@ -44,7 +50,7 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
     if (procEventoNFe) {
         const infEvento = procEventoNFe.getElementsByTagName('infEvento')[0];
         if (infEvento) {
-            const chNFe = getValue('chNFe', infEvento) || '';
+            const chNFe = normalizeKey(getValue('chNFe', infEvento)) || '';
             const tpEvento = getValue('tpEvento', infEvento) || '';
 
             const eventTypeMap: { [key: string]: string } = {
@@ -70,7 +76,7 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
     if (ide) {
         const natOp = getValue('natOp', ide);
         if (natOp.toLowerCase().includes('estorno')) {
-             const chNFeEstorno = infNFe.getAttribute('Id')?.replace('NFe', '') || '';
+             const chNFeEstorno = normalizeKey(infNFe.getAttribute('Id')) || '';
              return { isEvent: true, eventType: 'Estorno', key: chNFeEstorno, uploadSource };
         }
     }
@@ -84,7 +90,7 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
     if (!ide || !emit || !total ) return null;
     
     const infProt = protNFe ? protNFe.getElementsByTagName('infProt')[0] : null;
-    const chNFe = infProt ? getValue('chNFe', infProt) : infNFe.getAttribute('Id')?.replace('NFe', '') || '';
+    const chNFe = normalizeKey(infProt ? getValue('chNFe', infProt) : infNFe.getAttribute('Id'));
     const cStat = infProt ? getValue('cStat', infProt) : '0';
 
     const numeroNF = getValue('nNF', ide);
@@ -194,7 +200,7 @@ const extractCteDataFromXml = (xmlContent: string, uploadSource: string) => {
     if (eventoCTe) {
         const infEvento = eventoCTe.getElementsByTagName('infEvento')[0];
         if (infEvento) {
-            const chCTe = getValue('chCTe', infEvento);
+            const chCTe = normalizeKey(getValue('chCTe', infEvento));
             const tpEvento = getValue('tpEvento', infEvento);
 
             // Prestação de Serviço em Desacordo
@@ -218,7 +224,7 @@ const extractCteDataFromXml = (xmlContent: string, uploadSource: string) => {
     const infProt = protCTe.getElementsByTagName('infProt')[0];
     if(!infProt) return null;
 
-    const chCTe = getValue('chCTe', infProt) || '';
+    const chCTe = normalizeKey(getValue('chCTe', infProt));
     const cStat = getValue('cStat', infProt) || '';
 
     const nota = {
@@ -297,7 +303,7 @@ export default function Home() {
     const handleProcessPrimaryFiles = async () => {
         setError(null);
         setKeyCheckResult(null);
-        setResults(null);
+        // Do not clear results here: setResults(null); 
         if (!Object.values(files).some(fileList => fileList && fileList.length > 0)) {
             toast({ variant: "destructive", title: "Nenhum arquivo carregado", description: "Por favor, carregue pelo menos um arquivo XML ou de exceção." });
             return;
@@ -374,7 +380,7 @@ export default function Home() {
                           jsonData.forEach(row => {
                               const key = row['Chave de Acesso'] || row['Chave'];
                               if (key) {
-                                  const cleanKey = String(key).trim();
+                                  const cleanKey = normalizeKey(key);
                                   if (cleanKey) exceptionSet.add(cleanKey);
                               }
                           });
@@ -427,8 +433,7 @@ export default function Home() {
             const spedFileContent = await spedFile.text();
             
             // Step 1: Get company info from SPED to re-process data with context
-            const spedLines = spedFileContent.split('\n');
-            const info = parseSpedInfo(spedLines.length > 0 ? spedLines[0].trim() : "");
+            const info = parseSpedInfo(spedFileContent.split('\n')[0]?.trim() || "");
             if (!info || !info.cnpj) {
                 throw new Error("Não foi possível extrair o CNPJ da empresa do arquivo SPED. Verifique a primeira linha (|0000|).");
             }
@@ -439,12 +444,12 @@ export default function Home() {
             const allCte = results["NF-Stock CTE"] || [];
             const allNfeItens = [...(results["Itens de Entrada"] || []), ...(results["Itens de Saída"] || [])];
             
-            const canceledKeys = new Set((results["Notas Canceladas"] || []).map(r => r['Chave de acesso']));
+            const canceledKeys = new Set((results["Notas Canceladas"] || []).map(r => normalizeKey(r['Chave de acesso'])));
             const exceptionKeys = {
-                OperacaoNaoRealizada: new Set((results["NF-Stock NFE Operação Não Realizada"] || []).map(r => r['Chave de acesso'])),
-                Desconhecimento: new Set((results["NF-Stock NFE Operação Desconhecida"] || []).map(r => r['Chave de acesso'])),
-                Desacordo: new Set((results["NF-Stock CTE Desacordo de Serviço"] || []).map(r => r['Chave de acesso'])),
-                Estorno: new Set((results["Estornos"] || []).map(r => r['Chave de acesso'])),
+                OperacaoNaoRealizada: new Set((results["NF-Stock NFE Operação Não Realizada"] || []).map(r => normalizeKey(r['Chave de acesso']))),
+                Desconhecimento: new Set((results["NF-Stock NFE Operação Desconhecida"] || []).map(r => normalizeKey(r['Chave de acesso']))),
+                Desacordo: new Set((results["NF-Stock CTE Desacordo de Serviço"] || []).map(r => normalizeKey(r['Chave de acesso']))),
+                Estorno: new Set((results["Estornos"] || []).map(r => normalizeKey(r['Chave de acesso']))),
             };
 
             const initialFramesForReprocessing = {

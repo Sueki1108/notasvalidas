@@ -15,6 +15,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { KeyCheckResult, KeyInfo } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 
+const normalizeKey = (key: any): string => {
+    if (!key) return '';
+    return String(key).replace(/\D/g, '').trim();
+}
+
 interface KeyItemRowProps {
     item: KeyInfo;
     cnpj: string | null;
@@ -137,7 +142,7 @@ const KeyTable = ({ title, description, keys, cnpj, filename }: KeyTableProps) =
             return;
         }
         const data = keys.map(item => ({ 
-            "Chave de acesso": item.key.replace(/^NFe|^CTe/, ''),
+            "Chave de acesso": normalizeKey(item.key),
             "Tipo": item.docType,
             "Direção": item.direction,
             "Fornecedor/Cliente": item.partnerName,

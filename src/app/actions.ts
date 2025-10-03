@@ -155,6 +155,11 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
     return null;
 }
 
+const normalizeKey = (key: any): string => {
+    if (!key) return '';
+    return String(key).replace(/\D/g, '').trim();
+}
+
 
 export async function validateWithSped(processedData: DataFrames, spedFileContent: string, allNotesFromXmls: any[], canceledXmlKeys: string[]) {
     try {
@@ -162,7 +167,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         const allSpedKeys = new Map<string, Partial<KeyInfo>>();
         
         const allNotesMap = new Map(allNotesFromXmls.map(note => [
-            (note['Chave de acesso'] || '').replace(/^NFe|^CTe/, ''), 
+            normalizeKey(note['Chave de acesso']), 
             note
         ]));
 
@@ -176,20 +181,20 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         for (const line of lines) {
             const parsedData = parseSpedLineForData(line.trim(), participants);
             if (parsedData && parsedData.key) {
-                 if (!allSpedKeys.has(parsedData.key)) {
-                    allSpedKeys.set(parsedData.key, parsedData);
+                 const cleanKey = normalizeKey(parsedData.key);
+                 if (!allSpedKeys.has(cleanKey)) {
+                    allSpedKeys.set(cleanKey, parsedData);
                 }
             }
         }
         
         let keyCheckResults: KeyCheckResult | null = null;
         const keysInTxt = new Set(allSpedKeys.keys());
-        const canceledKeysSet = new Set(canceledXmlKeys.map(k => k.replace(/^NFe|^CTe/, '')));
+        const canceledKeysSet = new Set(canceledXmlKeys.map(k => normalizeKey(k)));
         
         if (processedData['Chaves Válidas']) {
-            const spreadsheetKeysArray = processedData['Chaves Válidas'].map(row => {
-                const key = String(row['Chave de acesso']).trim();
-                return key.startsWith('NFe') ? key.substring(3) : (key.startsWith('CTe') ? key.substring(3) : key);
+             const spreadsheetKeysArray = processedData['Chaves Válidas'].map(row => {
+                return normalizeKey(row['Chave de acesso']);
             }).filter(key => key);
             const spreadsheetKeys = new Set(spreadsheetKeysArray);
 
@@ -197,7 +202,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                 .filter(key => !keysInTxt.has(key))
                 .map(key => {
                     const note = allNotesMap.get(key);
-                    const isNFe = note && note['Chave de acesso'].startsWith('NFe');
+                    const isNFe = note && normalizeKey(note['Chave de acesso']).length === 44;
                     const isSaida = note && spedInfo && note['Emitente CPF/CNPJ'] === spedInfo.cnpj;
                     return {
                         key: key,
@@ -252,16 +257,16 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                 const oldKeys: KeyInfo[] = existingDoc.data().keys || [];
                 oldKeys.forEach(k => {
                     if (k.comment) {
-                        oldComments.set(k.key, k.comment);
+                        oldComments.set(normalizeKey(k.key), k.comment);
                     }
                 });
             }
 
             const keysFromSheet: KeyInfo[] = (processedData['Chaves Válidas']?.map(row => row['Chave de acesso']) || [])
                 .map((key: string) => {
-                    const cleanKey = key.replace(/^NFe|^CTe/, '');
+                    const cleanKey = normalizeKey(key);
                     const note = allNotesMap.get(cleanKey);
-                    const isNFe = key.startsWith('NFe');
+                    const isNFe = cleanKey.length === 44;
                     const isSaida = note && spedInfo && note['Emitente CPF/CNPJ'] === spedInfo.cnpj;
                     return {
                         key: cleanKey,
@@ -278,10 +283,10 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             
             const keysOnlyInSped: KeyInfo[] = (keyCheckResults.keysInTxtNotInSheet).map((keyInfo: KeyInfo) => ({
                 ...keyInfo,
-                key: keyInfo.key.replace(/^NFe|^CTe/, ''),
+                key: normalizeKey(keyInfo.key),
                 origin: 'sped',
                 foundInSped: true,
-                comment: oldComments.get(keyInfo.key.replace(/^NFe|^CTe/, '')) || keyInfo.comment || ''
+                comment: oldComments.get(normalizeKey(keyInfo.key)) || keyInfo.comment || ''
             }));
 
             const verificationKeys = [...keysFromSheet, ...keysOnlyInSped];
@@ -328,7 +333,7 @@ export async function addOrUpdateKeyComment(cnpj: string, key: string, comment: 
         const data = docSnap.data();
         const keys = data.keys || [];
 
-        const keyIndex = keys.findIndex((k: any) => k.key.replace(/^NFe|^CTe/, '') === key.replace(/^NFe|^CTe/, ''));
+        const keyIndex = keys.findIndex((k: any) => normalizeKey(k.key) === normalizeKey(key));
 
         if (keyIndex === -1) {
              return { error: "Chave não encontrada no histórico de verificação." };
@@ -480,6 +485,7 @@ const forceCellAsString = (worksheet: XLSX.WorkSheet, headerName: string) => {
         if (key.startsWith(headerCol) && key !== headerAddress) {
             if (worksheet[key].t === 'n') { // if it's a number
                 worksheet[key].t = 's'; // change type to string
+                worksheet[key].v = String(worksheet[key].v); // ensure value is a string
             }
         }
     }
@@ -835,14 +841,8 @@ export async function extractReturnData(files: { name: string; content: string }
   const ws = XLSX.utils.json_to_sheet(df);
 
   // Force chNFe and refNFe columns to be text
-  const chNFeHeaderAddress = Object.keys(ws).find(key => ws[key].v === 'chNFe');
-  if (chNFeHeaderAddress) {
-      forceCellAsString(ws, 'chNFe');
-  }
-  const refNFeHeaderAddress = Object.keys(ws).find(key => ws[key].v === 'refNFe');
-  if (refNFeHeaderAddress) {
-      forceCellAsString(ws, 'refNFe');
-  }
+  forceCellAsString(ws, 'chNFe');
+  forceCellAsString(ws, 'refNFe');
 
 
   XLSX.utils.book_append_sheet(wb, ws, 'Dados');
