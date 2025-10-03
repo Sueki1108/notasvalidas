@@ -55,6 +55,8 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
             if (nota && nota['Emitente CPF/CNPJ'] === companyCnpj) {
                 ownEmissionNotes.push(nota);
                 
+                // This logic identifies own emissions that are NOT returns.
+                // It's based on the upload source (saida) or if it's an entry with a non-entry CFOP.
                 const firstItemCfop = nota.itens?.[0]?.CFOP;
                 const cfop = String(firstItemCfop || '');
                 const isCfopEntrada = cfop.startsWith('1') || cfop.startsWith('2');
@@ -73,12 +75,13 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
     }
 
     processedDfs["Emissão Própria"] = ownEmissionNotes;
-    const ownEmissionAllKeys = new Set(ownEmissionNotes.map(n => cleanAndToStr(n['Chave de acesso'])));
 
+    // Filter out own emission returns and exceptions from 'Notas Válidas'
     const notasValidas = allNotes.filter(row =>
         row &&
         !exceptionKeySet.has(row['Chave de acesso']) &&
-        !ownEmissionAllKeys.has(row['Chave de acesso'])
+        !ownEmissionNotes.some(own => own['Chave de acesso'] === row['Chave de acesso']) &&
+        !row.isOwnEmissionDevolution
     );
     
     processedDfs["Notas Válidas"] = notasValidas;

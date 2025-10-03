@@ -55,7 +55,7 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
             
             const eventType = eventTypeMap[tpEvento];
             if (eventType) {
-                 return { isEvent: true, eventType, key: `NFe${chNFe}`, uploadSource };
+                 return { isEvent: true, eventType, key: chNFe, uploadSource };
             }
         }
         return null; // Not a relevant event
@@ -71,7 +71,7 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
         const natOp = getValue('natOp', ide);
         if (natOp.toLowerCase().includes('estorno')) {
              const chNFeEstorno = infNFe.getAttribute('Id')?.replace('NFe', '') || '';
-             return { isEvent: true, eventType: 'Estorno', key: `NFe${chNFeEstorno}`, uploadSource };
+             return { isEvent: true, eventType: 'Estorno', key: chNFeEstorno, uploadSource };
         }
     }
 
@@ -89,9 +89,13 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
 
     const numeroNF = getValue('nNF', ide);
     const isSaida = getValue('tpNF', ide) === '1';
+    
+    const firstItemCfop = infNFe.getElementsByTagName('det')[0]?.getElementsByTagName('prod')[0]?.getElementsByTagName('CFOP')[0]?.textContent || '';
+    const isOwnEmissionDevolution = (uploadSource === 'entrada' && (firstItemCfop.startsWith('1') || firstItemCfop.startsWith('2')));
+
 
     const nota = {
-        'Chave de acesso': `NFe${chNFe}`,
+        'Chave de acesso': chNFe,
         'Número': numeroNF,
         'Data de Emissão': getValue('dhEmi', ide),
         'Valor': getValue('vNF', total),
@@ -101,7 +105,8 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
         'Destinatário CPF/CNPJ': dest ? (getValue('CNPJ', dest) || getValue('CPF', dest)) : '',
         'Destinatário': dest ? getValue('xNome', dest) : '',
         'Fornecedor/Cliente': isSaida ? (dest ? getValue('xNome', dest): '') : (getValue('xNome', emit)),
-        'uploadSource': uploadSource
+        'uploadSource': uploadSource,
+        'isOwnEmissionDevolution': isOwnEmissionDevolution
     };
 
 
@@ -119,7 +124,7 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
         const cofins = imposto.getElementsByTagName('COFINS')[0]?.firstElementChild;
 
         itens.push({
-            'Chave de acesso': `NFe${chNFe}`,
+            'Chave de acesso': chNFe,
             'Número da NF': numeroNF,
             'Número do Item': det.getAttribute('nItem'),
             'Código do Produto': getValue('cProd', prod),
@@ -194,7 +199,7 @@ const extractCteDataFromXml = (xmlContent: string, uploadSource: string) => {
 
             // Prestação de Serviço em Desacordo
             if (tpEvento === '610110') {
-                 return { isEvent: true, eventType: 'Desacordo', key: `CTe${chCTe}`, uploadSource };
+                 return { isEvent: true, eventType: 'Desacordo', key: chCTe, uploadSource };
             }
         }
         return null; // Ignore other CTe events
@@ -217,7 +222,7 @@ const extractCteDataFromXml = (xmlContent: string, uploadSource: string) => {
     const cStat = getValue('cStat', infProt) || '';
 
     const nota = {
-        'Chave de acesso': `CTe${chCTe}`,
+        'Chave de acesso': chCTe,
         'Número': getValue('nCT', ide),
         'Data de Emissão': getValue('dhEmi', ide),
         'Valor': parseFloat(getValue('vTPrest', vPrest) || '0'),
@@ -370,7 +375,7 @@ export default function Home() {
                               const key = row['Chave de Acesso'] || row['Chave'];
                               if (key) {
                                   const cleanKey = String(key).trim();
-                                  if (cleanKey) exceptionSet.add(cleanKey.startsWith('NFe') || cleanKey.startsWith('CTe') ? cleanKey : `NFe${cleanKey}`);
+                                  if (cleanKey) exceptionSet.add(cleanKey);
                               }
                           });
                         }
@@ -390,8 +395,9 @@ export default function Home() {
                 'Itens de Saída': allNfeItens,
                 'NF-Stock Emitidas': [] 
             };
-
-            const processedData = processDataFrames(initialFrames, canceledKeys, exceptionKeys, null); // Pass null for CNPJ initially
+            
+            // At this point, we don't have companyCnpj, so pass null
+            const processedData = processDataFrames(initialFrames, canceledKeys, exceptionKeys, null);
             
             setResults(processedData);
             toast({ title: "Processamento Inicial Concluído", description: "Arquivos XML processados. Carregue o SPED para finalizar." });
@@ -453,10 +459,11 @@ export default function Home() {
             setResults(reprocessedData);
 
             // Step 3: Now run the final validation
+            const allValidXmlNotes = [...(reprocessedData["Notas Válidas"] || []), ...(reprocessedData["Emissão Própria"] || [])];
             const finalValidationResult = await validateWithSped(
                 reprocessedData, 
                 spedFileContent, 
-                reprocessedData["Notas Válidas"] || [],
+                allValidXmlNotes,
                 Array.from(canceledKeys)
             );
             if (finalValidationResult.error) {
