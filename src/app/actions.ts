@@ -353,8 +353,13 @@ export async function mergeExcelFiles(files: { name: string, content: string }[]
         for (const file of files) {
             // content is expected to be a base64 string
             const workbook = XLSX.read(file.content, { type: 'base64' });
-            for (const sheetName of workbook.SheetNames) {
-                const worksheet = workbook.Sheets[sheetName];
+
+            // Standardize to ODS in memory before processing
+            const odsOutput = XLSX.write(workbook, { bookType: 'ods', type: 'buffer' });
+            const standardizedWorkbook = XLSX.read(odsOutput, { type: 'buffer' });
+
+            for (const sheetName of standardizedWorkbook.SheetNames) {
+                const worksheet = standardizedWorkbook.Sheets[sheetName];
                 const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
 
                 if (!sheetsData[sheetName]) {

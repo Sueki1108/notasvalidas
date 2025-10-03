@@ -78,15 +78,14 @@ export default function SageItensNfPage() {
                 const fileExtension = file.name.split('.').pop()?.toLowerCase();
                 
                 let workbook;
-                if (fileExtension === 'slk' || fileExtension === 'csv') {
-                    // For text-based formats, read as text
-                    const textContent = await file.text();
-                    workbook = XLSX.read(textContent, { type: 'string' });
-                } else {
-                    // For binary formats like xlsx, read as buffer
-                    const bufferContent = await file.arrayBuffer();
-                    workbook = XLSX.read(bufferContent, { type: 'buffer' });
-                }
+                 // For all formats, read as buffer, then standardize to ODS in memory
+                const bufferContent = await file.arrayBuffer();
+                const initialWorkbook = XLSX.read(bufferContent, { type: 'buffer' });
+                
+                // Standardize to ODS in memory
+                const odsOutput = XLSX.write(initialWorkbook, { bookType: 'ods', type: 'buffer' });
+                workbook = XLSX.read(odsOutput, { type: 'buffer' });
+
 
                 const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
                 const df: any[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
@@ -247,7 +246,7 @@ export default function SageItensNfPage() {
                                     <UploadCloud className="h-12 w-12 text-muted-foreground" />
                                     <p className="mt-4 font-semibold">Clique para carregar as planilhas</p>
                                     <p className="text-sm text-muted-foreground">
-                                        Selecione múltiplos arquivos (.xlsx, .csv, .slk)
+                                        Selecione múltiplos arquivos (.xlsx, .csv, .slk, .ods)
                                     </p>
                                 </label>
                                 <input
