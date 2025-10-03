@@ -237,6 +237,20 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         }
         
         if (spedInfo && spedInfo.cnpj && keyCheckResults) {
+            // Logic to preserve comments
+            const docRef = doc(db, "verifications", spedInfo.cnpj);
+            const existingDoc = await getDoc(docRef);
+            const oldComments = new Map<string, string>();
+
+            if (existingDoc.exists() && existingDoc.data().competence === spedInfo.competence) {
+                const oldKeys: KeyInfo[] = existingDoc.data().keys || [];
+                oldKeys.forEach(k => {
+                    if (k.comment) {
+                        oldComments.set(k.key, k.comment);
+                    }
+                });
+            }
+
             const keysFromSheet: KeyInfo[] = (processedData['Chaves Válidas']?.map(row => row['Chave de acesso']) || [])
                 .map((key: string) => {
                     const cleanKey = key.replace(/^NFe|^_|^CTe_/, '');
@@ -247,7 +261,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                         key: cleanKey,
                         origin: 'planilha',
                         foundInSped: keysInTxt.has(cleanKey),
-                        comment: '',
+                        comment: oldComments.get(cleanKey) || '',
                         partnerName: note?.['Fornecedor/Cliente'] || '',
                         emissionDate: note?.['Data de Emissão'] || '',
                         value: note?.['Valor'] || 0,
@@ -260,7 +274,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                 ...keyInfo,
                 origin: 'sped',
                 foundInSped: true,
-                comment: keyInfo.comment || ''
+                comment: oldComments.get(keyInfo.key) || keyInfo.comment || ''
             }));
 
             const verificationKeys = [...keysFromSheet, ...keysOnlyInSped];
@@ -280,7 +294,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                 verifiedAt: serverTimestamp(),
             };
 
-            await setDoc(doc(db, "verifications", spedInfo.cnpj), verificationData, { merge: true });
+            await setDoc(docRef, verificationData, { merge: true });
         }
 
         return { keyCheckResults, spedInfo };
