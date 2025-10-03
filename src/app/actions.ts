@@ -5,6 +5,7 @@
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
 
 // Type for the file data structure expected by the processor
 type DataFrames = { [key: string]: any[] };
@@ -115,7 +116,7 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
     else if (parts.length > 10 && parts[1] === 'D100') {
         const key = parts[10];
         const value = parseFloat(parts[16] || '0'); // vTPrest
-        const emissionDate = parts[10]; // DDMMYYYY
+        const emissionDate = parts[9]; // DDMMYYYY
         const partnerCode = parts[3]; // Emitente do CTe (COD_PART)
         const partnerName = participants.get(partnerCode) || '';
 
@@ -368,5 +369,32 @@ export async function mergeExcelFiles(files: { name: string, content: ArrayBuffe
     } catch (error: any) {
         console.error("Erro ao agrupar planilhas:", error);
         return { error: error.message || "Ocorreu um erro ao agrupar as planilhas." };
+    }
+}
+
+
+export async function unifyZipFiles(files: { name: string, content: string }[]) {
+    try {
+        const finalZip = new JSZip();
+
+        for (const file of files) {
+            const zip = await JSZip.loadAsync(file.content, { base64: true });
+            
+            const filePromises = Object.keys(zip.files).map(async (filename) => {
+                if (!zip.files[filename].dir) {
+                    const fileData = await zip.files[filename].async('nodebuffer');
+                    finalZip.file(filename, fileData);
+                }
+            });
+            await Promise.all(filePromises);
+        }
+
+        const base64 = await finalZip.generateAsync({ type: "base64" });
+
+        return { base64Data: base64 };
+
+    } catch (error: any) {
+        console.error("Erro ao unificar arquivos ZIP:", error);
+        return { error: error.message || "Ocorreu um erro ao unificar os arquivos." };
     }
 }
