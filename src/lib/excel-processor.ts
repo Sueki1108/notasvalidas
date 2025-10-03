@@ -47,8 +47,14 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
         (processedDfs["NF-Stock NFE"] || []).forEach(nota => {
             if (nota && nota['Emitente CPF/CNPJ'] === companyCnpj) {
                 ownEmissionNotes.push(nota);
-                // A nota de emissão própria só é válida se veio da pasta de saída
-                if (nota.uploadSource === 'saida') {
+                
+                const cfop = String(nota['CFOP'] || '');
+                const isCfopEntrada = cfop.startsWith('1') || cfop.startsWith('2');
+
+                // A nota de emissão própria só é válida se:
+                // 1. Veio da pasta de saída
+                // 2. Veio da pasta de entrada, MAS o CFOP NÃO é de entrada (ex: remessa)
+                if (nota.uploadSource === 'saida' || (nota.uploadSource === 'entrada' && !isCfopEntrada)) {
                     ownEmissionValidKeys.add(cleanAndToStr(nota['Chave de acesso']));
                 }
             }
@@ -69,7 +75,7 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
     
     processedDfs["Notas Válidas"] = notasValidas;
 
-    // "Chaves Válidas" inclui: chaves de notas de entrada válidas + chaves de emissão própria válidas (as de saída)
+    // "Chaves Válidas" inclui: chaves de notas de entrada válidas + chaves de emissão própria válidas
     const chavesValidasEntrada = new Set(notasValidas.map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));
     const combinedChavesValidas = new Set([...chavesValidasEntrada, ...ownEmissionValidKeys]);
     processedDfs["Chaves Válidas"] = Array.from(combinedChavesValidas).map(key => ({ "Chave de acesso": key }));
