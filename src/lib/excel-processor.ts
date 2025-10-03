@@ -52,7 +52,9 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
             if (nota && nota['Emitente CPF/CNPJ'] === companyCnpj) {
                 ownEmissionNotes.push(nota);
                 
-                const cfop = String(nota['CFOP'] || '');
+                // Get the CFOP from the first item if available, otherwise from the note header.
+                const firstItemCfop = nota.itens?.[0]?.CFOP;
+                const cfop = String(firstItemCfop || nota['CFOP'] || '');
                 const isCfopEntrada = cfop.startsWith('1') || cfop.startsWith('2');
 
                 if (nota.uploadSource === 'saida') {
