@@ -5,7 +5,7 @@ import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
-import { XMLParser } from 'fast-xml-parser';
+import { XMLParser, XMLBuilder } from 'fast-xml-parser';
 
 // Type for the file data structure expected by the processor
 type DataFrames = { [key: string]: any[] };
@@ -733,4 +733,80 @@ export async function extractReturnData(files: { name: string; content: string }
   const base64 = Buffer.from(buffer).toString('base64');
   
   return { base64Data: base64 };
+}
+
+// --- Logic for 'Alterar XML' Tool ---
+
+// Helper function to recursively get all paths from a JSON object
+const getPaths = (obj: any, parentPath = ''): string[] => {
+    let paths: string[] = [];
+    if (obj === null || typeof obj !== 'object') {
+        return paths;
+    }
+
+    for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            const newPath = parentPath ? `${parentPath}/${key}` : key;
+            paths.push(newPath);
+            if (typeof obj[key] === 'object') {
+                paths = paths.concat(getPaths(obj[key], newPath));
+            }
+        }
+    }
+    return paths;
+};
+
+export async function getXmlPaths(file: { name: string; content: string }) {
+    try {
+        const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
+        const jsonObj = parser.parse(file.content);
+        const paths = Array.from(new Set(getPaths(jsonObj))).sort();
+        return { paths };
+    } catch (error: any) {
+        console.error("Erro ao analisar XML para obter caminhos:", error);
+        return { error: `Não foi possível analisar o arquivo ${file.name}. É um XML válido?` };
+    }
+}
+
+
+const setValueByPath = (obj: any, path: string, newValue: any) => {
+    const keys = path.split('/');
+    let current = obj;
+    for (let i = 0; i < keys.length - 1; i++) {
+        current = current[keys[i]];
+        if (current === undefined) return; 
+    }
+    current[keys[keys.length - 1]] = newValue;
+};
+
+export async function processXmls(data: { files: { name: string, content: string }[], selectedPath: string, newText: string, docType: 'NFE' | 'CTE'}) {
+    const { files, selectedPath, newText, docType } = data;
+    try {
+        const zip = new JSZip();
+        const parser = new XMLParser({
+            ignoreAttributes: false,
+            attributeNamePrefix: "@_",
+            preserveOrder: true
+        });
+        const builder = new XMLBuilder({
+            ignoreAttributes: false,
+            attributeNamePrefix: "@_",
+            format: true,
+            preserveOrder: true
+        });
+
+        for (const file of files) {
+            let jsonObj = parser.parse(file.content);
+            setValueByPath(jsonObj, selectedPath, newText);
+            const xmlContent = builder.build(jsonObj);
+            zip.file(file.name, xmlContent);
+        }
+
+        const base64 = await zip.generateAsync({ type: "base64" });
+        return { base64Data: base64 };
+
+    } catch (error: any) {
+        console.error("Erro ao processar arquivos XML:", error);
+        return { error: error.message || "Ocorreu um erro ao modificar os arquivos XML." };
+    }
 }
