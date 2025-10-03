@@ -3,7 +3,7 @@
 
 import { useState, ChangeEvent, useEffect } from "react";
 import * as XLSX from "xlsx";
-import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon, FolderSync, Search } from "lucide-react";
+import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon, FolderSync, Search, Replace } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -485,6 +485,9 @@ export default function Home() {
                                  <DropdownMenuItem asChild>
                                     <Link href="/returns" className="flex items-center gap-2 w-full"><FileText />Devoluções</Link>
                                 </DropdownMenuItem>
+                                 <DropdownMenuItem asChild>
+                                    <Link href="/alterar-xml" className="flex items-center gap-2 w-full"><Replace />Alterar XML</Link>
+                                </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                         <Button variant="ghost" asChild>
@@ -657,4 +660,3 @@ export default function Home() {
         </div>
     );
 }
-

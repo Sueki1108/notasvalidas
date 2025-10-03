@@ -4,7 +4,7 @@
 import * as React from "react";
 import { useState, type ChangeEvent } from "react";
 import Link from 'next/link';
-import { Sheet, UploadCloud, FolderSync, Download, Trash2, File as FileIcon, Loader2, History, ChevronDown, FileText, Group, Search } from "lucide-react";
+import { Sheet, UploadCloud, FolderSync, Download, Trash2, File as FileIcon, Loader2, History, ChevronDown, FileText, Group, Search, Replace } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -152,6 +152,9 @@ export default function UnifyFoldersPage() {
                                  <DropdownMenuItem asChild>
                                     <Link href="/returns" className="flex items-center gap-2 w-full"><FileText />Devoluções</Link>
                                 </DropdownMenuItem>
+                                 <DropdownMenuItem asChild>
+                                    <Link href="/alterar-xml" className="flex items-center gap-2 w-full"><Replace />Alterar XML</Link>
+                                </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                         <Button variant="ghost" asChild>
@@ -237,4 +240,3 @@ export default function UnifyFoldersPage() {
         </div>
     );
 }
-
