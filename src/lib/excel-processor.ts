@@ -24,8 +24,7 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>): D
         if (!row) return row;
         return {
             ...row,
-            'Chave de acesso': row['Chave de acesso'] ?? row['Chave'],
-            'CPF/CNPJ': row['Emitente CPF/CNPJ'] ?? row['Destinatário CPF/CNPJ'],
+            'CPF/CNPJ': row['Emitente CPF/CNPJ'], // NFe de entrada, o emissor é o fornecedor
         };
     });
 
@@ -34,7 +33,7 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>): D
         return {
             ...row,
             'Valor': row['Valor da Prestação'] ?? row['Valor'],
-            'CPF/CNPJ': row['Tomador CPF/CNPJ'] ?? row['CPF/CNPJ'],
+            'CPF/CNPJ': row['Emitente CPF/CNPJ'], // CTe, o emissor é o fornecedor do transporte
             'Chave de acesso': row['Chave de Acesso'] ?? row['Chave de acesso'] ?? row['Chave'],
         };
     });

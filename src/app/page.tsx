@@ -40,21 +40,24 @@ const extractNfeDataFromXml = (xmlContent: string) => {
       return null;
     }
 
-    const getValue = (tag: string, context: Element) => context.getElementsByTagName(tag)[0]?.textContent || '';
+    const getValue = (tag: string, context: Element | null) => context?.getElementsByTagName(tag)[0]?.textContent || '';
     
     // Check if it's a cancellation event XML
     const procEventoNFe = xmlDoc.getElementsByTagName('procEventoNFe')[0];
     if (procEventoNFe) {
-        const chNFe = getValue('chNFe', procEventoNFe) || '';
-        const tpEvento = getValue('tpEvento', procEventoNFe) || '';
-        const cStatEvento = getValue('cStat', procEventoNFe.getElementsByTagName('infEvento')[0]) || '';
+        const infEvento = procEventoNFe.getElementsByTagName('infEvento')[0];
+        if (infEvento) {
+            const chNFe = getValue('chNFe', infEvento) || '';
+            const tpEvento = getValue('tpEvento', infEvento) || '';
+            const cStatEvento = getValue('cStat', infEvento) || '';
 
-        // 110111 is cancellation event, 135 or 101 is success status for the event
-        if (tpEvento === '110111' && (cStatEvento === '135' || cStatEvento === '101')) {
-            return {
-                nota: { 'Chave de acesso': `NFe${chNFe}`, 'Status': 'Cancelada (Evento)' },
-                itens: []
-            };
+            // 110111 is cancellation event, 135 or 101 is success status for the event
+            if (tpEvento === '110111' && (cStatEvento === '135' || cStatEvento === '101')) {
+                return {
+                    nota: { 'Chave de acesso': `NFe${chNFe}`, 'Status': 'Cancelada (Evento)' },
+                    itens: []
+                };
+            }
         }
         return null; // Not a relevant event
     }
@@ -166,35 +169,33 @@ const extractCteDataFromXml = (xmlContent: string) => {
       return null;
     }
 
-
-    const getValue = (tag: string, context: Element) => context.getElementsByTagName(tag)[0]?.textContent || '';
+    const getValue = (tag: string, context: Element | null) => context?.getElementsByTagName(tag)[0]?.textContent || '';
     
     const infCte = xmlDoc.getElementsByTagName('infCte')[0];
     if(!infCte) return null;
 
     const ide = infCte.getElementsByTagName('ide')[0];
+    const emit = infCte.getElementsByTagName('emit')[0];
     const vPrest = infCte.getElementsByTagName('vPrest')[0];
     const protCTe = xmlDoc.getElementsByTagName('protCTe')[0];
-    const toma = infCte.getElementsByTagName('toma')[0];
 
-    if(!ide || !vPrest || !protCTe) return null;
+    if(!ide || !emit || !vPrest || !protCTe) return null;
     
     const infProt = protCTe.getElementsByTagName('infProt')[0];
     if(!infProt) return null;
 
     const chCTe = getValue('chCTe', infProt) || '';
     const cStat = getValue('cStat', infProt) || '';
-    const tomadorName = toma ? getValue('xNome', toma) : '';
 
     const nota = {
         'Chave de acesso': `CTe${chCTe}`,
         'Número': getValue('nCT', ide),
         'Data de Emissão': getValue('dhEmi', ide),
-        'Valor': parseFloat(getValue('vTPrest', vPrest)),
+        'Valor': parseFloat(getValue('vTPrest', vPrest) || '0'),
         'Status': parseInt(cStat) === 100 ? 'Autorizadas' : `Status ${cStat}`,
-        'Tomador CPF/CNPJ': toma ? (getValue('CNPJ', toma) || getValue('CPF', toma)) : '',
-        'Tomador': tomadorName,
-        'Fornecedor/Cliente': tomadorName,
+        'Emitente CPF/CNPJ': getValue('CNPJ', emit) || getValue('CPF', emit),
+        'Emitente': getValue('xNome', emit),
+        'Fornecedor/Cliente': getValue('xNome', emit),
     };
 
     return { nota };
@@ -206,7 +207,7 @@ export default function Home() {
     const [spedFile, setSpedFile] = useState<File | null>(null);
     const [processing, setProcessing] = useState(false);
     const [validating, setValidating] = useState(false);
-    const [results, setResults] = useState<Record<string, any[]> | null>(null);
+    const [results, setResults] = useState<DataFrames | null>(null);
     const [keyCheckResults, setKeyCheckResults] = useState<KeyCheckResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const { toast } = useToast();
@@ -286,12 +287,12 @@ export default function Home() {
                                 canceledKeys.add(xmlData.nota['Chave de acesso']);
                             }
                              if (type === 'NFe-Entrada') {
-                                nfeEntrada.push(xmlData.nota);
+                                if (xmlData.nota) nfeEntrada.push(xmlData.nota);
                                 if (xmlData.itens && xmlData.itens.length > 0) {
                                     nfeItensEntrada.push(...xmlData.itens);
                                 }
                             } else { // Saida
-                                nfeSaida.push(xmlData.nota);
+                                if (xmlData.nota) nfeSaida.push(xmlData.nota);
                                 if (xmlData.itens && xmlData.itens.length > 0) {
                                     nfeItensSaida.push(...xmlData.itens);
                                 }
