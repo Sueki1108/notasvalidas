@@ -470,6 +470,18 @@ function getValueByPath(obj: any, path: string | string[]): any {
     return current !== undefined && current !== null ? String(current) : 'N/A';
 }
 
+const forceCellAsString = (worksheet: XLSX.WorkSheet, headerName: string) => {
+    const headerAddress = Object.keys(worksheet).find(key => worksheet[key].v === headerName);
+    if (!headerAddress) return;
+    const headerCol = headerAddress.replace(/\d+$/, '');
+    for (const key in worksheet) {
+        if (key.startsWith(headerCol) && key !== headerAddress) {
+            if (worksheet[key].t === 'n') { // if it's a number
+                worksheet[key].t = 's'; // change type to string
+            }
+        }
+    }
+};
 
 export async function extractNfeData(files: { name: string, content: string }[]) {
      const SPECIFIC_TAGS_MAP: { [key: string]: string[] } = {
@@ -566,18 +578,21 @@ export async function extractNfeData(files: { name: string, content: string }[])
                 return newRow;
             })
             const wsEspecificos = XLSX.utils.json_to_sheet(reorderedDadosEspecificos, { header: finalCols });
+            forceCellAsString(wsEspecificos, "Chave NF-e");
             XLSX.utils.book_append_sheet(wb, wsEspecificos, 'Dados NF-e');
         }
         
         // Aba 'Dados Itens'
         if (dadosItens.length > 0) {
             const wsItens = XLSX.utils.json_to_sheet(dadosItens);
+            forceCellAsString(wsItens, "Chave NF-e");
             XLSX.utils.book_append_sheet(wb, wsItens, 'Dados Itens');
         }
         
         // Aba 'Dados Completos XML'
         if (dadosCompletos.length > 0) {
             const wsCompletos = XLSX.utils.json_to_sheet(dadosCompletos);
+            forceCellAsString(wsCompletos, "Chave NF-e");
             XLSX.utils.book_append_sheet(wb, wsCompletos, 'Dados Completos XML');
         }
 
@@ -685,6 +700,8 @@ export async function extractCteData(files: { name: string, content: string }[])
 
         if (dadosCompletos.length > 0) {
             const wsCompletos = XLSX.utils.json_to_sheet(dadosCompletos);
+            forceCellAsString(wsCompletos, "cteProc/protCTe/infProt/chCTe");
+            forceCellAsString(wsCompletos, "cteProc/CTe/infCte/infCTeNorm/infDoc/infNFe/chave");
             XLSX.utils.book_append_sheet(wb, wsCompletos, 'Dados Completos');
         }
         
@@ -695,6 +712,8 @@ export async function extractCteData(files: { name: string, content: string }[])
                 finalColsOrder.forEach(col => newRow[col] = row[col] || 'N/A');
                 return newRow;
             }), { header: finalColsOrder });
+            forceCellAsString(wsEspecificos, "Chave CT-e");
+            forceCellAsString(wsEspecificos, "Chave NF-e");
             XLSX.utils.book_append_sheet(wb, wsEspecificos, 'Dados Específicos');
         }
 
@@ -812,6 +831,18 @@ export async function extractReturnData(files: { name: string; content: string }
 
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(df);
+
+  // Force chNFe and refNFe columns to be text
+  const chNFeHeaderAddress = Object.keys(ws).find(key => ws[key].v === 'chNFe');
+  if (chNFeHeaderAddress) {
+      forceCellAsString(ws, 'chNFe');
+  }
+  const refNFeHeaderAddress = Object.keys(ws).find(key => ws[key].v === 'refNFe');
+  if (refNFeHeaderAddress) {
+      forceCellAsString(ws, 'refNFe');
+  }
+
+
   XLSX.utils.book_append_sheet(wb, ws, 'Dados');
 
   const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
@@ -948,7 +979,10 @@ export async function separateXmlFromExcel(data: { excelFile: string, zipFile: s
         
         // 3. Create result Excel
         const foundKeysWB = XLSX.utils.book_new();
-        const foundKeysWS = XLSX.utils.json_to_sheet(foundKeys.map(key => ({ "Chave de Acesso Encontrada": key })));
+        const foundKeysData = foundKeys.map(key => ({ "Chave de Acesso Encontrada": key }));
+        const foundKeysWS = XLSX.utils.json_to_sheet(foundKeysData);
+        forceCellAsString(foundKeysWS, "Chave de Acesso Encontrada");
+
         XLSX.utils.book_append_sheet(foundKeysWB, foundKeysWS, 'Chaves Encontradas');
         const foundKeysBase64 = XLSX.write(foundKeysWB, { bookType: 'xlsx', type: 'base64' });
 
