@@ -438,6 +438,10 @@ const flattenObject = (obj: any, parentKey = '', res: { [key: string]: any } = {
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
             const propName = parentKey ? `${parentKey}/${key}` : key;
+            // Exclude 'det' from this level of flattening, it will be handled separately
+            if (key === 'det') {
+                continue;
+            }
             if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
                 flattenObject(obj[key], propName, res);
             } else if (Array.isArray(obj[key])) {
@@ -494,7 +498,6 @@ export async function extractNfeData(files: { name: string, content: string }[])
             ignoreAttributes: false,
             attributeNamePrefix: "@_",
             isArray: (name, jpath, isLeafNode, isAttribute) => { 
-                // Always treat these as arrays
                 if (name === "det" || name === "dup" || name === "obsCont") return true;
                 return false;
              }
@@ -502,14 +505,19 @@ export async function extractNfeData(files: { name: string, content: string }[])
 
         const dadosCompletos: any[] = [];
         const dadosEspecificos: any[] = [];
+        const dadosItens: any[] = [];
+
 
         for (const file of files) {
             try {
                 const jsonObj = parser.parse(file.content);
+                const nfeProc = jsonObj.nfeProc;
+                const chaveNFe = getValueByPath(jsonObj, SPECIFIC_TAGS_MAP["Chave NF-e"]) || file.name;
 
                 // --- DADOS COMPLETOS ---
                 const flatData = flattenObject(jsonObj);
                 flatData['Arquivo'] = file.name;
+                flatData['Chave NF-e'] = chaveNFe;
                 dadosCompletos.push(flatData);
                 
                 // --- DADOS ESPECIFICOS ---
@@ -522,12 +530,26 @@ export async function extractNfeData(files: { name: string, content: string }[])
                     specificData[colName] = value;
                 }
                 dadosEspecificos.push(specificData);
+                
+                // --- DADOS DOS ITENS ---
+                const items = nfeProc?.NFe?.infNFe?.det;
+                if (items && Array.isArray(items)) {
+                    items.forEach((item: any, index: number) => {
+                        const flatItem = flattenObject(item);
+                        flatItem['Arquivo'] = file.name;
+                        flatItem['Chave NF-e'] = chaveNFe;
+                        flatItem['Número do Item'] = index + 1;
+                        dadosItens.push(flatItem);
+                    });
+                }
+
 
             } catch (e: any) {
                  console.error(`Error processing file ${file.name}:`, e);
                  // Add placeholder for corrupted file to maintain row alignment
-                 dadosCompletos.push({ 'Arquivo': file.name, 'Erro_Processamento': `Erro de Sintaxe XML: ${e.message}` });
-                 const errorRow: { [key: string]: string } = { 'Arquivo': file.name };
+                 const chaveNFeErro = `ERRO-${file.name}`;
+                 dadosCompletos.push({ 'Arquivo': file.name, 'Chave NF-e': chaveNFeErro, 'Erro_Processamento': `Erro de Sintaxe XML: ${e.message}` });
+                 const errorRow: { [key: string]: string } = { 'Arquivo': file.name, 'Chave NF-e': chaveNFeErro };
                  Object.keys(SPECIFIC_TAGS_MAP).forEach(key => errorRow[key] = 'ERRO XML');
                  dadosEspecificos.push(errorRow);
             }
@@ -535,12 +557,6 @@ export async function extractNfeData(files: { name: string, content: string }[])
 
         const wb = XLSX.utils.book_new();
 
-        // Aba 'Dados Completos XML'
-        if (dadosCompletos.length > 0) {
-            const wsCompletos = XLSX.utils.json_to_sheet(dadosCompletos);
-            XLSX.utils.book_append_sheet(wb, wsCompletos, 'Dados Completos XML');
-        }
-        
         // Aba 'Dados NF-e'
         if (dadosEspecificos.length > 0) {
             const finalCols = ['Arquivo', ...Object.keys(SPECIFIC_TAGS_MAP)];
@@ -552,6 +568,19 @@ export async function extractNfeData(files: { name: string, content: string }[])
             const wsEspecificos = XLSX.utils.json_to_sheet(reorderedDadosEspecificos, { header: finalCols });
             XLSX.utils.book_append_sheet(wb, wsEspecificos, 'Dados NF-e');
         }
+        
+        // Aba 'Dados Itens'
+        if (dadosItens.length > 0) {
+            const wsItens = XLSX.utils.json_to_sheet(dadosItens);
+            XLSX.utils.book_append_sheet(wb, wsItens, 'Dados Itens');
+        }
+        
+        // Aba 'Dados Completos XML'
+        if (dadosCompletos.length > 0) {
+            const wsCompletos = XLSX.utils.json_to_sheet(dadosCompletos);
+            XLSX.utils.book_append_sheet(wb, wsCompletos, 'Dados Completos XML');
+        }
+
 
         const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
 
@@ -927,7 +956,7 @@ export async function separateXmlFromExcel(data: { excelFile: string, zipFile: s
         const outputZipBase64 = await outputZip.generateAsync({ type: 'base64' });
 
         return {
-            separatedZip: outputZipBase-64,
+            separatedZip: outputZipBase64,
             foundKeysExcel: foundKeysBase64,
         };
 
