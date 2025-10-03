@@ -112,8 +112,8 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
         }
     }
     // Validation for a D100 line (CTe)
-    else if (parts.length > 9 && parts[1] === 'D100') {
-        const key = parts[9];
+    else if (parts.length > 10 && parts[1] === 'D100') {
+        const key = parts[10];
         const value = parseFloat(parts[16] || '0'); // vTPrest
         const emissionDate = parts[10]; // DDMMYYYY
         const partnerCode = parts[3]; // Emitente do CTe (COD_PART)
@@ -294,35 +294,56 @@ export async function addOrUpdateKeyComment(cnpj: string, key: string, comment: 
 export async function mergeExcelFiles(files: { name: string, content: ArrayBuffer }[]) {
     try {
         const mergedWorkbook = XLSX.utils.book_new();
-        const sheetsData: { [sheetName: string]: any[] } = {};
+        const sheetsData: { [sheetName: string]: any[][] } = {};
 
+        // Read all sheets from all files
         for (const file of files) {
             const workbook = XLSX.read(file.content, { type: 'buffer' });
             for (const sheetName of workbook.SheetNames) {
                 const worksheet = workbook.Sheets[sheetName];
-                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                // Using header: 1 to get an array of arrays
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
 
                 if (!sheetsData[sheetName]) {
                     sheetsData[sheetName] = [];
                 }
-                
-                if (sheetsData[sheetName].length === 0) {
-                    // First file for this sheet, add all rows including header
-                    sheetsData[sheetName].push(...jsonData);
-                } else {
-                    // Subsequent files, skip the header row
-                    sheetsData[sheetName].push(...jsonData.slice(1));
-                }
+                sheetsData[sheetName].push(...jsonData);
             }
         }
-        
+
         if (Object.keys(sheetsData).length === 0) {
             return { error: "Nenhuma planilha encontrada nos arquivos carregados." };
         }
 
+        // Process merged data to remove duplicate headers
         for (const sheetName in sheetsData) {
-            if (sheetsData[sheetName].length > 0) {
-                const newWorksheet = XLSX.utils.aoa_to_sheet(sheetsData[sheetName]);
+            const allRows = sheetsData[sheetName];
+            if (allRows.length > 0) {
+                const header = allRows[0];
+                const uniqueRows = [header];
+                const seenRows = new Set([JSON.stringify(header)]);
+
+                for (let i = 1; i < allRows.length; i++) {
+                    const rowString = JSON.stringify(allRows[i]);
+                    // If it's a header row, we only add it if it's the very first one
+                    if(JSON.stringify(allRows[i]) === JSON.stringify(header)) {
+                         continue;
+                    }
+                    if (!seenRows.has(rowString)) {
+                        uniqueRows.push(allRows[i]);
+                        seenRows.add(rowString);
+                    }
+                }
+                
+                // Keep only the first header
+                const finalRows = [uniqueRows[0]];
+                for (let i = 1; i < uniqueRows.length; i++) {
+                    if (JSON.stringify(uniqueRows[i]) !== JSON.stringify(header)) {
+                        finalRows.push(uniqueRows[i]);
+                    }
+                }
+
+                const newWorksheet = XLSX.utils.aoa_to_sheet(finalRows);
                 XLSX.utils.book_append_sheet(mergedWorkbook, newWorksheet, sheetName);
             }
         }
@@ -349,7 +370,3 @@ export async function mergeExcelFiles(files: { name: string, content: ArrayBuffe
         return { error: error.message || "Ocorreu um erro ao agrupar as planilhas." };
     }
 }
-
-    
-
-    
