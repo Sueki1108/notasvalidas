@@ -874,7 +874,11 @@ const getPaths = (obj: any, parentPath = ''): string[] => {
 
 export async function getXmlPaths(file: { name: string; content: string }) {
     try {
-        const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
+        const parser = new XMLParser({ 
+            ignoreAttributes: false, 
+            attributeNamePrefix: "@_",
+            preserveOrder: true
+        });
         const jsonObj = parser.parse(file.content);
         const paths = Array.from(new Set(getPaths(jsonObj))).sort();
         return { paths };
@@ -999,3 +1003,5 @@ export async function separateXmlFromExcel(data: { excelFile: string, zipFile: s
         return { error: error.message || "Ocorreu um erro ao separar os arquivos XML." };
     }
 }
+
+    
