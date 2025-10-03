@@ -37,7 +37,7 @@ const initialFilesState: FileList = {
 
 type DataFrames = { [key: string]: any[] };
 
-const extractNfeDataFromXml = (xmlContent: string) => {
+const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlContent, "application/xml");
     const errorNode = xmlDoc.querySelector("parsererror");
@@ -63,7 +63,7 @@ const extractNfeDataFromXml = (xmlContent: string) => {
             
             const eventType = eventTypeMap[tpEvento];
             if (eventType) {
-                 return { isEvent: true, eventType, key: `NFe${chNFe}` };
+                 return { isEvent: true, eventType, key: `NFe${chNFe}`, uploadSource };
             }
         }
         return null; // Not a relevant event
@@ -98,6 +98,7 @@ const extractNfeDataFromXml = (xmlContent: string) => {
         'Destinatário CPF/CNPJ': dest ? (getValue('CNPJ', dest) || getValue('CPF', dest)) : '',
         'Destinatário': dest ? getValue('xNome', dest) : '',
         'Fornecedor/Cliente': isSaida ? (dest ? getValue('xNome', dest): '') : (getValue('xNome', emit)),
+        'uploadSource': uploadSource
     };
 
 
@@ -162,13 +163,14 @@ const extractNfeDataFromXml = (xmlContent: string) => {
             'COFINS Base de Cálculo': cofins ? parseFloat(getValue('vBC', cofins) || '0') : 0,
             'COFINS Alíquota': cofins ? parseFloat(getValue('pCOFINS', cofins) || '0') : 0,
             'COFINS Valor': cofins ? parseFloat(getValue('vCOFINS', cofins) || '0') : 0,
+            'uploadSource': uploadSource
         });
     }
 
     return { nota, itens };
 }
 
-const extractCteDataFromXml = (xmlContent: string) => {
+const extractCteDataFromXml = (xmlContent: string, uploadSource: string) => {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlContent, "application/xml");
     const errorNode = xmlDoc.querySelector("parsererror");
@@ -189,7 +191,7 @@ const extractCteDataFromXml = (xmlContent: string) => {
 
             // Prestação de Serviço em Desacordo
             if (tpEvento === '610110') {
-                 return { isEvent: true, eventType: 'Desacordo', key: `CTe${chCTe}` };
+                 return { isEvent: true, eventType: 'Desacordo', key: `CTe${chCTe}`, uploadSource };
             }
         }
         return null; // Ignore other CTe events
@@ -220,6 +222,7 @@ const extractCteDataFromXml = (xmlContent: string) => {
         'Emitente CPF/CNPJ': getValue('CNPJ', emit) || getValue('CPF', emit),
         'Emitente': getValue('xNome', emit),
         'Fornecedor/Cliente': getValue('xNome', emit),
+        'uploadSource': uploadSource
     };
 
     return { nota };
@@ -295,10 +298,15 @@ export default function Home() {
                 Desacordo: new Set<string>(),
             }
 
-            const processXmlFiles = async (fileList: File[], type: 'NFe' | 'CTe') => {
+            const processXmlFiles = async (fileList: File[], category: string) => {
+                 const type = category.includes('CTe') ? 'CTe' : 'NFe';
+                 const uploadSource = category === 'XMLs de Saída' ? 'saida' : 'entrada';
+                 
                  for (const file of fileList) {
                     const fileContent = await file.text();
-                    const xmlData = type === 'NFe' ? extractNfeDataFromXml(fileContent) : extractCteDataFromXml(fileContent);
+                    const xmlData = type === 'NFe' 
+                        ? extractNfeDataFromXml(fileContent, uploadSource) 
+                        : extractCteDataFromXml(fileContent, uploadSource);
 
                     if (!xmlData) continue;
 
@@ -328,8 +336,7 @@ export default function Home() {
             for(const category of requiredFilesForStep1) {
                 const fileList = files[category];
                 if(fileList && fileList.length > 0) {
-                    const type = category.includes('CTe') ? 'CTe' : 'NFe';
-                    await processXmlFiles(fileList, type);
+                    await processXmlFiles(fileList, category);
                 }
             }
             
@@ -366,7 +373,7 @@ export default function Home() {
                 'NF-Stock CTE': allCte,
                 'Itens de Entrada': allNfeItens, // Placeholder, will be filtered later
                 'Itens de Saída': allNfeItens, // Placeholder, will be filtered later
-                'NF-Stock Emitidas': allNfe.filter(n => n.isSaida) // Simple initial separation
+                'NF-Stock Emitidas': [] // Will be populated in processDataFrames
             };
 
             setInitialData(initialFrames);

@@ -40,47 +40,52 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
         ...Array.from(exceptionKeys.Desacordo),
     ]);
     
-    const chavesAcessoEmissaoPropria = new Set<string>();
+    const ownEmissionNotes: any[] = [];
+    const ownEmissionValidKeys = new Set<string>();
+
     if (companyCnpj) {
         (processedDfs["NF-Stock NFE"] || []).forEach(nota => {
             if (nota && nota['Emitente CPF/CNPJ'] === companyCnpj) {
-                chavesAcessoEmissaoPropria.add(cleanAndToStr(nota['Chave de acesso']));
+                ownEmissionNotes.push(nota);
+                // A nota de emissão própria só é válida se veio da pasta de saída
+                if (nota.uploadSource === 'saida') {
+                    ownEmissionValidKeys.add(cleanAndToStr(nota['Chave de acesso']));
+                }
             }
         });
     }
     
-    // Separate own emission notes
-    processedDfs["Emissão Própria"] = (processedDfs["NF-Stock NFE"] || []).filter(nota => 
-        nota && chavesAcessoEmissaoPropria.has(cleanAndToStr(nota['Chave de acesso']))
-    );
+    // Separa as notas de emissão própria em sua própria aba
+    processedDfs["Emissão Própria"] = ownEmissionNotes;
+    const ownEmissionAllKeys = new Set(ownEmissionNotes.map(n => cleanAndToStr(n['Chave de acesso'])));
 
     // Filter valid notes: must not be canceled or an exception. Own emissions are handled separately.
     const notasValidas = allNotes.filter(row =>
         row &&
         !canceledKeys.has(row['Chave de acesso']) &&
         !exceptionKeySet.has(row['Chave de acesso']) &&
-        !chavesAcessoEmissaoPropria.has(row['Chave de acesso']) // Exclude own emission from this primary list
+        !ownEmissionAllKeys.has(row['Chave de acesso']) // Exclude ALL own emission from this primary list
     );
     
     processedDfs["Notas Válidas"] = notasValidas;
 
-    // "Chaves Válidas" includes valid entries, own emissions, and issued notes.
+    // "Chaves Válidas" inclui: chaves de notas de entrada válidas + chaves de emissão própria válidas (as de saída)
     const chavesValidasEntrada = new Set(notasValidas.map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));
-    const chavesSaidaValidas = new Set((processedDfs["NF-Stock Emitidas"] || []).filter(row => row && !canceledKeys.has(row['Chave de acesso'])).map(r => r['Chave de acesso']));
-    const combinedChavesValidas = new Set([...chavesValidasEntrada, ...chavesAcessoEmissaoPropria, ...chavesSaidaValidas]);
+    const combinedChavesValidas = new Set([...chavesValidasEntrada, ...ownEmissionValidKeys]);
     processedDfs["Chaves Válidas"] = Array.from(combinedChavesValidas).map(key => ({ "Chave de acesso": key }));
 
     
-    // Filter items based on valid notes (excluding own emission)
+    // Filter items based on valid keys
     processedDfs["Itens de Entrada"] = (dfs["Itens de Entrada"] || []).filter(row => 
         row && chavesValidasEntrada.has(cleanAndToStr(row["Chave de acesso"]))
     );
      processedDfs["Itens de Saída"] = (dfs["Itens de Saída"] || []).filter(row => 
-        row && (chavesSaidaValidas.has(cleanAndToStr(row["Chave de acesso"])) || chavesAcessoEmissaoPropria.has(cleanAndToStr(row["Chave de acesso"])))
+        row && ownEmissionValidKeys.has(cleanAndToStr(row["Chave de acesso"]))
     );
 
 
-    // Handle outgoing notes - remove canceled
+    // Handle outgoing notes - remove canceled (This seems redundant if they are part of ownEmission)
+    // Kept for safety in case there are other types of outgoing notes
     const notasSaidaTemporaria = processedDfs["NF-Stock Emitidas"] || [];
     processedDfs["NF-Stock Emitidas"] = notasSaidaTemporaria.filter(row => row && !canceledKeys.has(row['Chave de acesso']));
     const notasSaidaCanceladas = notasSaidaTemporaria.filter(row => row && canceledKeys.has(row['Chave de acesso']));
