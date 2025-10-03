@@ -7,7 +7,7 @@ import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Sheet, History, Search, ArrowLeft, CheckCircle, XCircle, MessageSquare, Group, File as FileIcon, ChevronDown } from "lucide-react";
+import { Loader2, Sheet, History, Search, ArrowLeft, CheckCircle, XCircle, MessageSquare, Group, FileText, ChevronDown } from "lucide-react";
 import Link from 'next/link';
 import {
   DropdownMenu,
@@ -133,6 +133,9 @@ export default function HistoryPage() {
                             <DropdownMenuContent>
                                 <DropdownMenuItem asChild>
                                     <Link href="/merger" className="flex items-center gap-2 w-full"><Group />Agrupador de Planilhas</Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                    <Link href="/sage-itens-nf" className="flex items-center gap-2 w-full"><FileText />Sage - Itens da NF</Link>
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -288,7 +291,7 @@ export default function HistoryPage() {
                                      <AccordionItem value="item-3">
                                         <AccordionTrigger className="font-semibold">
                                              <div className="flex items-center gap-2">
-                                                <FileIcon className="text-blue-600" />
+                                                <FileText className="text-blue-600" />
                                                 Apenas no SPED ({groupedKeys.onlyInSped.length})
                                             </div>
                                         </AccordionTrigger>

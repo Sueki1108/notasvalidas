@@ -4,7 +4,7 @@
 import * as React from "react";
 import { useState, type ChangeEvent } from "react";
 import Link from 'next/link';
-import { Sheet, UploadCloud, Group, Download, Trash2, File, Loader2, History, ChevronDown } from "lucide-react";
+import { Sheet, UploadCloud, Group, Download, Trash2, File, Loader2, History, ChevronDown, FileText } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -125,6 +125,9 @@ export default function MergerPage() {
                             <DropdownMenuContent>
                                 <DropdownMenuItem asChild>
                                     <Link href="/merger" className="flex items-center gap-2 w-full"><Group />Agrupador de Planilhas</Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                    <Link href="/sage-itens-nf" className="flex items-center gap-2 w-full"><FileText />Sage - Itens da NF</Link>
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
