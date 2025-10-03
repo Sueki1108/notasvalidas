@@ -48,30 +48,22 @@ const extractNfeDataFromXml = (xmlContent: string) => {
 
     const getValue = (tag: string, context: Element | null) => context?.getElementsByTagName(tag)[0]?.textContent || '';
     
-    // Check if it's an event XML
     const procEventoNFe = xmlDoc.getElementsByTagName('procEventoNFe')[0];
     if (procEventoNFe) {
         const infEvento = procEventoNFe.getElementsByTagName('infEvento')[0];
         if (infEvento) {
             const chNFe = getValue('chNFe', infEvento) || '';
             const tpEvento = getValue('tpEvento', infEvento) || '';
-            const descEvento = infEvento.getElementsByTagName('descEvento')[0]?.textContent || '';
 
-            // Event type codes
-            const CANCELAMENTO = '110111';
-            const OP_NAO_REALIZADA = '210240';
-            const DESCONHECIMENTO = '411500';
-
-            switch (tpEvento) {
-                case CANCELAMENTO:
-                    return { isEvent: true, eventType: 'Cancelamento', canceledKey: `NFe${chNFe}` };
-                case OP_NAO_REALIZADA:
-                    return { isEvent: true, eventType: 'OperacaoNaoRealizada', exceptionKey: `NFe${chNFe}` };
-                case DESCONHECIMENTO:
-                     return { isEvent: true, eventType: 'Desconhecimento', exceptionKey: `NFe${chNFe}` };
-                default:
-                    // Other events like Carta de Correção are ignored as they don't invalidate the NF-e
-                    return null; 
+            const eventTypeMap: { [key: string]: string } = {
+                '110111': 'Cancelamento',
+                '210240': 'OperacaoNaoRealizada',
+                '411500': 'Desconhecimento',
+            };
+            
+            const eventType = eventTypeMap[tpEvento];
+            if (eventType) {
+                 return { isEvent: true, eventType, key: `NFe${chNFe}` };
             }
         }
         return null; // Not a relevant event
@@ -197,7 +189,7 @@ const extractCteDataFromXml = (xmlContent: string) => {
 
             // Prestação de Serviço em Desacordo
             if (tpEvento === '610110') {
-                 return { isEvent: true, eventType: 'Desacordo', exceptionKey: `CTe${chCTe}` };
+                 return { isEvent: true, eventType: 'Desacordo', key: `CTe${chCTe}` };
             }
         }
         return null; // Ignore other CTe events
@@ -239,6 +231,7 @@ export default function Home() {
     const [spedFile, setSpedFile] = useState<File | null>(null);
     const [processing, setProcessing] = useState(false);
     const [validating, setValidating] = useState(false);
+    const [initialData, setInitialData] = useState<DataFrames | null>(null);
     const [results, setResults] = useState<DataFrames | null>(null);
     const [keyCheckResults, setKeyCheckResults] = useState<KeyCheckResult | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -310,20 +303,16 @@ export default function Home() {
                     if (!xmlData) continue;
 
                     if (xmlData.isEvent) {
-                        if (xmlData.canceledKey) {
-                            canceledKeys.add(xmlData.canceledKey);
-                        }
-                        if (xmlData.exceptionKey) {
-                             if (xmlData.eventType === 'OperacaoNaoRealizada') {
-                                exceptionKeys.OperacaoNaoRealizada.add(xmlData.exceptionKey);
-                            } else if (xmlData.eventType === 'Desconhecimento') {
-                                exceptionKeys.Desconhecimento.add(xmlData.exceptionKey);
-                            } else if (xmlData.eventType === 'Desacordo') {
-                                exceptionKeys.Desacordo.add(xmlData.exceptionKey);
-                            }
+                        if (xmlData.eventType === 'Cancelamento') {
+                            canceledKeys.add(xmlData.key);
+                        } else if (xmlData.eventType) {
+                             const eventSet = exceptionKeys[xmlData.eventType as keyof typeof exceptionKeys];
+                             if (eventSet) {
+                                 eventSet.add(xmlData.key);
+                             }
                         }
                     } else if (xmlData.nota) {
-                        if (type === 'NFe') {
+                        if (type === 'NFe' && 'itens' in xmlData) {
                             allNfe.push(xmlData.nota);
                             if (xmlData.itens) allNfeItens.push(...xmlData.itens);
                         } else {
@@ -336,28 +325,14 @@ export default function Home() {
                 }
             };
             
-            // Process ALL XML files from all categories
-            if (files["XMLs de Entrada (NFe)"]) await processXmlFiles(files["XMLs de Entrada (NFe)"]!, 'NFe');
-            if (files["XMLs de Entrada (CTe)"]) await processXmlFiles(files["XMLs de Entrada (CTe)"]!, 'CTe');
-            if (files["XMLs de Saída"]) await processXmlFiles(files["XMLs de Saída"]!, 'NFe');
-            if (files["NF-Stock NFE Operação Não Realizada"]) await processXmlFiles(files["NF-Stock NFE Operação Não Realizada"]!, 'NFe');
-            if (files["NF-Stock NFE Operação Desconhecida"]) await processXmlFiles(files["NF-Stock NFE Operação Desconhecida"]!, 'NFe');
-            if (files["NF-Stock CTE Desacordo de Serviço"]) await processXmlFiles(files["NF-Stock CTE Desacordo de Serviço"]!, 'CTe');
-
-            // Assign raw extracted data
-            dataFrames['NF-Stock NFE'] = allNfe;
-            dataFrames['NF-Stock CTE'] = allCte;
-            dataFrames['Itens de Entrada'] = allNfeItens.filter(item => { // Assume all items are initially 'entrada'
-                const nota = allNfe.find(n => n['Chave de acesso'] === item['Chave de acesso']);
-                return nota && nota['Emitente CPF/CNPJ'] !== spedInfo?.cnpj; // Simple check for now
-            });
-             dataFrames['Itens de Saída'] = allNfeItens.filter(item => {
-                const nota = allNfe.find(n => n['Chave de acesso'] === item['Chave de acesso']);
-                return nota && nota['Emitente CPF/CNPJ'] === spedInfo?.cnpj; // Simple check
-            });
-
-
-            // Handle Excel-based exceptions
+            for(const category of requiredFilesForStep1) {
+                const fileList = files[category];
+                if(fileList && fileList.length > 0) {
+                    const type = category.includes('CTe') ? 'CTe' : 'NFe';
+                    await processXmlFiles(fileList, type);
+                }
+            }
+            
             const handleExcelExceptions = async (sheetName: string, exceptionSet: Set<string>) => {
                 const fileList = files[sheetName];
                 if (!fileList || !fileList.some(f => f.name.toLowerCase().endsWith('.xlsx'))) return;
@@ -371,7 +346,10 @@ export default function Home() {
                           const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
                           jsonData.forEach(row => {
                               const key = row['Chave de Acesso'] || row['Chave'];
-                              if (key) exceptionSet.add(key.startsWith('NFe') || key.startsWith('CTe') ? key : `NFe${key}`);
+                              if (key) {
+                                  const cleanKey = String(key).trim();
+                                  if (cleanKey) exceptionSet.add(cleanKey.startsWith('NFe') || cleanKey.startsWith('CTe') ? cleanKey : `NFe${cleanKey}`);
+                              }
                           });
                         }
                     }
@@ -383,16 +361,26 @@ export default function Home() {
             await handleExcelExceptions("NF-Stock CTE Desacordo de Serviço", exceptionKeys.Desacordo);
 
 
-            const processedData = processDataFrames({
-                ...dataFrames,
-            }, canceledKeys, exceptionKeys);
+            const initialFrames = {
+                'NF-Stock NFE': allNfe,
+                'NF-Stock CTE': allCte,
+                'Itens de Entrada': allNfeItens, // Placeholder, will be filtered later
+                'Itens de Saída': allNfeItens, // Placeholder, will be filtered later
+                'NF-Stock Emitidas': allNfe.filter(n => n.isSaida) // Simple initial separation
+            };
 
+            setInitialData(initialFrames);
+
+            // Run initial processing without company CNPJ
+            const processedData = processDataFrames(initialFrames, canceledKeys, exceptionKeys);
+            
             setResults(processedData);
-            toast({ title: "Processamento Concluído", description: "Os arquivos foram processados. Vá para a aba de Validação SPED." });
+            toast({ title: "Processamento Inicial Concluído", description: "Arquivos XML processados. Carregue o SPED para finalizar." });
             setActiveTab('validate');
         } catch (err: any) {
             setError(err.message || "Ocorreu um erro desconhecido.");
             setResults(null);
+            setInitialData(null);
             toast({ variant: "destructive", title: "Erro no Processamento", description: err.message });
         } finally {
             setProcessing(false);
@@ -404,8 +392,8 @@ export default function Home() {
             toast({ variant: "destructive", title: "Arquivo SPED Ausente", description: "Por favor, carregue o arquivo SPED TXT." });
             return;
         }
-        if (!results) {
-             toast({ variant: "destructive", title: "Dados não processados", description: "Processe os arquivos na aba 'Processamento Principal' primeiro." });
+        if (!initialData) {
+             toast({ variant: "destructive", title: "Dados não processados", description: "Processe os arquivos XML na aba 'Processamento Principal' primeiro." });
             return;
         }
 
@@ -413,16 +401,29 @@ export default function Home() {
         setValidating(true);
         try {
             const spedFileContent = await spedFile.text();
-            const allNotes = [...(results["Notas Válidas"] || []), ...(results["NF-Stock Emitidas"] || [])];
             
-            const resultData = await validateWithSped(results, spedFileContent, allNotes);
+            const resultData = await validateWithSped(initialData, spedFileContent, []);
+            
+            if (resultData.error) throw new Error(resultData.error);
+            if (!resultData.spedInfo) throw new Error("Não foi possível extrair informações da empresa do arquivo SPED.");
 
-            if (resultData.error) {
-                throw new Error(resultData.error);
-            }
+            setSpedInfo(resultData.spedInfo);
 
-            setKeyCheckResults(resultData.keyCheckResults || null);
-            setSpedInfo(resultData.spedInfo || null);
+            const canceledKeys = new Set(results?.["Notas Canceladas"]?.map(r => r['Chave de acesso']) || []);
+            const exceptionKeys = {
+                OperacaoNaoRealizada: new Set(results?.["NF-Stock NFE Operação Não Realizada"]?.map(r => r['Chave de acesso']) || []),
+                Desconhecimento: new Set(results?.["NF-Stock NFE Operação Desconhecida"]?.map(r => r['Chave de acesso']) || []),
+                Desacordo: new Set(results?.["NF-Stock CTE Desacordo de Serviço"]?.map(r => r['Chave de acesso']) || []),
+            };
+
+            const finalProcessedData = processDataFrames(initialData, canceledKeys, exceptionKeys, resultData.spedInfo.cnpj);
+            
+            const validationResult = await validateWithSped(finalProcessedData, spedFileContent, finalProcessedData["Notas Válidas"] || []);
+            if(validationResult.error) throw new Error(validationResult.error);
+
+            setResults(finalProcessedData);
+            setKeyCheckResults(validationResult.keyCheckResults || null);
+
             toast({ title: "Validação SPED Concluída", description: "A verificação das chaves foi finalizada." });
         } catch (err: any) {
              setError(err.message || "Ocorreu um erro desconhecido na validação.");
@@ -439,6 +440,7 @@ export default function Home() {
         setFiles(initialFilesState);
         setSpedFile(null);
         setResults(null);
+        setInitialData(null);
         setKeyCheckResults(null);
         setError(null);
         setSpedInfo(null);
@@ -576,9 +578,9 @@ export default function Home() {
                                         files={files}
                                         onFileChange={handleFileChange}
                                         onClearFile={handleClearFile}
-                                        disabled={!!results}
+                                        disabled={!!initialData}
                                     />
-                                    {!results && (
+                                    {!initialData && (
                                         <Button onClick={handleProcessPrimaryFiles} disabled={processing} className="w-full">
                                             {processing ? "Processando..." : "Processar Arquivos"}
                                         </Button>

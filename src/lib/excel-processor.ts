@@ -22,7 +22,7 @@ const cleanAndToStr = (value: any): string => {
 };
 
 
-export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, exceptionKeys: ExceptionKeys): DataFrames {
+export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, exceptionKeys: ExceptionKeys, companyCnpj?: string | null): DataFrames {
     const processedDfs: DataFrames = JSON.parse(JSON.stringify(dfs));
 
     const nfeEntrada = processedDfs["NF-Stock NFE"] || [];
@@ -39,51 +39,44 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
         ...Array.from(exceptionKeys.Desconhecimento),
         ...Array.from(exceptionKeys.Desacordo),
     ]);
-
-    const cfopsEmissaoPropria = [
-        1201, 1202, 1203, 1204, 1208, 1209, 1410, 1411,
-        2201, 2202, 2203, 2204, 2208, 2209, 2410, 2411
-    ];
-
+    
     const chavesAcessoEmissaoPropria = new Set<string>();
-    const nfeNotesToProcess = (processedDfs["NF-Stock NFE"] || []);
-
-    // Identify own emission from NFe notes based on CFOP in their items
-    if (processedDfs["Itens de Entrada"]) {
-        processedDfs["Itens de Entrada"].forEach(item => {
-            if (item && item.CFOP && cfopsEmissaoPropria.includes(parseInt(String(item.CFOP), 10))) {
-                chavesAcessoEmissaoPropria.add(cleanAndToStr(item['Chave de acesso']));
+    if (companyCnpj) {
+        (processedDfs["NF-Stock NFE"] || []).forEach(nota => {
+            if (nota && nota['Emitente CPF/CNPJ'] === companyCnpj) {
+                chavesAcessoEmissaoPropria.add(cleanAndToStr(nota['Chave de acesso']));
             }
         });
     }
     
     // Separate own emission notes
-    processedDfs["Emissão Própria"] = nfeNotesToProcess.filter(nota => 
+    processedDfs["Emissão Própria"] = (processedDfs["NF-Stock NFE"] || []).filter(nota => 
         nota && chavesAcessoEmissaoPropria.has(cleanAndToStr(nota['Chave de acesso']))
     );
 
-    // Filter valid notes: must not be canceled, exception or own emission
+    // Filter valid notes: must not be canceled or an exception. Own emissions are handled separately.
     const notasValidas = allNotes.filter(row =>
         row &&
         !canceledKeys.has(row['Chave de acesso']) &&
         !exceptionKeySet.has(row['Chave de acesso']) &&
-        !chavesAcessoEmissaoPropria.has(row['Chave de acesso'])
+        !chavesAcessoEmissaoPropria.has(row['Chave de acesso']) // Exclude own emission from this primary list
     );
     
-    processedDfs["Notas Válidas"] = notasValidas.filter(n => n['Chave de acesso'].startsWith('NFe'));
-    const notasValidasCTE = notasValidas.filter(n => n['Chave de acesso'].startsWith('CTe'));
-    processedDfs["Notas Válidas"].push(...notasValidasCTE); // Combine CTe validos
+    processedDfs["Notas Válidas"] = notasValidas;
 
+    // "Chaves Válidas" includes valid entries, own emissions, and issued notes.
+    const chavesValidasEntrada = new Set(notasValidas.map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));
+    const chavesSaidaValidas = new Set((processedDfs["NF-Stock Emitidas"] || []).filter(row => row && !canceledKeys.has(row['Chave de acesso'])).map(r => r['Chave de acesso']));
+    const combinedChavesValidas = new Set([...chavesValidasEntrada, ...chavesAcessoEmissaoPropria, ...chavesSaidaValidas]);
+    processedDfs["Chaves Válidas"] = Array.from(combinedChavesValidas).map(key => ({ "Chave de acesso": key }));
 
-    const chavesAcessoFinaisValidas = new Set(processedDfs["Notas Válidas"].map(row => row && cleanAndToStr(row["Chave de acesso"])).filter(Boolean));
-    const chavesSaidaValidas = new Set((processedDfs["NF-Stock Emitidas"] || []).map(r => r['Chave de acesso']));
     
-    // Filter items based on valid notes
+    // Filter items based on valid notes (excluding own emission)
     processedDfs["Itens de Entrada"] = (dfs["Itens de Entrada"] || []).filter(row => 
-        row && chavesAcessoFinaisValidas.has(cleanAndToStr(row["Chave de acesso"]))
+        row && chavesValidasEntrada.has(cleanAndToStr(row["Chave de acesso"]))
     );
      processedDfs["Itens de Saída"] = (dfs["Itens de Saída"] || []).filter(row => 
-        row && chavesSaidaValidas.has(cleanAndToStr(row["Chave de acesso"]))
+        row && (chavesSaidaValidas.has(cleanAndToStr(row["Chave de acesso"])) || chavesAcessoEmissaoPropria.has(cleanAndToStr(row["Chave de acesso"])))
     );
 
 
@@ -92,11 +85,6 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
     processedDfs["NF-Stock Emitidas"] = notasSaidaTemporaria.filter(row => row && !canceledKeys.has(row['Chave de acesso']));
     const notasSaidaCanceladas = notasSaidaTemporaria.filter(row => row && canceledKeys.has(row['Chave de acesso']));
     processedDfs["Notas Canceladas"].push(...notasSaidaCanceladas);
-
-
-    // "Chaves Válidas" should only contain keys from valid entry and valid issued notes
-    const combinedChavesValidas = new Set([...chavesAcessoFinaisValidas, ...chavesSaidaValidas]);
-    processedDfs["Chaves Válidas"] = Array.from(combinedChavesValidas).map(key => ({ "Chave de acesso": key }));
     
     // Immobilized assets - based on valid input items
     if (processedDfs["Itens de Entrada"] && processedDfs["Itens de Entrada"].length > 0) {
