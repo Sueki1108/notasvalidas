@@ -90,7 +90,7 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
     if (!ide || !emit || !total ) return null;
     
     const infProt = protNFe ? protNFe.getElementsByTagName('infProt')[0] : null;
-    const chNFe = normalizeKey(infProt ? getValue('chNFe', infProt) : infNFe.getAttribute('Id'));
+    const chNFe = normalizeKey(infProt ? getValue('chNFe', infProt) : (infNFe.getAttribute('Id') || '').replace('NFe',''));
     const cStat = infProt ? getValue('cStat', infProt) : '0';
 
     const numeroNF = getValue('nNF', ide);
@@ -429,6 +429,7 @@ export default function Home() {
 
         setError(null);
         setValidating(true);
+        setKeyCheckResult(null);
         try {
             const spedFileContent = await spedFile.text();
             
@@ -761,3 +762,5 @@ export default function Home() {
         </div>
     );
 }
+
+    
