@@ -116,6 +116,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
     try {
         let spedInfo: SpedInfo | null = null;
         const allSpedKeys = new Map<string, Partial<KeyInfo>>();
+        
         const allNotesMap = new Map(allNotesFromXmls.map(note => [
             (note['Chave de acesso'] || '').replace(/^NFe|^CTe/, ''), 
             note
@@ -185,7 +186,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         if (spedInfo && spedInfo.cnpj && keyCheckResults) {
             const keysFromSheet: KeyInfo[] = (processedData['Chaves Válidas']?.map(row => row['Chave de acesso']) || [])
                 .map((key: string) => {
-                    const cleanKey = key.replace(/^NFe|^CTe/, '');
+                    const cleanKey = key.replace(/^NFe|^_|^CTe_/, '');
                     const note = allNotesMap.get(cleanKey);
                     return {
                         key: cleanKey,
@@ -276,12 +277,20 @@ export async function mergeExcelFiles(files: { name: string, content: ArrayBuffe
         for (const file of files) {
             const workbook = XLSX.read(file.content, { type: 'buffer' });
             for (const sheetName of workbook.SheetNames) {
+                const worksheet = workbook.Sheets[sheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
                 if (!sheetsData[sheetName]) {
                     sheetsData[sheetName] = [];
                 }
-                const worksheet = workbook.Sheets[sheetName];
-                const jsonData = XLSX.utils.sheet_to_json(worksheet);
-                sheetsData[sheetName].push(...jsonData);
+                
+                if (sheetsData[sheetName].length === 0) {
+                    // First file for this sheet, add all rows including header
+                    sheetsData[sheetName].push(...jsonData);
+                } else {
+                    // Subsequent files, skip the header row
+                    sheetsData[sheetName].push(...jsonData.slice(1));
+                }
             }
         }
         
@@ -291,8 +300,8 @@ export async function mergeExcelFiles(files: { name: string, content: ArrayBuffe
 
         for (const sheetName in sheetsData) {
             if (sheetsData[sheetName].length > 0) {
-                const worksheet = XLSX.utils.json_to_sheet(sheetsData[sheetName]);
-                XLSX.utils.book_append_sheet(mergedWorkbook, worksheet, sheetName);
+                const newWorksheet = XLSX.utils.aoa_to_sheet(sheetsData[sheetName]);
+                XLSX.utils.book_append_sheet(mergedWorkbook, newWorksheet, sheetName);
             }
         }
 
