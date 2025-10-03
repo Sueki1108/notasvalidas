@@ -72,7 +72,17 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
     const infNFe = xmlDoc.getElementsByTagName('infNFe')[0];
     if(!infNFe) return null;
 
+    // Check for Estorno based on natOp
     const ide = infNFe.getElementsByTagName('ide')[0];
+    if (ide) {
+        const natOp = getValue('natOp', ide);
+        const chNFeEstorno = infNFe.getAttribute('Id')?.replace('NFe', '') || '';
+        if (natOp.toLowerCase().includes('estorno')) {
+             return { isEvent: true, eventType: 'Estorno', key: `NFe${chNFeEstorno}`, uploadSource };
+        }
+    }
+
+
     const emit = infNFe.getElementsByTagName('emit')[0];
     const dest = infNFe.getElementsByTagName('dest')[0];
     const total = infNFe.getElementsByTagName('ICMSTot')[0];
@@ -83,12 +93,6 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
     const infProt = protNFe ? protNFe.getElementsByTagName('infProt')[0] : null;
     const chNFe = infProt ? getValue('chNFe', infProt) : infNFe.getAttribute('Id')?.replace('NFe', '') || '';
     const cStat = infProt ? getValue('cStat', infProt) : '0';
-
-    // Check for Estorno
-    const natOp = getValue('natOp', ide);
-    if (natOp.toLowerCase().includes('estorno')) {
-        return { isEvent: true, eventType: 'Estorno', key: `NFe${chNFe}` };
-    }
 
     const numeroNF = getValue('nNF', ide);
     const isSaida = getValue('tpNF', ide) === '1';
@@ -327,11 +331,12 @@ export default function Home() {
                              }
                         }
                     } else if (xmlData.nota) {
-                        if (type === 'NFe' && 'itens' in xmlData) {
-                            allNfe.push(xmlData.nota);
-                            if (xmlData.itens) allNfeItens.push(...xmlData.itens);
+                        const noteWithItems = { ...xmlData.nota, itens: ('itens' in xmlData && xmlData.itens) ? xmlData.itens : [] };
+                        if (type === 'NFe') {
+                            allNfe.push(noteWithItems);
+                            if (noteWithItems.itens) allNfeItens.push(...noteWithItems.itens);
                         } else {
-                            allCte.push(xmlData.nota);
+                            allCte.push(noteWithItems);
                         }
                          if (xmlData.nota['Status']?.includes('Cancelada')) {
                             canceledKeys.add(xmlData.nota['Chave de acesso']);
@@ -416,13 +421,14 @@ export default function Home() {
         try {
             const spedFileContent = await spedFile.text();
             
-            const resultData = await validateWithSped(initialData, spedFileContent, []);
-            
-            if (resultData.error) throw new Error(resultData.error);
-            if (!resultData.spedInfo) throw new Error("Não foi possível extrair informações da empresa do arquivo SPED.");
+            // Step 1: Call validateWithSped with minimal data just to get spedInfo
+            const infoResult = await validateWithSped({}, spedFileContent, []);
+            if (infoResult.error || !infoResult.spedInfo) {
+                throw new Error(infoResult.error || "Não foi possível extrair informações da empresa do arquivo SPED.");
+            }
+            setSpedInfo(infoResult.spedInfo);
 
-            setSpedInfo(resultData.spedInfo);
-
+            // Step 2: Reprocess the initial data now WITH the company CNPJ
             const canceledKeys = new Set(results?.["Notas Canceladas"]?.map(r => r['Chave de acesso']) || []);
             const exceptionKeys = {
                 OperacaoNaoRealizada: new Set(results?.["NF-Stock NFE Operação Não Realizada"]?.map(r => r['Chave de acesso']) || []),
@@ -430,14 +436,16 @@ export default function Home() {
                 Desacordo: new Set(results?.["NF-Stock CTE Desacordo de Serviço"]?.map(r => r['Chave de acesso']) || []),
                 Estorno: new Set(results?.["Estornos"]?.map(r => r['Chave de acesso']) || []),
             };
+            const finalProcessedData = processDataFrames(initialData, canceledKeys, exceptionKeys, infoResult.spedInfo.cnpj);
 
-            const finalProcessedData = processDataFrames(initialData, canceledKeys, exceptionKeys, resultData.spedInfo.cnpj);
-            
-            const validationResult = await validateWithSped(finalProcessedData, spedFileContent, finalProcessedData["Notas Válidas"] || []);
-            if(validationResult.error) throw new Error(validationResult.error);
+            // Step 3: Run the final validation with the correctly processed data
+            const finalValidationResult = await validateWithSped(finalProcessedData, spedFileContent, finalProcessedData["Notas Válidas"] || []);
+            if (finalValidationResult.error) {
+                throw new Error(finalValidationResult.error);
+            }
 
             setResults(finalProcessedData);
-            setKeyCheckResult(validationResult.keyCheckResults || null);
+            setKeyCheckResult(finalValidationResult.keyCheckResults || null);
 
             toast({ title: "Validação SPED Concluída", description: "A verificação das chaves foi finalizada." });
         } catch (err: any) {
@@ -723,3 +731,5 @@ export default function Home() {
         </div>
     );
 }
+
+    
