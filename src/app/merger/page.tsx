@@ -57,9 +57,23 @@ export default function MergerPage() {
 
         try {
             const fileContents = await Promise.all(
-                files.map(file => 
-                    file.arrayBuffer().then(content => ({ name: file.name, content }))
-                )
+                files.map(file => {
+                    return new Promise<{ name: string, content: string }>((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                             if (event.target?.result) {
+                                // result is a data URL (e.g., "data:application/octet-stream;base64,xxxx...")
+                                // We only need the base64 part
+                                const content = (event.target.result as string).split(',')[1];
+                                resolve({ name: file.name, content });
+                            } else {
+                                reject(new Error(`Falha ao ler o arquivo ${file.name}`));
+                            }
+                        };
+                        reader.onerror = () => reject(new Error(`Erro ao ler o arquivo ${file.name}`));
+                        reader.readAsDataURL(file);
+                    });
+                })
             );
             
             const result = await mergeExcelFiles(fileContents);

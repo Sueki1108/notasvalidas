@@ -345,14 +345,14 @@ export async function addOrUpdateKeyComment(cnpj: string, key: string, comment: 
     }
 }
 
-export async function mergeExcelFiles(files: { name: string, content: ArrayBuffer }[]) {
+export async function mergeExcelFiles(files: { name: string, content: string }[]) {
     try {
         const mergedWorkbook = XLSX.utils.book_new();
         const sheetsData: { [sheetName: string]: any[][] } = {};
 
-        // Read all sheets from all files
         for (const file of files) {
-            const workbook = XLSX.read(file.content, { type: 'buffer' });
+            // content is expected to be a base64 string
+            const workbook = XLSX.read(file.content, { type: 'base64' });
             for (const sheetName of workbook.SheetNames) {
                 const worksheet = workbook.Sheets[sheetName];
                 const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
@@ -360,7 +360,7 @@ export async function mergeExcelFiles(files: { name: string, content: ArrayBuffe
                 if (!sheetsData[sheetName]) {
                     sheetsData[sheetName] = [];
                 }
-                // Push all rows except the header of subsequent files for the same sheet
+
                 if (sheetsData[sheetName].length === 0) {
                      sheetsData[sheetName].push(...jsonData);
                 } else {
@@ -373,7 +373,6 @@ export async function mergeExcelFiles(files: { name: string, content: ArrayBuffe
             return { error: "Nenhuma planilha encontrada nos arquivos carregados." };
         }
 
-        // Create new worksheets from the merged data
         for (const sheetName in sheetsData) {
             const newWorksheet = XLSX.utils.aoa_to_sheet(sheetsData[sheetName]);
             XLSX.utils.book_append_sheet(mergedWorkbook, newWorksheet, sheetName);
@@ -385,7 +384,6 @@ export async function mergeExcelFiles(files: { name: string, content: ArrayBuffe
         
         const buffer = XLSX.write(mergedWorkbook, { bookType: 'xlsx', type: 'array' });
         
-        // Convert ArrayBuffer to base64
         let binary = '';
         const bytes = new Uint8Array(buffer);
         const len = bytes.byteLength;
