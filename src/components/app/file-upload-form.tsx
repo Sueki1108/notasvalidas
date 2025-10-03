@@ -20,15 +20,15 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
             return '.txt';
         }
         if (fileName.toLowerCase().includes('xml')) {
-            return '.xml';
+            return '.xml, text/xml';
         }
-        return ".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel";
+        return ".xlsx,.xls,.csv,.ods,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/vnd.oasis.opendocument.spreadsheet";
     }
 
     const getDisplayName = (fileName: string) => {
         if (fileName.toLowerCase().includes('xml')) return fileName;
         if (fileName.toLowerCase().includes('txt')) return fileName;
-        return `${fileName}.xlsx`;
+        return `${fileName}`;
     }
     
     const isMultiple = (fileName: string) => {
@@ -83,5 +83,3 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
         </div>
     );
 }
-
-    

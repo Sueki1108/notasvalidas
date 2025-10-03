@@ -79,24 +79,19 @@ export default function SageItensNfPage() {
                 const content = await file.arrayBuffer();
                 
                 let df: any[][] = [];
-                if (fileExtension === 'xlsx') {
-                    const workbook = XLSX.read(content, { type: 'buffer' });
-                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                    df = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-                } else if (fileExtension === 'csv') {
+
+                let workbook;
+                if (fileExtension === 'csv') {
                     const decoder = new TextDecoder('utf-8');
                     const csvString = decoder.decode(content);
-                    const workbook = XLSX.read(csvString, { type: 'string' });
-                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                    df = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                    workbook = XLSX.read(csvString, { type: 'string' });
                 } else {
-                    toast({
-                        variant: "destructive",
-                        title: "Formato não suportado",
-                        description: `Arquivo '${file.name}' ignorado.`
-                    });
-                    continue;
+                    workbook = XLSX.read(content, { type: 'buffer' });
                 }
+
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                df = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
 
                 // Convert to array of objects with new headers
                 let dataAsObjects = df.map(row => {
@@ -264,7 +259,7 @@ export default function SageItensNfPage() {
                                     className="sr-only"
                                     onChange={handleFileChange}
                                     multiple
-                                    accept=".xlsx, .csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                                    accept=".xlsx,.xls,.csv,.ods,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/vnd.oasis.opendocument.spreadsheet"
                                 />
                             </div>
 
