@@ -72,12 +72,13 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
     const infNFe = xmlDoc.getElementsByTagName('infNFe')[0];
     if(!infNFe) return null;
 
-    // Check for Estorno based on natOp
     const ide = infNFe.getElementsByTagName('ide')[0];
+    
+    // Check for Estorno based on natOp
     if (ide) {
         const natOp = getValue('natOp', ide);
-        const chNFeEstorno = infNFe.getAttribute('Id')?.replace('NFe', '') || '';
         if (natOp.toLowerCase().includes('estorno')) {
+             const chNFeEstorno = infNFe.getAttribute('Id')?.replace('NFe', '') || '';
              return { isEvent: true, eventType: 'Estorno', key: `NFe${chNFeEstorno}`, uploadSource };
         }
     }
@@ -244,7 +245,6 @@ export default function Home() {
     const [spedFile, setSpedFile] = useState<File | null>(null);
     const [processing, setProcessing] = useState(false);
     const [validating, setValidating] = useState(false);
-    const [initialData, setInitialData] = useState<DataFrames | null>(null);
     const [results, setResults] = useState<DataFrames | null>(null);
     const [keyCheckResults, setKeyCheckResult] = useState<KeyCheckResult | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -311,7 +311,7 @@ export default function Home() {
 
             const processXmlFiles = async (fileList: File[], category: string) => {
                  const type = category.includes('CTe') ? 'CTe' : 'NFe';
-                 const uploadSource = category === 'XMLs de Saída' ? 'saida' : 'entrada';
+                 const uploadSource = category.includes('Saída') ? 'saida' : 'entrada';
                  
                  for (const file of fileList) {
                     const fileContent = await file.text();
@@ -383,15 +383,12 @@ export default function Home() {
             const initialFrames = {
                 'NF-Stock NFE': allNfe,
                 'NF-Stock CTE': allCte,
-                'Itens de Entrada': allNfeItens, // Placeholder, will be filtered later
-                'Itens de Saída': allNfeItens, // Placeholder, will be filtered later
-                'NF-Stock Emitidas': [] // Will be populated in processDataFrames
+                'Itens de Entrada': allNfeItens,
+                'Itens de Saída': allNfeItens,
+                'NF-Stock Emitidas': [] 
             };
 
-            setInitialData(initialFrames);
-
-            // Run initial processing without company CNPJ
-            const processedData = processDataFrames(initialFrames, canceledKeys, exceptionKeys);
+            const processedData = processDataFrames(initialFrames, canceledKeys, exceptionKeys, null); // Pass null for CNPJ initially
             
             setResults(processedData);
             toast({ title: "Processamento Inicial Concluído", description: "Arquivos XML processados. Carregue o SPED para finalizar." });
@@ -399,7 +396,6 @@ export default function Home() {
         } catch (err: any) {
             setError(err.message || "Ocorreu um erro desconhecido.");
             setResults(null);
-            setInitialData(null);
             toast({ variant: "destructive", title: "Erro no Processamento", description: err.message });
         } finally {
             setProcessing(false);
@@ -411,7 +407,7 @@ export default function Home() {
             toast({ variant: "destructive", title: "Arquivo SPED Ausente", description: "Por favor, carregue o arquivo SPED TXT." });
             return;
         }
-        if (!initialData) {
+        if (!results) {
              toast({ variant: "destructive", title: "Dados não processados", description: "Processe os arquivos XML na aba 'Processamento Principal' primeiro." });
             return;
         }
@@ -421,32 +417,19 @@ export default function Home() {
         try {
             const spedFileContent = await spedFile.text();
             
-            // Step 1: Call validateWithSped with minimal data just to get spedInfo
             const infoResult = await validateWithSped({}, spedFileContent, []);
             if (infoResult.error || !infoResult.spedInfo) {
                 throw new Error(infoResult.error || "Não foi possível extrair informações da empresa do arquivo SPED.");
             }
             setSpedInfo(infoResult.spedInfo);
 
-            // Step 2: Reprocess the initial data now WITH the company CNPJ
-            const canceledKeys = new Set(results?.["Notas Canceladas"]?.map(r => r['Chave de acesso']) || []);
-            const exceptionKeys = {
-                OperacaoNaoRealizada: new Set(results?.["NF-Stock NFE Operação Não Realizada"]?.map(r => r['Chave de acesso']) || []),
-                Desconhecimento: new Set(results?.["NF-Stock NFE Operação Desconhecida"]?.map(r => r['Chave de acesso']) || []),
-                Desacordo: new Set(results?.["NF-Stock CTE Desacordo de Serviço"]?.map(r => r['Chave de acesso']) || []),
-                Estorno: new Set(results?.["Estornos"]?.map(r => r['Chave de acesso']) || []),
-            };
-            const finalProcessedData = processDataFrames(initialData, canceledKeys, exceptionKeys, infoResult.spedInfo.cnpj);
-
-            // Step 3: Run the final validation with the correctly processed data
-            const finalValidationResult = await validateWithSped(finalProcessedData, spedFileContent, finalProcessedData["Notas Válidas"] || []);
+            const finalValidationResult = await validateWithSped(results, spedFileContent, results["Notas Válidas"] || []);
             if (finalValidationResult.error) {
                 throw new Error(finalValidationResult.error);
             }
 
-            setResults(finalProcessedData);
             setKeyCheckResult(finalValidationResult.keyCheckResults || null);
-
+            
             toast({ title: "Validação SPED Concluída", description: "A verificação das chaves foi finalizada." });
         } catch (err: any) {
              setError(err.message || "Ocorreu um erro desconhecido na validação.");
@@ -463,7 +446,6 @@ export default function Home() {
         setFiles(initialFilesState);
         setSpedFile(null);
         setResults(null);
-        setInitialData(null);
         setKeyCheckResult(null);
         setError(null);
         setSpedInfo(null);
@@ -602,9 +584,9 @@ export default function Home() {
                                         files={files}
                                         onFileChange={handleFileChange}
                                         onClearFile={handleClearFile}
-                                        disabled={!!initialData}
+                                        disabled={!!results}
                                     />
-                                    {!initialData && (
+                                    {!results && (
                                         <Button onClick={handleProcessPrimaryFiles} disabled={processing} className="w-full">
                                             {processing ? "Processando..." : "Processar Arquivos"}
                                         </Button>
@@ -731,5 +713,3 @@ export default function Home() {
         </div>
     );
 }
-
-    
