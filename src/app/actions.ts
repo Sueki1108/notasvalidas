@@ -378,28 +378,27 @@ export async function unifyZipFiles(files: { name: string, content: string }[]) 
 
 // --- Logic for 'Extrair NF-e' Tool ---
 
-const SPECIFIC_TAGS_MAP: { [key: string]: string[] } = {
-    "Número NF-e": ["nfeProc", "NFe", "infNFe", "ide", "nNF"],
-    "Chave NF-e": ["nfeProc", "protNFe", "infProt", "chNFe"],
-    "Valor Total Nota": ["nfeProc", "NFe", "infNFe", "total", "ICMSTot", "vNF"],
-    "Valor ICMS": ["nfeProc", "NFe", "infNFe", "total", "ICMSTot", "vICMS"],
-    "Valor Total IPI": ["nfeProc", "NFe", "infNFe", "total", "ICMSTot", "vIPI"],
-    "Valor Total PIS": ["nfeProc", "NFe", "infNFe", "total", "ICMSTot", "vPIS"],
-    "Valor Total COFINS": ["nfeProc", "NFe", "infNFe", "total", "ICMSTot", "vCOFINS"],
-    "Valor Total Tributos": ["nfeProc", "NFe", "infNFe", "total", "ICMSTot", "vTotTrib"],
-    "Data de Emissão": ["nfeProc", "NFe", "infNFe", "ide", "dhEmi"]
-};
+const flattenObject = (obj: any, parentKey = '', res: { [key: string]: any } = {}) => {
+    for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            const propName = parentKey ? `${parentKey}/${key}` : key;
+            if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+                flattenObject(obj[key], propName, res);
+            } else if (Array.isArray(obj[key])) {
+                 res[propName] = obj[key].map((item: any) => typeof item === 'object' ? JSON.stringify(item) : item).join('; ');
+            }
+            else {
+                res[propName] = obj[key];
+            }
+        }
+    }
+    return res;
+}
 
-const COLUMNS_TO_FORMAT_DECIMAL = [
-    "Valor Total Nota",
-    "Valor ICMS",
-    "Valor Total IPI",
-    "Valor Total PIS",
-    "Valor Total COFINS",
-    "Valor Total Tributos"
-];
-
-function getValueByPath(obj: any, path: string[]): string {
+function getValueByPath(obj: any, path: string | string[]): any {
+    if (!Array.isArray(path)) {
+        path = path.split('/');
+    }
     let current = obj;
     for (const key of path) {
         if (current && typeof current === 'object' && key in current) {
@@ -411,31 +410,38 @@ function getValueByPath(obj: any, path: string[]): string {
     return current !== undefined && current !== null ? String(current) : 'N/A';
 }
 
-function flattenObject(obj: any, parentKey = '', res: { [key: string]: any } = {}) {
-    for (const key in obj) {
-        if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            const propName = parentKey ? `${parentKey}/${key}` : key;
-            if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
-                flattenObject(obj[key], propName, res);
-            } else if (Array.isArray(obj[key])) {
-                 // For simplicity, we can stringify arrays or handle them as needed.
-                 // Here, we'll just join them. A more complex handler might be needed for nested arrays.
-                 res[propName] = obj[key].map((item: any) => typeof item === 'object' ? JSON.stringify(item) : item).join('; ');
-            }
-            else {
-                res[propName] = obj[key];
-            }
-        }
-    }
-    return res;
-}
-
 
 export async function extractNfeData(files: { name: string, content: string }[]) {
+     const SPECIFIC_TAGS_MAP: { [key: string]: string[] } = {
+        "Número NF-e": ["nfeProc", "NFe", "infNFe", "ide", "nNF"],
+        "Chave NF-e": ["nfeProc", "protNFe", "infProt", "chNFe"],
+        "Valor Total Nota": ["nfeProc", "NFe", "infNFe", "total", "ICMSTot", "vNF"],
+        "Valor ICMS": ["nfeProc", "NFe", "infNFe", "total", "ICMSTot", "vICMS"],
+        "Valor Total IPI": ["nfeProc", "NFe", "infNFe", "total", "ICMSTot", "vIPI"],
+        "Valor Total PIS": ["nfeProc", "NFe", "infNFe", "total", "ICMSTot", "vPIS"],
+        "Valor Total COFINS": ["nfeProc", "NFe", "infNFe", "total", "ICMSTot", "vCOFINS"],
+        "Valor Total Tributos": ["nfeProc", "NFe", "infNFe", "total", "ICMSTot", "vTotTrib"],
+        "Data de Emissão": ["nfeProc", "NFe", "infNFe", "ide", "dhEmi"]
+    };
+
+    const COLUMNS_TO_FORMAT_DECIMAL = [
+        "Valor Total Nota",
+        "Valor ICMS",
+        "Valor Total IPI",
+        "Valor Total PIS",
+        "Valor Total COFINS",
+        "Valor Total Tributos"
+    ];
+
      try {
         const parser = new XMLParser({
             ignoreAttributes: false,
             attributeNamePrefix: "@_",
+            isArray: (name, jpath, isLeafNode, isAttribute) => { 
+                // Always treat these as arrays
+                if (name === "det" || name === "dup" || name === "obsCont") return true;
+                return false;
+             }
         });
 
         const dadosCompletos: any[] = [];
@@ -455,7 +461,7 @@ export async function extractNfeData(files: { name: string, content: string }[])
                 for (const colName in SPECIFIC_TAGS_MAP) {
                     let value = getValueByPath(jsonObj, SPECIFIC_TAGS_MAP[colName]);
                     if (COLUMNS_TO_FORMAT_DECIMAL.includes(colName) && value && value !== 'N/A') {
-                        value = value.replace('.', ',');
+                        value = parseFloat(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
                     specificData[colName] = value;
                 }
@@ -493,7 +499,6 @@ export async function extractNfeData(files: { name: string, content: string }[])
 
         const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
 
-        // Convert ArrayBuffer to base64
         let binary = '';
         const bytes = new Uint8Array(buffer);
         for (let i = 0; i < bytes.byteLength; i++) {
@@ -505,6 +510,122 @@ export async function extractNfeData(files: { name: string, content: string }[])
 
     } catch (error: any) {
         console.error("Erro ao extrair dados de NF-e:", error);
+        return { error: error.message || "Ocorreu um erro ao extrair os dados." };
+    }
+}
+
+
+export async function extractCteData(files: { name: string, content: string }[]) {
+     const TOMADOR_MAP: { [key: string]: string } = {
+        '0': 'Remetente',
+        '1': 'Expedidor',
+        '2': 'Recebedor',
+        '3': 'Destinatário',
+        '4': 'Outros (Substituto/Terceiro)'
+    };
+    
+    const SPECIFIC_TAGS_MAP: { [key: string]: string } = {
+        "Número CT-e": "cteProc/CTe/infCte/ide/nCT",
+        "Chave CT-e": "cteProc/protCTe/infProt/chCTe",
+        "Código do Tomador": "cteProc/CTe/infCte/ide/toma3/toma,cteProc/CTe/infCte/ide/toma4/toma,cteProc/CTe/infCte/ide/toma",
+        "Nome do Remetente": "cteProc/CTe/infCte/rem/xNome",
+        "CNPJ do Remetente": "cteProc/CTe/infCte/rem/CNPJ",
+        "Nome do Destinatário": "cteProc/CTe/infCte/dest/xNome",
+        "CNPJ do Destinatário": "cteProc/CTe/infCte/dest/CNPJ",
+        "Chave NF-e": "cteProc/CTe/infCte/infCTeNorm/infDoc/infNFe/chave",
+        "Valor Total Prestação": "cteProc/CTe/infCte/vPrest/vTPrest",
+        "Valor ICMS": "cteProc/CTe/infCte/imp/ICMS/ICMS00/vICMS",
+        "Valor ICMS ST Retido (ICMS00)": "cteProc/CTe/infCte/imp/ICMS/ICMS00/vICMSSTRet",
+        "Valor ICMS ST Retido (ICMS60)": "cteProc/CTe/infCte/imp/ICMS/ICMS60/vICMSSTRet",
+        "Valor Total Tributos": "cteProc/CTe/infCte/imp/vTotTrib",
+        "Valor ICMS Outra UF": "cteProc/CTe/infCte/imp/ICMS/ICMSOutraUF/vICMSOutraUF"
+    };
+
+    const COLUMNS_TO_FORMAT_DECIMAL = [
+        "Valor Total Prestação", "Valor ICMS", "Valor ICMS ST Retido (ICMS00)",
+        "Valor ICMS ST Retido (ICMS60)", "Valor Total Tributos", "Valor ICMS Outra UF"
+    ];
+
+    try {
+        const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", isArray: (name) => name === "infNFe" });
+        
+        const dadosCompletos: any[] = [];
+        const dadosEspecificos: any[] = [];
+
+        for (const file of files) {
+            try {
+                const jsonObj = parser.parse(file.content);
+                
+                const flatData = flattenObject(jsonObj);
+                flatData['Arquivo'] = file.name;
+                dadosCompletos.push(flatData);
+
+                const specificData: { [key: string]: any } = { 'Arquivo': file.name };
+                for (const colName in SPECIFIC_TAGS_MAP) {
+                    const paths = SPECIFIC_TAGS_MAP[colName].split(',');
+                    let value: any = 'N/A';
+                    for (const path of paths) {
+                        const foundValue = getValueByPath(jsonObj, path.trim());
+                        if (foundValue !== 'N/A') {
+                            value = foundValue;
+                            break;
+                        }
+                    }
+
+                    if (Array.isArray(value)) {
+                         value = value.map(v => typeof v === 'object' ? v.chave : v).join(', ');
+                    }
+
+                    if (COLUMNS_TO_FORMAT_DECIMAL.includes(colName) && value && value !== 'N/A') {
+                         value = parseFloat(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    }
+                    specificData[colName] = value;
+                }
+                
+                const codigoTomador = specificData["Código do Tomador"];
+                specificData["Tomador do Serviço"] = TOMADOR_MAP[codigoTomador] || 'Não Informado/Erro';
+
+                dadosEspecificos.push(specificData);
+
+            } catch (e: any) {
+                 console.error(`Error processing file ${file.name}:`, e);
+                 dadosCompletos.push({ 'Arquivo': file.name, 'Erro_Processamento': `Erro de Sintaxe XML: ${e.message}` });
+                 const errorRow: { [key: string]: string } = { 'Arquivo': file.name };
+                 Object.keys(SPECIFIC_TAGS_MAP).forEach(key => errorRow[key] = 'ERRO XML');
+                 dadosEspecificos.push(errorRow);
+            }
+        }
+        
+        const wb = XLSX.utils.book_new();
+
+        if (dadosCompletos.length > 0) {
+            const wsCompletos = XLSX.utils.json_to_sheet(dadosCompletos);
+            XLSX.utils.book_append_sheet(wb, wsCompletos, 'Dados Completos');
+        }
+        
+        if (dadosEspecificos.length > 0) {
+            const finalColsOrder = ['Arquivo', ...Object.keys(SPECIFIC_TAGS_MAP).filter(c => c !== "Código do Tomador"), "Tomador do Serviço"];
+             const wsEspecificos = XLSX.utils.json_to_sheet(dadosEspecificos.map(row => {
+                const newRow: {[key: string]: any} = {};
+                finalColsOrder.forEach(col => newRow[col] = row[col] || 'N/A');
+                return newRow;
+            }), { header: finalColsOrder });
+            XLSX.utils.book_append_sheet(wb, wsEspecificos, 'Dados Específicos');
+        }
+
+        const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        const base64 = btoa(binary);
+
+        return { base64Data: base64 };
+
+    } catch (error: any) {
+        console.error("Erro ao extrair dados de CT-e:", error);
         return { error: error.message || "Ocorreu um erro ao extrair os dados." };
     }
 }

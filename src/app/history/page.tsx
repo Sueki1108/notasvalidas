@@ -143,6 +143,9 @@ export default function HistoryPage() {
                                 <DropdownMenuItem asChild>
                                     <Link href="/extract-nfe" className="flex items-center gap-2 w-full"><Search />Extrair NF-e</Link>
                                 </DropdownMenuItem>
+                                 <DropdownMenuItem asChild>
+                                    <Link href="/extract-cte" className="flex items-center gap-2 w-full"><Search />Extrair CT-e</Link>
+                                </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </nav>
