@@ -144,6 +144,9 @@ export default function ReturnsPage() {
                                 <DropdownMenuItem asChild>
                                     <Link href="/alterar-xml" className="flex items-center gap-2 w-full"><Replace />Alterar XML</Link>
                                 </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                    <Link href="/separar-xml" className="flex items-center gap-2 w-full"><FileText />Separar XML</Link>
+                                </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                         <Button variant="ghost" asChild><Link href="/history">Histórico</Link></Button>

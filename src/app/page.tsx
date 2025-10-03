@@ -417,13 +417,40 @@ export default function Home() {
         try {
             const spedFileContent = await spedFile.text();
             
-            const infoResult = await validateWithSped({}, spedFileContent, []);
-            if (infoResult.error || !infoResult.spedInfo) {
-                throw new Error(infoResult.error || "Não foi possível extrair informações da empresa do arquivo SPED.");
+            // Step 1: Get company info from SPED to re-process data with context
+            const spedLines = spedFileContent.split('\n');
+            const info = parseSpedInfo(spedLines.length > 0 ? spedLines[0].trim() : "");
+            if (!info || !info.cnpj) {
+                throw new Error("Não foi possível extrair o CNPJ da empresa do arquivo SPED. Verifique a primeira linha (|0000|).");
             }
-            setSpedInfo(infoResult.spedInfo);
+            setSpedInfo(info);
 
-            const finalValidationResult = await validateWithSped(results, spedFileContent, results["Notas Válidas"] || []);
+            // Step 2: Reprocess the original data with the company CNPJ to correctly identify own emissions
+            const allNfe = results["NF-Stock NFE"] || [];
+            const allCte = results["NF-Stock CTE"] || [];
+            const allNfeItens = [...(results["Itens de Entrada"] || []), ...(results["Itens de Saída"] || [])];
+            
+            const canceledKeys = new Set((results["Notas Canceladas"] || []).map(r => r['Chave de acesso']));
+            const exceptionKeys = {
+                OperacaoNaoRealizada: new Set((results["NF-Stock NFE Operação Não Realizada"] || []).map(r => r['Chave de acesso'])),
+                Desconhecimento: new Set((results["NF-Stock NFE Operação Desconhecida"] || []).map(r => r['Chave de acesso'])),
+                Desacordo: new Set((results["NF-Stock CTE Desacordo de Serviço"] || []).map(r => r['Chave de acesso'])),
+                Estorno: new Set((results["Estornos"] || []).map(r => r['Chave de acesso'])),
+            };
+
+            const initialFramesForReprocessing = {
+                'NF-Stock NFE': allNfe,
+                'NF-Stock CTE': allCte,
+                'Itens de Entrada': allNfeItens,
+                'Itens de Saída': allNfeItens,
+                'NF-Stock Emitidas': [] 
+            };
+            
+            const reprocessedData = processDataFrames(initialFramesForReprocessing, canceledKeys, exceptionKeys, info.cnpj);
+            setResults(reprocessedData);
+
+            // Step 3: Now run the final validation
+            const finalValidationResult = await validateWithSped(reprocessedData, spedFileContent, reprocessedData["Notas Válidas"] || []);
             if (finalValidationResult.error) {
                 throw new Error(finalValidationResult.error);
             }
@@ -498,6 +525,20 @@ export default function Home() {
         }
     };
 
+    const parseSpedInfo = (spedLine: string): SpedInfo | null => {
+        if (!spedLine || !spedLine.startsWith('|0000|')) return null;
+        const parts = spedLine.split('|');
+        if (parts.length < 10) return null;
+        const startDate = parts[4]; 
+        const companyName = parts[6];
+        const cnpj = parts[7];
+        if (!startDate || !companyName || !cnpj || startDate.length !== 8) return null;
+        const month = startDate.substring(2, 4);
+        const year = startDate.substring(4, 8);
+        const competence = `${month}/${year}`;
+        return { cnpj, companyName, competence };
+    };
+
     return (
         <div className="min-h-screen bg-background text-foreground">
             <header className="sticky top-0 z-10 w-full border-b bg-background/80 backdrop-blur-sm">
@@ -540,6 +581,9 @@ export default function Home() {
                                 </DropdownMenuItem>
                                  <DropdownMenuItem asChild>
                                     <Link href="/alterar-xml" className="flex items-center gap-2 w-full"><Replace />Alterar XML</Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                    <Link href="/separar-xml" className="flex items-center gap-2 w-full"><FileText />Separar XML</Link>
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>

@@ -866,3 +866,73 @@ export async function processXmls(data: { files: { name: string, content: string
         return { error: error.message || "Ocorreu um erro ao modificar os arquivos XML." };
     }
 }
+
+export async function separateXmlFromExcel(data: { excelFile: string, zipFile: string }) {
+    try {
+        const { excelFile, zipFile } = data;
+
+        // 1. Read keys from Excel
+        const excelWorkbook = XLSX.read(excelFile, { type: 'base64' });
+        const firstSheetName = excelWorkbook.SheetNames[0];
+        const worksheet = excelWorkbook.Sheets[firstSheetName];
+        const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        const targetKeys = new Set(jsonData.map(row => String(row[0]).trim()).filter(Boolean));
+
+        // 2. Process ZIP file
+        const zip = await JSZip.loadAsync(zipFile, { base64: true });
+        const outputZip = new JSZip();
+        const foundKeys: string[] = [];
+        const parser = new XMLParser({ ignoreAttributes: true });
+
+        const xmlFiles = Object.keys(zip.files).filter(name => name.toLowerCase().endsWith('.xml'));
+
+        for (const filename of xmlFiles) {
+            if (zip.files[filename].dir) continue;
+            
+            try {
+                const xmlContent = await zip.files[filename].async('string');
+                const jsonObj = parser.parse(xmlContent);
+
+                // Check if it's an event XML (procEventoNFe)
+                if (jsonObj.procEventoNFe) {
+                    continue; // Ignore event files
+                }
+                
+                let accessKey = '';
+                if(jsonObj.nfeProc?.protNFe?.infProt?.chNFe) {
+                    accessKey = jsonObj.nfeProc.protNFe.infProt.chNFe;
+                } else if (jsonObj.cteProc?.protCTe?.infProt?.chCTe) {
+                     accessKey = jsonObj.cteProc.protCTe.infProt.chCTe;
+                } else if(jsonObj.NFe?.infNFe?.['@_Id']) {
+                    accessKey = jsonObj.NFe.infNFe['@_Id'].replace('NFe', '');
+                }
+
+
+                if (accessKey && targetKeys.has(accessKey)) {
+                    outputZip.file(filename, xmlContent);
+                    foundKeys.push(accessKey);
+                }
+            } catch (e) {
+                console.warn(`Could not parse XML file ${filename}, skipping.`, e);
+            }
+        }
+        
+        // 3. Create result Excel
+        const foundKeysWB = XLSX.utils.book_new();
+        const foundKeysWS = XLSX.utils.json_to_sheet(foundKeys.map(key => ({ "Chave de Acesso Encontrada": key })));
+        XLSX.utils.book_append_sheet(foundKeysWB, foundKeysWS, 'Chaves Encontradas');
+        const foundKeysBase64 = XLSX.write(foundKeysWB, { bookType: 'xlsx', type: 'base64' });
+
+        // 4. Create result ZIP
+        const outputZipBase64 = await outputZip.generateAsync({ type: 'base64' });
+
+        return {
+            separatedZip: outputZipBase-64,
+            foundKeysExcel: foundKeysBase64,
+        };
+
+    } catch (error: any) {
+        console.error("Erro ao separar arquivos XML:", error);
+        return { error: error.message || "Ocorreu um erro ao separar os arquivos XML." };
+    }
+}
