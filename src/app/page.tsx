@@ -450,7 +450,12 @@ export default function Home() {
             setResults(reprocessedData);
 
             // Step 3: Now run the final validation
-            const finalValidationResult = await validateWithSped(reprocessedData, spedFileContent, reprocessedData["Notas Válidas"] || []);
+            const finalValidationResult = await validateWithSped(
+                reprocessedData, 
+                spedFileContent, 
+                reprocessedData["Notas Válidas"] || [],
+                Array.from(canceledKeys)
+            );
             if (finalValidationResult.error) {
                 throw new Error(finalValidationResult.error);
             }

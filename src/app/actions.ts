@@ -156,7 +156,7 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
 }
 
 
-export async function validateWithSped(processedData: DataFrames, spedFileContent: string, allNotesFromXmls: any[]) {
+export async function validateWithSped(processedData: DataFrames, spedFileContent: string, allNotesFromXmls: any[], canceledXmlKeys: string[]) {
     try {
         let spedInfo: SpedInfo | null = null;
         const allSpedKeys = new Map<string, Partial<KeyInfo>>();
@@ -184,6 +184,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         
         let keyCheckResults: KeyCheckResult | null = null;
         const keysInTxt = new Set(allSpedKeys.keys());
+        const canceledKeysSet = new Set(canceledXmlKeys.map(k => k.replace(/^NFe|^CTe/, '')));
         
         if (processedData['Chaves Válidas']) {
             const spreadsheetKeysArray = processedData['Chaves Válidas'].map(row => {
@@ -213,7 +214,8 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                 .filter(key => {
                     const spedData = allSpedKeys.get(key);
                     const isCancelledInSped = spedData?.comment === 'Documento Cancelado/Denegado no SPED';
-                    return !spreadsheetKeys.has(key) && !isCancelledInSped;
+                    const isCancelledInXml = canceledKeysSet.has(key);
+                    return !spreadsheetKeys.has(key) && !isCancelledInSped && !isCancelledInXml;
                 })
                 .map(key => {
                     const spedData = allSpedKeys.get(key);
