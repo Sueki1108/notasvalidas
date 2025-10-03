@@ -1,7 +1,7 @@
 // src/app/page.tsx
 "use client";
 
-import { useState, ChangeEvent, useEffect } from "react";
+import { useContext, useState } from "react";
 import * as XLSX from "xlsx";
 import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon, FolderSync, Search, Replace } from "lucide-react";
 import {
@@ -24,16 +24,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
 import { formatCnpj } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AppContext } from "@/context/AppContext";
 
-
-const initialFilesState: FileList = {
-    "XMLs de Entrada (NFe)": null,
-    "XMLs de Entrada (CTe)": null,
-    "XMLs de Saída": null,
-    "NF-Stock NFE Operação Não Realizada": null,
-    "NF-Stock NFE Operação Desconhecida": null,
-    "NF-Stock CTE Desacordo de Serviço": null,
-};
 
 type DataFrames = { [key: string]: any[] };
 
@@ -240,16 +232,27 @@ const extractCteDataFromXml = (xmlContent: string, uploadSource: string) => {
 }
 
 export default function Home() {
-    const [activeTab, setActiveTab] = useState("process");
-    const [files, setFiles] = useState<FileList>(initialFilesState);
-    const [spedFile, setSpedFile] = useState<File | null>(null);
+    const {
+      files,
+      setFiles,
+      spedFile,
+      setSpedFile,
+      results,
+      setResults,
+      keyCheckResults,
+      setKeyCheckResult,
+      spedInfo,
+      setSpedInfo,
+      activeTab,
+      setActiveTab,
+      clearAllData,
+    } = useContext(AppContext);
+
     const [processing, setProcessing] = useState(false);
     const [validating, setValidating] = useState(false);
-    const [results, setResults] = useState<DataFrames | null>(null);
-    const [keyCheckResults, setKeyCheckResult] = useState<KeyCheckResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const { toast } = useToast();
-    const [spedInfo, setSpedInfo] = useState<SpedInfo | null>(null);
+    
 
      const requiredFilesForStep1 = [
         "XMLs de Entrada (NFe)",
@@ -260,7 +263,7 @@ export default function Home() {
         "NF-Stock CTE Desacordo de Serviço",
     ];
     
-    const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFiles = e.target.files;
         const fileName = e.target.name;
         if (selectedFiles && selectedFiles.length > 0) {
@@ -474,22 +477,6 @@ export default function Home() {
     };
 
 
-    const handleClearData = (isInternalCall = false) => {
-        setFiles(initialFilesState);
-        setSpedFile(null);
-        setResults(null);
-        setKeyCheckResult(null);
-        setError(null);
-        setSpedInfo(null);
-        setActiveTab("process");
-        
-        const inputs = document.querySelectorAll<HTMLInputElement>('input[type="file"]');
-        inputs.forEach(input => input.value = "");
-        if (!isInternalCall) {
-            toast({ title: "Dados Limpos", description: "Todos os arquivos e resultados foram removidos." });
-        }
-    };
-
     const handleDownload = () => {
         if (!results) return;
         try {
@@ -605,7 +592,7 @@ export default function Home() {
                         <h2 className="text-3xl font-bold font-headline text-primary flex items-center gap-2">
                             Fluxo de Conferência
                         </h2>
-                        <Button onClick={() => handleClearData()} variant="destructive">
+                        <Button onClick={() => clearAllData()} variant="destructive">
                             <Trash2 className="mr-2 h-4 w-4" />
                             Limpar Tudo e Recomeçar
                         </Button>
