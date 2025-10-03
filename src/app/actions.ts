@@ -71,7 +71,27 @@ const parseSpedInfo = (spedLine: string): SpedInfo | null => {
     return { cnpj, companyName, competence };
 };
 
-const parseSpedLineForData = (line: string): Partial<KeyInfo> | null => {
+const parseAllParticipants = (spedFileContent: string) => {
+    const participants = new Map<string, string>();
+    const lines = spedFileContent.split('\n');
+    for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (trimmedLine.startsWith('|0150|')) {
+            const parts = trimmedLine.split('|');
+            if (parts.length > 3) {
+                const code = parts[2];
+                const name = parts[3];
+                if (code && name) {
+                    participants.set(code, name);
+                }
+            }
+        }
+    }
+    return participants;
+};
+
+
+const parseSpedLineForData = (line: string, participants: Map<string, string>): Partial<KeyInfo> | null => {
     const parts = line.split('|');
     
     // Basic validation for a C100 line (NFe)
@@ -79,8 +99,8 @@ const parseSpedLineForData = (line: string): Partial<KeyInfo> | null => {
         const key = parts[9];
         const value = parseFloat(parts[23] || '0');
         const emissionDate = parts[10]; // DDMMYYYY
-        // For NFe, partner is in field 14 or 18 (emit or dest)
-        const partnerName = parts[14] || parts[18] || ''; 
+        const partnerCode = parts[3]; // Emitente ou Destinatario (COD_PART)
+        const partnerName = participants.get(partnerCode) || '';
 
         if (key && key.length === 44) {
             return {
@@ -96,8 +116,8 @@ const parseSpedLineForData = (line: string): Partial<KeyInfo> | null => {
         const key = parts[9];
         const value = parseFloat(parts[16] || '0'); // vTPrest
         const emissionDate = parts[10]; // DDMMYYYY
-        // For CTe, partner is usually the sender (remetente) or receiver (destinatario)
-        const partnerName = parts[13] || parts[17] || ''; 
+        const partnerCode = parts[3]; // Emitente do CTe (COD_PART)
+        const partnerName = participants.get(partnerCode) || '';
 
         if (key && key.length === 44) {
             return {
@@ -122,13 +142,15 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             note
         ]));
 
+        const participants = parseAllParticipants(spedFileContent);
+        
         const lines = spedFileContent.split('\n');
         if (lines.length > 0 && lines[0]) {
             spedInfo = parseSpedInfo(lines[0].trim());
         }
         
         for (const line of lines) {
-            const parsedData = parseSpedLineForData(line.trim());
+            const parsedData = parseSpedLineForData(line.trim(), participants);
             if (parsedData && parsedData.key) {
                  if (!allSpedKeys.has(parsedData.key)) {
                     allSpedKeys.set(parsedData.key, parsedData);
