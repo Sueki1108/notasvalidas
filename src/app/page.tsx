@@ -84,6 +84,12 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
     const chNFe = infProt ? getValue('chNFe', infProt) : infNFe.getAttribute('Id')?.replace('NFe', '') || '';
     const cStat = infProt ? getValue('cStat', infProt) : '0';
 
+    // Check for Estorno
+    const natOp = getValue('natOp', ide);
+    if (natOp.toLowerCase().includes('estorno')) {
+        return { isEvent: true, eventType: 'Estorno', key: `NFe${chNFe}` };
+    }
+
     const numeroNF = getValue('nNF', ide);
     const isSaida = getValue('tpNF', ide) === '1';
 
@@ -236,7 +242,7 @@ export default function Home() {
     const [validating, setValidating] = useState(false);
     const [initialData, setInitialData] = useState<DataFrames | null>(null);
     const [results, setResults] = useState<DataFrames | null>(null);
-    const [keyCheckResults, setKeyCheckResults] = useState<KeyCheckResult | null>(null);
+    const [keyCheckResults, setKeyCheckResult] = useState<KeyCheckResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const { toast } = useToast();
     const [spedInfo, setSpedInfo] = useState<SpedInfo | null>(null);
@@ -278,7 +284,7 @@ export default function Home() {
 
     const handleProcessPrimaryFiles = async () => {
         setError(null);
-        setKeyCheckResults(null);
+        setKeyCheckResult(null);
         setResults(null);
         if (!Object.values(files).some(fileList => fileList && fileList.length > 0)) {
             toast({ variant: "destructive", title: "Nenhum arquivo carregado", description: "Por favor, carregue pelo menos um arquivo XML ou de exceção." });
@@ -296,6 +302,7 @@ export default function Home() {
                 OperacaoNaoRealizada: new Set<string>(),
                 Desconhecimento: new Set<string>(),
                 Desacordo: new Set<string>(),
+                Estorno: new Set<string>(),
             }
 
             const processXmlFiles = async (fileList: File[], category: string) => {
@@ -421,6 +428,7 @@ export default function Home() {
                 OperacaoNaoRealizada: new Set(results?.["NF-Stock NFE Operação Não Realizada"]?.map(r => r['Chave de acesso']) || []),
                 Desconhecimento: new Set(results?.["NF-Stock NFE Operação Desconhecida"]?.map(r => r['Chave de acesso']) || []),
                 Desacordo: new Set(results?.["NF-Stock CTE Desacordo de Serviço"]?.map(r => r['Chave de acesso']) || []),
+                Estorno: new Set(results?.["Estornos"]?.map(r => r['Chave de acesso']) || []),
             };
 
             const finalProcessedData = processDataFrames(initialData, canceledKeys, exceptionKeys, resultData.spedInfo.cnpj);
@@ -429,12 +437,12 @@ export default function Home() {
             if(validationResult.error) throw new Error(validationResult.error);
 
             setResults(finalProcessedData);
-            setKeyCheckResults(validationResult.keyCheckResults || null);
+            setKeyCheckResult(validationResult.keyCheckResults || null);
 
             toast({ title: "Validação SPED Concluída", description: "A verificação das chaves foi finalizada." });
         } catch (err: any) {
              setError(err.message || "Ocorreu um erro desconhecido na validação.");
-             setKeyCheckResults(null);
+             setKeyCheckResult(null);
              setSpedInfo(null);
              toast({ variant: "destructive", title: "Erro na Validação SPED", description: err.message });
         } finally {
@@ -448,7 +456,7 @@ export default function Home() {
         setSpedFile(null);
         setResults(null);
         setInitialData(null);
-        setKeyCheckResults(null);
+        setKeyCheckResult(null);
         setError(null);
         setSpedInfo(null);
         setActiveTab("process");
@@ -468,6 +476,7 @@ export default function Home() {
                 "NF-Stock NFE Operação Não Realizada": "NFE Op Nao Realizada",
                 "NF-Stock NFE Operação Desconhecida": "NFE Op Desconhecida",
                 "NF-Stock CTE Desacordo de Serviço": "CTE Desacordo Servico",
+                "Estornos": "Estornos",
                 "NF-Stock Emitidas": "NF Emitidas",
                 "Notas Válidas": "Notas Validas",
                 "Emissão Própria": "Emissao Propria",
@@ -479,7 +488,7 @@ export default function Home() {
             };
             const orderedSheetNames = [
                 "Notas Válidas", "Itens de Entrada", "Emissão Própria", "NF-Stock Emitidas", "Itens de Saída", "Chaves Válidas", "Imobilizados", "Notas Canceladas",
-                "NF-Stock NFE Operação Não Realizada", "NF-Stock NFE Operação Desconhecida", "NF-Stock CTE Desacordo de Serviço"
+                "NF-Stock NFE Operação Não Realizada", "NF-Stock NFE Operação Desconhecida", "NF-Stock CTE Desacordo de Serviço", "Estornos"
             ].filter(name => results[name] && results[name].length > 0);
 
             orderedSheetNames.forEach(sheetName => {

@@ -7,6 +7,7 @@ type ExceptionKeys = {
     OperacaoNaoRealizada: Set<string>;
     Desconhecimento: Set<string>;
     Desacordo: Set<string>;
+    Estorno: Set<string>;
 }
 
 // Helper to safely convert values to string for key creation
@@ -33,11 +34,14 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
     processedDfs["NF-Stock NFE Operação Não Realizada"] = allNotes.filter(row => row && exceptionKeys.OperacaoNaoRealizada.has(row['Chave de acesso']));
     processedDfs["NF-Stock NFE Operação Desconhecida"] = allNotes.filter(row => row && exceptionKeys.Desconhecimento.has(row['Chave de acesso']));
     processedDfs["NF-Stock CTE Desacordo de Serviço"] = allNotes.filter(row => row && exceptionKeys.Desacordo.has(row['Chave de acesso']));
+    processedDfs["Estornos"] = allNotes.filter(row => row && exceptionKeys.Estorno.has(row['Chave de acesso']));
+
 
     const exceptionKeySet = new Set([
         ...Array.from(exceptionKeys.OperacaoNaoRealizada),
         ...Array.from(exceptionKeys.Desconhecimento),
         ...Array.from(exceptionKeys.Desacordo),
+        ...Array.from(exceptionKeys.Estorno),
     ]);
     
     const ownEmissionNotes: any[] = [];
@@ -51,11 +55,10 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
                 const cfop = String(nota['CFOP'] || '');
                 const isCfopEntrada = cfop.startsWith('1') || cfop.startsWith('2');
 
-                // A nota de emissão própria só é válida se:
-                // 1. Veio da pasta de saída
-                // 2. Veio da pasta de entrada, MAS o CFOP NÃO é de entrada (ex: remessa)
-                if (nota.uploadSource === 'saida' || (nota.uploadSource === 'entrada' && !isCfopEntrada)) {
-                    ownEmissionValidKeys.add(cleanAndToStr(nota['Chave de acesso']));
+                if (nota.uploadSource === 'saida') {
+                     ownEmissionValidKeys.add(cleanAndToStr(nota['Chave de acesso']));
+                } else if (nota.uploadSource === 'entrada' && !isCfopEntrada) {
+                     ownEmissionValidKeys.add(cleanAndToStr(nota['Chave de acesso']));
                 }
             }
         });
