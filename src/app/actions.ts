@@ -97,20 +97,31 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
     
     // Basic validation for a C100 line (NFe)
     if (parts.length > 9 && parts[1] === 'C100') {
+        const docStatus = parts[5]; // 00: Regular, 02: Cancelado
         const key = parts[9];
+        
+        if (!key || key.length !== 44) return null;
+
+        // If document is canceled, denegated, or inutilized
+        if (['02', '03', '04', '05'].includes(docStatus)) {
+            return {
+                key,
+                comment: 'Documento Cancelado/Denegado no SPED'
+            };
+        }
+        
+        // For regular documents (00, 01)
         const value = parseFloat(parts[23] || '0');
         const emissionDate = parts[10]; // DDMMYYYY
         const partnerCode = parts[3]; // Emitente ou Destinatario (COD_PART)
         const partnerName = participants.get(partnerCode) || '';
 
-        if (key && key.length === 44) {
-            return {
-                key,
-                value,
-                emissionDate: emissionDate ? `${emissionDate.substring(0,2)}/${emissionDate.substring(2,4)}/${emissionDate.substring(4,8)}` : '',
-                partnerName
-            };
-        }
+        return {
+            key,
+            value,
+            emissionDate: emissionDate ? `${emissionDate.substring(0,2)}/${emissionDate.substring(2,4)}/${emissionDate.substring(4,8)}` : '',
+            partnerName
+        };
     }
     // Validation for a D100 line (CTe)
     else if (parts.length > 10 && parts[1] === 'D100') {
@@ -191,7 +202,8 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                         origin: 'sped' as 'sped',
                         partnerName: spedData?.partnerName || '',
                         emissionDate: spedData?.emissionDate || '',
-                        value: spedData?.value || 0
+                        value: spedData?.value || 0,
+                        comment: spedData?.comment || ''
                     }
                 });
             
@@ -226,7 +238,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                 ...keyInfo,
                 origin: 'sped',
                 foundInSped: true,
-                comment: ''
+                comment: keyInfo.comment || ''
             }));
 
             const verificationKeys = [...keysFromSheet, ...keysOnlyInSped];
