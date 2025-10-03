@@ -71,12 +71,14 @@ const DetailRow = ({ item }: { item: VerificationKey }) => {
         if (dateStr.length === 8 && /^\d+$/.test(dateStr)) return `${dateStr.substring(0, 2)}/${dateStr.substring(2, 4)}/${dateStr.substring(4, 8)}`;
         return dateStr;
     };
+
+    const cleanKey = item.key.replace(/^NFe|^CTe/, '');
     
     return (
         <TableRow>
             <TableCell className="font-mono text-xs break-all">
-                {item.key}
-                <Button size="icon" variant="ghost" className="h-6 w-6 ml-2" onClick={() => copyToClipboard(item.key)}>
+                {cleanKey}
+                <Button size="icon" variant="ghost" className="h-6 w-6 ml-2" onClick={() => copyToClipboard(cleanKey)}>
                     <Copy className="h-3 w-3" />
                 </Button>
             </TableCell>
@@ -87,12 +89,14 @@ const DetailRow = ({ item }: { item: VerificationKey }) => {
             <TableCell className="text-right">{item.value ? item.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'N/A'}</TableCell>
             <TableCell>
                 {item.comment && (
+                    <TooltipProvider>
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <MessageSquare className="h-5 w-5 text-blue-600" />
                         </TooltipTrigger>
                         <TooltipContent><p>{item.comment}</p></TooltipContent>
                     </Tooltip>
+                    </TooltipProvider>
                 )}
             </TableCell>
         </TableRow>
@@ -296,8 +300,8 @@ export default function HistoryPage() {
                         </AlertDialogHeader>
                         
                          <div className="space-y-4">
-                            <ScrollArea className="h-96 w-full pr-4">
-                               <TooltipProvider>
+                            <ScrollArea className="h-[60vh] w-full pr-4">
+                               
                                 <Accordion type="single" collapsible defaultValue="item-2" className="w-full">
                                     <AccordionItem value="item-1">
                                         <AccordionTrigger className="font-semibold">
@@ -354,7 +358,7 @@ export default function HistoryPage() {
                                         </AccordionContent>
                                     </AccordionItem>
                                 </Accordion>
-                                </TooltipProvider>
+                                
                             </ScrollArea>
                         </div>
                         

@@ -253,7 +253,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
 
             const keysFromSheet: KeyInfo[] = (processedData['Chaves Válidas']?.map(row => row['Chave de acesso']) || [])
                 .map((key: string) => {
-                    const cleanKey = key.replace(/^NFe|^_|^CTe_/, '');
+                    const cleanKey = key.replace(/^NFe|^CTe/, '');
                     const note = allNotesMap.get(cleanKey);
                     const isNFe = key.startsWith('NFe');
                     const isSaida = note && spedInfo && note['Emitente CPF/CNPJ'] === spedInfo.cnpj;
@@ -272,9 +272,10 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             
             const keysOnlyInSped: KeyInfo[] = (keyCheckResults.keysInTxtNotInSheet).map((keyInfo: KeyInfo) => ({
                 ...keyInfo,
+                key: keyInfo.key.replace(/^NFe|^CTe/, ''),
                 origin: 'sped',
                 foundInSped: true,
-                comment: oldComments.get(keyInfo.key) || keyInfo.comment || ''
+                comment: oldComments.get(keyInfo.key.replace(/^NFe|^CTe/, '')) || keyInfo.comment || ''
             }));
 
             const verificationKeys = [...keysFromSheet, ...keysOnlyInSped];
