@@ -210,7 +210,11 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                 });
 
             const keysInTxtNotInSheet = [...keysInTxt]
-                .filter(key => !spreadsheetKeys.has(key))
+                .filter(key => {
+                    const spedData = allSpedKeys.get(key);
+                    const isCancelledInSped = spedData?.comment === 'Documento Cancelado/Denegado no SPED';
+                    return !spreadsheetKeys.has(key) && !isCancelledInSped;
+                })
                 .map(key => {
                     const spedData = allSpedKeys.get(key);
                     return {
