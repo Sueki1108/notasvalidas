@@ -50,17 +50,11 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
             if (nota && nota['Emitente CPF/CNPJ'] === companyCnpj) {
                 ownEmissionNotes.push(nota);
                 
-                const firstItemCfop = nota.itens?.[0]?.CFOP;
-                const cfop = String(firstItemCfop || '');
-                const isCfopEntrada = cfop.startsWith('1') || cfop.startsWith('2');
                 const cleanKey = normalizeKey(nota['Chave de acesso']);
 
-                if (nota.uploadSource === 'saida') {
-                     if (!exceptionKeySet.has(cleanKey)) {
-                        ownEmissionValidKeys.add(cleanKey);
-                     }
-                } else if (nota.uploadSource === 'entrada' && !isCfopEntrada) {
-                     if (!exceptionKeySet.has(cleanKey)) {
+                if (!exceptionKeySet.has(cleanKey)) {
+                     // Include if it's an outgoing note OR if it's an incoming devolution
+                     if (nota.uploadSource === 'saida' || (nota.uploadSource === 'entrada' && nota.isOwnEmissionDevolution)) {
                         ownEmissionValidKeys.add(cleanKey);
                      }
                 }
