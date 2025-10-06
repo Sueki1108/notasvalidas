@@ -162,11 +162,13 @@ const normalizeKey = (key: any): string => {
 }
 
 
-export async function validateWithSped(processedData: DataFrames, spedFileContent: string, allNotesFromXmls: any[], canceledXmlKeys: string[]) {
+export async function validateWithSped(processedData: DataFrames, spedFileContent: string) {
     try {
         let spedInfo: SpedInfo | null = null;
         const allSpedKeys = new Map<string, Partial<KeyInfo>>();
         
+        // Combine all valid notes (from XMLs) to create a lookup map
+        const allNotesFromXmls = [...(processedData["Notas Válidas"] || []), ...(processedData["Emissão Própria"] || [])];
         const allNotesMap = new Map(allNotesFromXmls.map(note => [
             normalizeKey(note['Chave de acesso']), 
             note
@@ -191,62 +193,62 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         
         let keyCheckResults: KeyCheckResult | null = null;
         const keysInTxt = new Set(allSpedKeys.keys());
-        const canceledKeysSet = new Set(canceledXmlKeys.map(k => normalizeKey(k)));
         
-        if (processedData['Chaves Válidas']) {
-             const spreadsheetKeysArray = processedData['Chaves Válidas'].map(row => {
-                return normalizeKey(row['Chave de acesso']);
-            }).filter(key => key);
-            const spreadsheetKeys = new Set(spreadsheetKeysArray);
+        const canceledXmlKeys = new Set((processedData['Notas Canceladas'] || []).map(r => normalizeKey(r['Chave de acesso'])));
+        
+        // This is the definitive list of valid keys from the XML/Excel processing step
+        const spreadsheetKeysArray = (processedData['Chaves Válidas'] || [])
+            .map(row => normalizeKey(row['Chave de acesso']))
+            .filter(key => key);
+        const spreadsheetKeys = new Set(spreadsheetKeysArray);
 
-            const keysNotFoundInTxt = [...spreadsheetKeys]
-                .filter(key => !keysInTxt.has(key))
-                .map(key => {
-                    const note = allNotesMap.get(key);
-                    const isNFe = note && normalizeKey(note['Chave de acesso']).length === 44;
-                    const isSaida = note && spedInfo && note['Emitente CPF/CNPJ'] === spedInfo.cnpj;
-                    return {
-                        key: key,
-                        origin: 'planilha' as 'planilha',
-                        partnerName: note?.['Fornecedor/Cliente'] || '',
-                        emissionDate: note?.['Data de Emissão'] || '',
-                        value: note?.['Valor'] || 0,
-                        docType: isNFe ? 'NFe' : 'CTe',
-                        direction: isSaida ? 'Saída' : 'Entrada'
-                    }
-                });
+        const keysNotFoundInTxt = [...spreadsheetKeys]
+            .filter(key => !keysInTxt.has(key))
+            .map(key => {
+                const note = allNotesMap.get(key);
+                const isNFe = note && normalizeKey(note['Chave de acesso']).length === 44;
+                const isSaida = note && spedInfo && note['Emitente CPF/CNPJ'] === spedInfo.cnpj;
+                return {
+                    key: key,
+                    origin: 'planilha' as 'planilha',
+                    partnerName: note?.['Fornecedor/Cliente'] || '',
+                    emissionDate: note?.['Data de Emissão'] || '',
+                    value: note?.['Valor'] || 0,
+                    docType: isNFe ? 'NFe' : 'CTe',
+                    direction: isSaida ? 'Saída' : 'Entrada'
+                }
+            });
 
-            const keysInTxtNotInSheet = [...keysInTxt]
-                .filter(key => {
-                    const spedData = allSpedKeys.get(key);
-                    const isCancelledInSped = spedData?.comment === 'Documento Cancelado/Denegado no SPED';
-                    const isCancelledInXml = canceledKeysSet.has(key);
-                    return !spreadsheetKeys.has(key) && !isCancelledInSped && !isCancelledInXml;
-                })
-                .map(key => {
-                    const spedData = allSpedKeys.get(key);
-                    return {
-                        key: key,
-                        origin: 'sped' as 'sped',
-                        partnerName: spedData?.partnerName || '',
-                        emissionDate: spedData?.emissionDate || '',
-                        value: spedData?.value || 0,
-                        comment: spedData?.comment || '',
-                        docType: spedData?.docType,
-                        direction: spedData?.direction
-                    }
-                });
-            
-            const duplicateKeysInSheet = findDuplicates(spreadsheetKeysArray);
-            const duplicateKeysInTxt = findDuplicates(Array.from(allSpedKeys.keys()));
+        const keysInTxtNotInSheet = [...keysInTxt]
+            .filter(key => {
+                const spedData = allSpedKeys.get(key);
+                const isCancelledInSped = spedData?.comment === 'Documento Cancelado/Denegado no SPED';
+                const isCancelledInXml = canceledXmlKeys.has(key);
+                return !spreadsheetKeys.has(key) && !isCancelledInSped && !isCancelledInXml;
+            })
+            .map(key => {
+                const spedData = allSpedKeys.get(key);
+                return {
+                    key: key,
+                    origin: 'sped' as 'sped',
+                    partnerName: spedData?.partnerName || '',
+                    emissionDate: spedData?.emissionDate || '',
+                    value: spedData?.value || 0,
+                    comment: spedData?.comment || '',
+                    docType: spedData?.docType,
+                    direction: spedData?.direction
+                }
+            });
+        
+        const duplicateKeysInSheet = findDuplicates(spreadsheetKeysArray);
+        const duplicateKeysInTxt = findDuplicates(Array.from(allSpedKeys.keys()));
 
-            keyCheckResults = { 
-                keysNotFoundInTxt, 
-                keysInTxtNotInSheet,
-                duplicateKeysInSheet,
-                duplicateKeysInTxt,
-            };
-        }
+        keyCheckResults = { 
+            keysNotFoundInTxt, 
+            keysInTxtNotInSheet,
+            duplicateKeysInSheet,
+            duplicateKeysInTxt,
+        };
         
         if (spedInfo && spedInfo.cnpj && keyCheckResults) {
             // Logic to preserve comments
@@ -1008,3 +1010,4 @@ export async function separateXmlFromExcel(data: { excelFile: string, zipFile: s
 }
 
     
+

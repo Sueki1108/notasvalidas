@@ -303,7 +303,7 @@ export default function Home() {
     const handleProcessPrimaryFiles = async () => {
         setError(null);
         setKeyCheckResult(null);
-        // Do not clear results here: setResults(null); 
+        
         if (!Object.values(files).some(fileList => fileList && fileList.length > 0)) {
             toast({ variant: "destructive", title: "Nenhum arquivo carregado", description: "Por favor, carregue pelo menos um arquivo XML ou de exceção." });
             return;
@@ -316,7 +316,7 @@ export default function Home() {
             const allNfeItens: any[] = [];
             const allCte: any[] = [];
             const canceledKeys = new Set<string>();
-            const exceptionKeys = {
+            const exceptionKeys: ExceptionKeys = {
                 OperacaoNaoRealizada: new Set<string>(),
                 Desconhecimento: new Set<string>(),
                 Desacordo: new Set<string>(),
@@ -402,10 +402,16 @@ export default function Home() {
                 'NF-Stock Emitidas': [] 
             };
             
-            // At this point, we don't have companyCnpj, so pass null
-            const processedData = processDataFrames(initialFrames, canceledKeys, exceptionKeys, null);
+            const firstSpedLine = spedFile ? (await spedFile.text()).split('\n')[0]?.trim() || "" : "";
+            const tempSpedInfo = parseSpedInfo(firstSpedLine);
+            const companyCnpj = tempSpedInfo ? tempSpedInfo.cnpj : null;
+
+            const processedData = processDataFrames(initialFrames, canceledKeys, exceptionKeys, companyCnpj);
             
             setResults(processedData);
+            if (companyCnpj) {
+                setSpedInfo(tempSpedInfo);
+            }
             toast({ title: "Processamento Inicial Concluído", description: "Arquivos XML processados. Carregue o SPED para finalizar." });
             setActiveTab('validate');
         } catch (err: any) {
@@ -433,50 +439,42 @@ export default function Home() {
         try {
             const spedFileContent = await spedFile.text();
             
-            // Step 1: Get company info from SPED to re-process data with context
+            // Re-run processing with final CNPJ if not already done
             const info = parseSpedInfo(spedFileContent.split('\n')[0]?.trim() || "");
             if (!info || !info.cnpj) {
                 throw new Error("Não foi possível extrair o CNPJ da empresa do arquivo SPED. Verifique a primeira linha (|0000|).");
             }
-            setSpedInfo(info);
-
-            // Step 2: Reprocess the original data with the company CNPJ to correctly identify own emissions
-            const allNfe = results["NF-Stock NFE"] || [];
-            const allCte = results["NF-Stock CTE"] || [];
-            const allNfeItens = [...(results["Itens de Entrada"] || []), ...(results["Itens de Saída"] || [])];
+            if (!spedInfo || spedInfo.cnpj !== info.cnpj) {
+                setSpedInfo(info);
+                 const reprocessedData = processDataFrames(
+                    { // Reconstruct initial frames from results
+                        'NF-Stock NFE': results['NF-Stock NFE'] || [],
+                        'NF-Stock CTE': results['NF-Stock CTE'] || [],
+                        'Itens de Entrada': results['Itens de Entrada'] || [],
+                        'Itens de Saída': results['Itens de Saída'] || [],
+                        'NF-Stock Emitidas': results['NF-Stock Emitidas'] || [],
+                    }, 
+                    new Set((results['Notas Canceladas'] || []).map(r => normalizeKey(r['Chave de acesso']))),
+                    {
+                        OperacaoNaoRealizada: new Set((results["NF-Stock NFE Operação Não Realizada"] || []).map(r => normalizeKey(r['Chave de acesso']))),
+                        Desconhecimento: new Set((results["NF-Stock NFE Operação Desconhecida"] || []).map(r => normalizeKey(r['Chave de acesso']))),
+                        Desacordo: new Set((results["NF-Stock CTE Desacordo de Serviço"] || []).map(r => normalizeKey(r['Chave de acesso']))),
+                        Estorno: new Set((results["Estornos"] || []).map(r => normalizeKey(r['Chave de acesso']))),
+                    },
+                    info.cnpj
+                );
+                setResults(reprocessedData);
+            }
             
-            const canceledKeys = new Set((results["Notas Canceladas"] || []).map(r => normalizeKey(r['Chave de acesso'])));
-            const exceptionKeys = {
-                OperacaoNaoRealizada: new Set((results["NF-Stock NFE Operação Não Realizada"] || []).map(r => normalizeKey(r['Chave de acesso']))),
-                Desconhecimento: new Set((results["NF-Stock NFE Operação Desconhecida"] || []).map(r => normalizeKey(r['Chave de acesso']))),
-                Desacordo: new Set((results["NF-Stock CTE Desacordo de Serviço"] || []).map(r => normalizeKey(r['Chave de acesso']))),
-                Estorno: new Set((results["Estornos"] || []).map(r => normalizeKey(r['Chave de acesso']))),
-            };
 
-            const initialFramesForReprocessing = {
-                'NF-Stock NFE': allNfe,
-                'NF-Stock CTE': allCte,
-                'Itens de Entrada': allNfeItens,
-                'Itens de Saída': allNfeItens,
-                'NF-Stock Emitidas': [] 
-            };
-            
-            const reprocessedData = processDataFrames(initialFramesForReprocessing, canceledKeys, exceptionKeys, info.cnpj);
-            setResults(reprocessedData);
+            const finalValidationResult = await validateWithSped(results, spedFileContent);
 
-            // Step 3: Now run the final validation
-            const allValidXmlNotes = [...(reprocessedData["Notas Válidas"] || []), ...(reprocessedData["Emissão Própria"] || [])];
-            const finalValidationResult = await validateWithSped(
-                reprocessedData, 
-                spedFileContent, 
-                allValidXmlNotes,
-                Array.from(canceledKeys)
-            );
             if (finalValidationResult.error) {
                 throw new Error(finalValidationResult.error);
             }
 
             setKeyCheckResult(finalValidationResult.keyCheckResults || null);
+            setSpedInfo(finalValidationResult.spedInfo || null);
             
             toast({ title: "Validação SPED Concluída", description: "A verificação das chaves foi finalizada." });
         } catch (err: any) {
