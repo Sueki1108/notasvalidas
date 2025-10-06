@@ -96,9 +96,10 @@ const parseAllParticipants = (spedFileContent: string) => {
 
 const parseSpedLineForData = (line: string, participants: Map<string, string>): Partial<KeyInfo> | null => {
     const parts = line.split('|');
+    const docModel = parts[4]; // COD_MOD - 55 for NFe, 57 for CTe
     
-    // Basic validation for a C100 line (NFe)
-    if (parts.length > 9 && parts[1] === 'C100') {
+    // NFe validation (C100)
+    if (parts.length > 9 && parts[1] === 'C100' && docModel === '55') {
         const docStatus = parts[5]; // 00: Regular, 02: Cancelado
         const key = parts[9];
         const directionValue = parts[2]; // 0: Entrada, 1: Saída
@@ -107,20 +108,13 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
 
         const direction = directionValue === '0' ? 'Entrada' : 'Saída';
 
-        // If document is canceled, denegated, or inutilized
         if (['02', '03', '04', '05'].includes(docStatus)) {
-            return {
-                key,
-                comment: 'Documento Cancelado/Denegado no SPED',
-                docType: 'NFe',
-                direction
-            };
+            return { key, comment: 'Documento Cancelado/Denegado no SPED', docType: 'NFe', direction };
         }
         
-        // For regular documents (00, 01)
         const value = parseFloat(parts[23] || '0');
         const emissionDate = parts[10]; // DDMMYYYY
-        const partnerCode = parts[3]; // Emitente ou Destinatario (COD_PART)
+        const partnerCode = parts[3];
         const partnerName = participants.get(partnerCode) || '';
 
         return {
@@ -132,17 +126,17 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
             direction
         };
     }
-    // Validation for a D100 line (CTe)
-    else if (parts.length > 10 && parts[1] === 'D100') {
+    // CTe validation (D100)
+    else if (parts.length > 10 && parts[1] === 'D100' && docModel === '57') {
         const key = parts[10];
         const value = parseFloat(parts[16] || '0'); // vTPrest
         const emissionDate = parts[9]; // DDMMYYYY
-        const partnerCode = parts[3]; // Emitente do CTe (COD_PART)
+        const partnerCode = parts[3];
         const partnerName = participants.get(partnerCode) || '';
         const directionValue = parts[2]; // 0: Saída (emissao propria), 1: Entrada (tomador) - Invertido pro CTe
         
         if (key && key.length === 44) {
-             const direction = directionValue === '0' ? 'Saída' : 'Entrada';
+            const direction = directionValue === '0' ? 'Saída' : 'Entrada';
             return {
                 key,
                 value,
@@ -167,7 +161,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         let spedInfo: SpedInfo | null = null;
         const allSpedKeys = new Map<string, Partial<KeyInfo>>();
         
-        // Combine all valid notes (from XMLs) to create a lookup map
+        // Combine all valid notes (from XMLs) to create a lookup map for enrichment
         const allNotesFromXmls = [...(processedData["Notas Válidas"] || []), ...(processedData["Emissão Própria"] || [])];
         const allNotesMap = new Map(allNotesFromXmls.map(note => [
             normalizeKey(note['Chave de acesso']), 
@@ -206,7 +200,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             .filter(key => !keysInTxt.has(key))
             .map(key => {
                 const note = allNotesMap.get(key);
-                const isNFe = note && normalizeKey(note['Chave de acesso']).length === 44;
+                const isCte = note && note.uploadSource && note.uploadSource.includes('CTe');
                 const isSaida = note && spedInfo && note['Emitente CPF/CNPJ'] === spedInfo.cnpj;
                 return {
                     key: key,
@@ -214,7 +208,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                     partnerName: note?.['Fornecedor/Cliente'] || '',
                     emissionDate: note?.['Data de Emissão'] || '',
                     value: note?.['Valor'] || 0,
-                    docType: isNFe ? 'NFe' : 'CTe',
+                    docType: isCte ? 'CTe' : 'NFe',
                     direction: isSaida ? 'Saída' : 'Entrada'
                 }
             });
@@ -265,23 +259,22 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                 });
             }
 
-            const keysFromSheet: KeyInfo[] = (processedData['Chaves Válidas']?.map(row => row['Chave de acesso']) || [])
-                .map((key: string) => {
-                    const cleanKey = normalizeKey(key);
-                    const note = allNotesMap.get(cleanKey);
-                    const isNFe = cleanKey.length === 44;
-                    const isSaida = note && spedInfo && note['Emitente CPF/CNPJ'] === spedInfo.cnpj;
+            const allValidXmlKeys: KeyInfo[] = [...(processedData['Notas Válidas'] || []), ...(processedData['Emissão Própria'] || [])]
+                .map(row => {
+                    const cleanKey = normalizeKey(row['Chave de acesso']);
+                    const isCte = row.uploadSource && row.uploadSource.includes('CTe');
+                    const isSaida = spedInfo && row['Emitente CPF/CNPJ'] === spedInfo.cnpj;
                     return {
                         key: cleanKey,
                         origin: 'planilha',
                         foundInSped: keysInTxt.has(cleanKey),
                         comment: oldComments.get(cleanKey) || '',
-                        partnerName: note?.['Fornecedor/Cliente'] || '',
-                        emissionDate: note?.['Data de Emissão'] || '',
-                        value: note?.['Valor'] || 0,
-                        docType: isNFe ? 'NFe' : 'CTe',
+                        partnerName: row['Fornecedor/Cliente'] || '',
+                        emissionDate: row['Data de Emissão'] || '',
+                        value: row['Valor'] || 0,
+                        docType: isCte ? 'CTe' : 'NFe',
                         direction: isSaida ? 'Saída' : 'Entrada'
-                    };
+                    }
                 });
             
             const keysOnlyInSped: KeyInfo[] = (keyCheckResults.keysInTxtNotInSheet).map((keyInfo: KeyInfo) => ({
@@ -292,13 +285,13 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                 comment: oldComments.get(normalizeKey(keyInfo.key)) || keyInfo.comment || ''
             }));
 
-            const verificationKeys = [...keysFromSheet, ...keysOnlyInSped];
+            const verificationKeys = [...allValidXmlKeys, ...keysOnlyInSped];
 
             const stats = {
-                totalSheetKeys: keysFromSheet.length,
+                totalSheetKeys: allValidXmlKeys.length,
                 totalSpedKeys: allSpedKeys.size,
-                foundInBoth: keysFromSheet.filter(k => k.foundInSped).length,
-                onlyInSheet: keysFromSheet.filter(k => !k.foundInSped).length,
+                foundInBoth: allValidXmlKeys.filter(k => k.foundInSped).length,
+                onlyInSheet: allValidXmlKeys.filter(k => !k.foundInSped).length,
                 onlyInSped: keysOnlyInSped.length,
             };
 
@@ -1011,3 +1004,6 @@ export async function separateXmlFromExcel(data: { excelFile: string, zipFile: s
 
     
 
+
+
+      
