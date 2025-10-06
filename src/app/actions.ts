@@ -6,6 +6,7 @@ import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firest
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
+import path from 'path';
 
 // Type for the file data structure expected by the processor
 type DataFrames = { [key: string]: any[] };
@@ -383,9 +384,12 @@ export async function unifyZipFiles(files: { name: string, content: string }[]) 
             const zip = await JSZip.loadAsync(file.content, { base64: true });
             
             const filePromises = Object.keys(zip.files).map(async (filename) => {
-                if (!zip.files[filename].dir) {
-                    const fileData = await zip.files[filename].async('nodebuffer');
-                    finalZip.file(filename, fileData);
+                const zipEntry = zip.files[filename];
+                if (!zipEntry.dir) {
+                    const fileData = await zipEntry.async('nodebuffer');
+                    // Use path.basename to get only the filename, discarding the folder structure
+                    const baseName = path.basename(filename);
+                    finalZip.file(baseName, fileData);
                 }
             });
             await Promise.all(filePromises);
