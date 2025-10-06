@@ -7,7 +7,7 @@ import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Sheet, History, Search, ArrowLeft, CheckCircle, XCircle, MessageSquare, Group, FileText, ChevronDown, FolderSync, Replace, Copy } from "lucide-react";
+import { Loader2, Sheet, History, Search, ArrowLeft, CheckCircle, XCircle, MessageSquare, Group, FileText, ChevronDown, FolderSync, Replace, Copy, Download } from "lucide-react";
 import Link from 'next/link';
 import {
   DropdownMenu,
@@ -31,7 +31,8 @@ import { formatCnpj } from "@/lib/utils";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import type { KeyInfo } from "@/app/actions";
+import type { KeyInfo, KeyCheckResult } from "@/app/actions";
+import { downloadHistoryData } from "@/app/actions";
 
 
 type VerificationKey = KeyInfo & {
@@ -52,8 +53,8 @@ type Verification = {
   cnpj: string;
   competence: string;
   verifiedAt: Timestamp;
-  keys: VerificationKey[];
-  stats: VerificationStats;
+  processedData: Record<string, any[]>;
+  keyCheckResults: KeyCheckResult;
 };
 
 
@@ -107,17 +108,17 @@ const DetailRow = ({ item }: { item: VerificationKey }) => {
 export default function HistoryPage() {
     const [verifications, setVerifications] = useState<Verification[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadingDownload, setLoadingDownload] = useState<string | null>(null);
     const [selectedVerification, setSelectedVerification] = useState<Verification | null>(null);
+    const { toast } = useToast();
 
     const groupedKeys = useMemo(() => {
-        if (!selectedVerification || !selectedVerification.keys) {
-            return { foundInBoth: [], onlyInSheet: [], onlyInSped: [] };
+        if (!selectedVerification || !selectedVerification.keyCheckResults) {
+            return { keysNotFoundInTxt: [], keysInTxtNotInSheet: [] };
         }
-        
         return {
-            foundInBoth: selectedVerification.keys.filter(k => k.origin === 'planilha' && k.foundInSped),
-            onlyInSheet: selectedVerification.keys.filter(k => k.origin === 'planilha' && !k.foundInSped),
-            onlyInSped: selectedVerification.keys.filter(k => k.origin === 'sped'),
+            keysNotFoundInTxt: selectedVerification.keyCheckResults.keysNotFoundInTxt || [],
+            keysInTxtNotInSheet: selectedVerification.keyCheckResults.keysInTxtNotInSheet || [],
         };
     }, [selectedVerification]);
 
@@ -141,6 +142,34 @@ export default function HistoryPage() {
         fetchVerifications();
     }, []);
 
+    const handleDownload = async (verificationId: string, type: 'main' | 'sped') => {
+        setLoadingDownload(verificationId + type);
+        try {
+            const result = await downloadHistoryData(verificationId);
+            if (result.error) throw new Error(result.error);
+
+            const base64Data = type === 'main' ? result.mainProcessingFile : result.spedValidationFile;
+            const filename = type === 'main' ? 'processamento_principal.xlsx' : 'validacao_sped.xlsx';
+
+            if (base64Data) {
+                const link = document.createElement('a');
+                link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64Data}`;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                toast({ title: 'Download Iniciado', description: `O arquivo ${filename} está sendo baixado.` });
+            } else {
+                throw new Error("Nenhum dado encontrado para download.");
+            }
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: 'Erro no Download', description: error.message });
+        } finally {
+            setLoadingDownload(null);
+        }
+    };
+
+
     const handleCloseModal = () => {
         setSelectedVerification(null);
     }
@@ -161,6 +190,19 @@ export default function HistoryPage() {
         if (!timestamp) return '';
         return timestamp.toDate().toLocaleTimeString('pt-BR');
     }
+    
+    const getDiscrepancyCount = (v: Verification) => {
+        const results = v.keyCheckResults;
+        if (!results) return 0;
+        return (results.keysInTxtNotInSheet?.length || 0) + (results.keysNotFoundInTxt?.length || 0);
+    }
+    
+    const getTotalKeysCount = (v: Verification) => {
+         const results = v.processedData;
+         if (!results || !results['Chaves Válidas']) return 0;
+         return results['Chaves Válidas'].length;
+    }
+
 
     return (
         <div className="min-h-screen bg-background text-foreground">
@@ -243,8 +285,8 @@ export default function HistoryPage() {
                                     </TableHeader>
                                     <TableBody>
                                         {verifications.map((v) => {
-                                            const totalKeys = v.stats?.totalSheetKeys || 0;
-                                            const discrepancies = (v.stats?.onlyInSheet || 0) + (v.stats?.onlyInSped || 0);
+                                            const totalKeys = getTotalKeysCount(v);
+                                            const discrepancies = getDiscrepancyCount(v);
                                             return (
                                             <TableRow key={v.id}>
                                                 <TableCell className="font-medium">{v.companyName}</TableCell>
@@ -263,10 +305,24 @@ export default function HistoryPage() {
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="text-right">
-                                                    <Button variant="outline" size="sm" onClick={() => setSelectedVerification(v)}>
-                                                        <Search className="mr-2 h-4 w-4" />
-                                                        Ver Detalhes
-                                                    </Button>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="outline" size="sm">Ações <ChevronDown className="ml-2 h-4 w-4" /></Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent>
+                                                            <DropdownMenuItem onClick={() => setSelectedVerification(v)}>
+                                                                <Search className="mr-2 h-4 w-4" /> Ver Detalhes
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => handleDownload(v.id, 'main')} disabled={loadingDownload === v.id + 'main'}>
+                                                                {loadingDownload === v.id + 'main' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                                                                Baixar Processamento
+                                                            </DropdownMenuItem>
+                                                             <DropdownMenuItem onClick={() => handleDownload(v.id, 'sped')} disabled={loadingDownload === v.id + 'sped'}>
+                                                                {loadingDownload === v.id + 'sped' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                                                                Baixar Validação
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
                                                 </TableCell>
                                             </TableRow>
                                         )})}
@@ -306,37 +362,19 @@ export default function HistoryPage() {
                             <ScrollArea className="h-[60vh] w-full pr-4">
                                
                                 <Accordion type="single" collapsible defaultValue="item-2" className="w-full">
-                                    <AccordionItem value="item-1">
-                                        <AccordionTrigger className="font-semibold">
-                                            <div className="flex items-center gap-2">
-                                                <CheckCircle className="text-green-600" />
-                                                Encontradas em Ambos ({groupedKeys.foundInBoth.length})
-                                            </div>
-                                        </AccordionTrigger>
-                                        <AccordionContent>
-                                            {groupedKeys.foundInBoth.length > 0 ? (
-                                                <Table>
-                                                    <TableHeader><TableRow><TableHead>Chave</TableHead><TableHead>Tipo</TableHead><TableHead>Direção</TableHead><TableHead>Parceiro</TableHead><TableHead>Emissão</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Comentário</TableHead></TableRow></TableHeader>
-                                                    <TableBody>
-                                                    {groupedKeys.foundInBoth.map((item, index) => <DetailRow key={index} item={item} />)}
-                                                    </TableBody>
-                                                </Table>
-                                            ) : <p className="pt-2 text-sm text-muted-foreground">Nenhuma chave encontrada em ambas as fontes.</p>}
-                                        </AccordionContent>
-                                    </AccordionItem>
-                                     <AccordionItem value="item-2">
+                                    <AccordionItem value="item-2">
                                         <AccordionTrigger className="font-semibold">
                                             <div className="flex items-center gap-2">
                                                 <XCircle className="text-red-600" />
-                                                Apenas na Planilha ({groupedKeys.onlyInSheet.length})
+                                                Apenas na Planilha ({groupedKeys.keysNotFoundInTxt.length})
                                             </div>
                                         </AccordionTrigger>
                                         <AccordionContent>
-                                            {groupedKeys.onlyInSheet.length > 0 ? (
+                                            {groupedKeys.keysNotFoundInTxt.length > 0 ? (
                                                 <Table>
                                                     <TableHeader><TableRow><TableHead>Chave</TableHead><TableHead>Tipo</TableHead><TableHead>Direção</TableHead><TableHead>Parceiro</TableHead><TableHead>Emissão</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Comentário</TableHead></TableRow></TableHeader>
                                                     <TableBody>
-                                                        {groupedKeys.onlyInSheet.map((item, index) => <DetailRow key={index} item={item} />)}
+                                                        {groupedKeys.keysNotFoundInTxt.map((item, index) => <DetailRow key={index} item={item} />)}
                                                     </TableBody>
                                                 </Table>
                                             ) : <p className="pt-2 text-sm text-muted-foreground">Nenhuma chave encontrada apenas na planilha.</p>}
@@ -346,15 +384,15 @@ export default function HistoryPage() {
                                         <AccordionTrigger className="font-semibold">
                                              <div className="flex items-center gap-2">
                                                 <FileText className="text-blue-600" />
-                                                Apenas no SPED ({groupedKeys.onlyInSped.length})
+                                                Apenas no SPED ({groupedKeys.keysInTxtNotInSheet.length})
                                             </div>
                                         </AccordionTrigger>
                                         <AccordionContent>
-                                            {groupedKeys.onlyInSped.length > 0 ? (
+                                            {groupedKeys.keysInTxtNotInSheet.length > 0 ? (
                                                 <Table>
                                                     <TableHeader><TableRow><TableHead>Chave</TableHead><TableHead>Tipo</TableHead><TableHead>Direção</TableHead><TableHead>Parceiro</TableHead><TableHead>Emissão</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Comentário</TableHead></TableRow></TableHeader>
                                                     <TableBody>
-                                                        {groupedKeys.onlyInSped.map((item, index) => <DetailRow key={index} item={item} />)}
+                                                        {groupedKeys.keysInTxtNotInSheet.map((item, index) => <DetailRow key={index} item={item} />)}
                                                     </TableBody>
                                                 </Table>
                                             ) : <p className="pt-2 text-sm text-muted-foreground">Nenhuma chave encontrada apenas no SPED.</p>}

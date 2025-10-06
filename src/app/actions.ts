@@ -245,60 +245,12 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         };
         
         if (spedInfo && spedInfo.cnpj && keyCheckResults) {
-            // Logic to preserve comments
             const docRef = doc(db, "verifications", spedInfo.cnpj);
-            const existingDoc = await getDoc(docRef);
-            const oldComments = new Map<string, string>();
-
-            if (existingDoc.exists() && existingDoc.data().competence === spedInfo.competence) {
-                const oldKeys: KeyInfo[] = existingDoc.data().keys || [];
-                oldKeys.forEach(k => {
-                    if (k.comment) {
-                        oldComments.set(normalizeKey(k.key), k.comment);
-                    }
-                });
-            }
-
-            const allValidXmlKeys: KeyInfo[] = [...(processedData['Notas Válidas'] || []), ...(processedData['Emissão Própria'] || [])]
-                .map(row => {
-                    const cleanKey = normalizeKey(row['Chave de acesso']);
-                    const isCte = row.uploadSource && row.uploadSource.includes('CTe');
-                    const isSaida = spedInfo && row['Emitente CPF/CNPJ'] === spedInfo.cnpj;
-                    return {
-                        key: cleanKey,
-                        origin: 'planilha',
-                        foundInSped: keysInTxt.has(cleanKey),
-                        comment: oldComments.get(cleanKey) || '',
-                        partnerName: row['Fornecedor/Cliente'] || '',
-                        emissionDate: row['Data de Emissão'] || '',
-                        value: row['Valor'] || 0,
-                        docType: isCte ? 'CTe' : 'NFe',
-                        direction: isSaida ? 'Saída' : 'Entrada'
-                    }
-                });
             
-            const keysOnlyInSped: KeyInfo[] = (keyCheckResults.keysInTxtNotInSheet).map((keyInfo: KeyInfo) => ({
-                ...keyInfo,
-                key: normalizeKey(keyInfo.key),
-                origin: 'sped',
-                foundInSped: true,
-                comment: oldComments.get(normalizeKey(keyInfo.key)) || keyInfo.comment || ''
-            }));
-
-            const verificationKeys = [...allValidXmlKeys, ...keysOnlyInSped];
-
-            const stats = {
-                totalSheetKeys: allValidXmlKeys.length,
-                totalSpedKeys: allSpedKeys.size,
-                foundInBoth: allValidXmlKeys.filter(k => k.foundInSped).length,
-                onlyInSheet: allValidXmlKeys.filter(k => !k.foundInSped).length,
-                onlyInSped: keysOnlyInSped.length,
-            };
-
             const verificationData = {
                 ...spedInfo,
-                keys: verificationKeys,
-                stats: stats,
+                processedData: processedData, // Store all processed sheets
+                keyCheckResults: keyCheckResults, // Store validation results
                 verifiedAt: serverTimestamp(),
             };
 
@@ -327,18 +279,32 @@ export async function addOrUpdateKeyComment(cnpj: string, key: string, comment: 
         }
 
         const data = docSnap.data();
-        const keys = data.keys || [];
+        // The structure for keys to comment on might need adjustment,
+        // this assumes keyCheckResults are stored.
+        const keysNotFound = data.keyCheckResults?.keysNotFoundInTxt || [];
+        const keysOnlySped = data.keyCheckResults?.keysInTxtNotInSheet || [];
 
-        const keyIndex = keys.findIndex((k: any) => normalizeKey(k.key) === normalizeKey(key));
+        let keyFound = false;
+        const updateKeyArray = (arr: KeyInfo[]) => {
+            const idx = arr.findIndex(k => normalizeKey(k.key) === normalizeKey(key));
+            if (idx !== -1) {
+                arr[idx].comment = comment;
+                keyFound = true;
+            }
+            return arr;
+        };
+        
+        const updatedKeysNotFound = updateKeyArray([...keysNotFound]);
+        const updatedKeysOnlySped = updateKeyArray([...keysOnlySped]);
 
-        if (keyIndex === -1) {
+        if (!keyFound) {
              return { error: "Chave não encontrada no histórico de verificação." };
         }
         
-        const updatedKeys = [...keys];
-        updatedKeys[keyIndex] = { ...updatedKeys[keyIndex], comment: comment };
-        
-        await updateDoc(verificationRef, { keys: updatedKeys });
+        await updateDoc(verificationRef, {
+            "keyCheckResults.keysNotFoundInTxt": updatedKeysNotFound,
+            "keyCheckResults.keysInTxtNotInSheet": updatedKeysOnlySped,
+        });
         
         return { success: true, message: "Comentário salvo com sucesso!" };
 
@@ -1002,8 +968,70 @@ export async function separateXmlFromExcel(data: { excelFile: string, zipFile: s
     }
 }
 
-    
 
+export async function downloadHistoryData(verificationId: string) {
+    if (!verificationId) {
+        return { error: "ID da verificação é obrigatório." };
+    }
 
+    try {
+        const docRef = doc(db, "verifications", verificationId);
+        const docSnap = await getDoc(docRef);
 
+        if (!docSnap.exists()) {
+            return { error: "Histórico de verificação não encontrado." };
+        }
+
+        const historyData = docSnap.data();
+        const { processedData, keyCheckResults } = historyData;
+
+        // 1. Generate Base64 for the main processing workbook
+        const mainWorkbook = XLSX.utils.book_new();
+        const sheetNameMap: { [key: string]: string } = {
+            "NF-Stock NFE Operação Não Realizada": "NFE Op Nao Realizada",
+            "NF-Stock NFE Operação Desconhecida": "NFE Op Desconhecida",
+            "NF-Stock CTE Desacordo de Serviço": "CTE Desacordo Servico",
+            "Estornos": "Estornos",
+            "NF-Stock Emitidas": "NF Emitidas",
+            "Notas Válidas": "Notas Validas",
+            "Emissão Própria": "Emissao Propria",
+            "Notas Canceladas": "Notas Canceladas",
+            "Itens de Entrada": "Itens de Entrada",
+            "Itens de Saída": "Itens de Saida",
+            "Imobilizados": "Imobilizados",
+            "Chaves Válidas": "Chaves Validas",
+        };
+        const orderedSheetNames = [
+            "Notas Válidas", "Itens de Entrada", "Emissão Própria", "NF-Stock Emitidas", "Itens de Saída", "Chaves Válidas", "Imobilizados", "Notas Canceladas",
+            "NF-Stock NFE Operação Não Realizada", "NF-Stock NFE Operação Desconhecida", "NF-Stock CTE Desacordo de Serviço", "Estornos"
+        ].filter(name => processedData[name] && processedData[name].length > 0);
+
+        orderedSheetNames.forEach(sheetName => {
+            const worksheet = XLSX.utils.json_to_sheet(processedData[sheetName]);
+            XLSX.utils.book_append_sheet(mainWorkbook, worksheet, sheetNameMap[sheetName] || sheetName);
+        });
+        
+        const mainWbBase64 = XLSX.write(mainWorkbook, { bookType: 'xlsx', type: 'base64' });
+
+        // 2. Generate Base64 for the SPED validation workbook
+        const spedWorkbook = XLSX.utils.book_new();
+        if (keyCheckResults) {
+            const notFoundInSpedSheet = XLSX.utils.json_to_sheet(keyCheckResults.keysNotFoundInTxt || []);
+            XLSX.utils.book_append_sheet(spedWorkbook, notFoundInSpedSheet, "Nao Encontradas no SPED");
+
+            const inSpedNotValidSheet = XLSX.utils.json_to_sheet(keyCheckResults.keysInTxtNotInSheet || []);
+            XLSX.utils.book_append_sheet(spedWorkbook, inSpedNotValidSheet, "Apenas no SPED");
+        }
+        const spedWbBase64 = XLSX.write(spedWorkbook, { bookType: 'xlsx', type: 'base64' });
+
+        return {
+            mainProcessingFile: mainWbBase64,
+            spedValidationFile: spedWbBase64,
+        };
+
+    } catch (error: any) {
+        console.error("Erro ao gerar arquivos do histórico:", error);
+        return { error: error.message || "Ocorreu um erro ao baixar os dados do histórico." };
+    }
+}
       
