@@ -139,16 +139,17 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
         const emissionDate = parts[9]; // DDMMYYYY
         const partnerCode = parts[3]; // Emitente do CTe (COD_PART)
         const partnerName = participants.get(partnerCode) || '';
-        const directionValue = parts[2]; // 0: Entrada, 1: Saída
-
+        const directionValue = parts[2]; // 0: Saída (emissao propria), 1: Entrada (tomador) - Invertido pro CTe
+        
         if (key && key.length === 44) {
+             const direction = directionValue === '0' ? 'Saída' : 'Entrada';
             return {
                 key,
                 value,
                 emissionDate: emissionDate ? `${emissionDate.substring(0,2)}/${emissionDate.substring(2,4)}/${emissionDate.substring(4,8)}` : '',
                 partnerName,
                 docType: 'CTe',
-                direction: directionValue === '0' ? 'Entrada' : 'Saída'
+                direction
             };
         }
     }
