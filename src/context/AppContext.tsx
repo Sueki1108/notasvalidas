@@ -21,6 +21,10 @@ interface AppContextType {
     activeTab: string;
     setActiveTab: React.Dispatch<React.SetStateAction<string>>;
     clearAllData: () => void;
+    detectedMonths: string[];
+    setDetectedMonths: React.Dispatch<React.SetStateAction<string[]>>;
+    selectedMonths: Set<string>;
+    setSelectedMonths: React.Dispatch<React.SetStateAction<Set<string>>>;
 }
 
 const initialFilesState: FileList = {
@@ -46,6 +50,10 @@ export const AppContext = createContext<AppContextType>({
     activeTab: 'process',
     setActiveTab: () => {},
     clearAllData: () => {},
+    detectedMonths: [],
+    setDetectedMonths: () => {},
+    selectedMonths: new Set(),
+    setSelectedMonths: () => {},
 });
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
@@ -55,6 +63,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const [keyCheckResults, setKeyCheckResult] = useState<KeyCheckResult | null>(null);
     const [spedInfo, setSpedInfo] = useState<SpedInfo | null>(null);
     const [activeTab, setActiveTab] = useState('process');
+    const [detectedMonths, setDetectedMonths] = useState<string[]>([]);
+    const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
 
     const clearAllData = () => {
         setFiles(initialFilesState);
@@ -63,6 +73,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setKeyCheckResult(null);
         setSpedInfo(null);
         setActiveTab("process");
+        setDetectedMonths([]);
+        setSelectedMonths(new Set());
         
         const inputs = document.querySelectorAll<HTMLInputElement>('input[type="file"]');
         inputs.forEach(input => input.value = "");
@@ -76,7 +88,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             keyCheckResults, setKeyCheckResult,
             spedInfo, setSpedInfo,
             activeTab, setActiveTab,
-            clearAllData
+            clearAllData,
+            detectedMonths, setDetectedMonths,
+            selectedMonths, setSelectedMonths
         }}>
             {children}
         </AppContext.Provider>
