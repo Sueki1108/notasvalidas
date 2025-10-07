@@ -265,7 +265,9 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             const docRef = doc(db, "verifications", spedInfo.cnpj);
             
             const verificationData = {
-                ...spedInfo,
+                cnpj: spedInfo.cnpj,
+                companyName: spedInfo.companyName,
+                competence: spedInfo.competence,
                 keyCheckResults: keyCheckResults,
                 verifiedAt: serverTimestamp(),
             };

@@ -231,6 +231,9 @@ export default function HistoryPage() {
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
+                        <Button variant="ghost" asChild>
+                            <Link href="/history">Histórico</Link>
+                        </Button>
                     </nav>
                 </div>
             </header>
@@ -284,7 +287,7 @@ export default function HistoryPage() {
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="text-right">
-                                                    <Button variant="outline" size="sm" onClick={() => setSelectedVerification(v)}>
+                                                     <Button variant="outline" size="sm" onClick={() => setSelectedVerification(v)}>
                                                         <Search className="mr-2 h-4 w-4" /> Ver Detalhes
                                                     </Button>
                                                 </TableCell>
