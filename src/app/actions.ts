@@ -94,6 +94,22 @@ const parseAllParticipants = (spedFileContent: string) => {
     return participants;
 };
 
+const parseNfeInCte = (line: string): { key: string } | null => {
+    if (line.startsWith('|D195|')) {
+        const parts = line.split('|');
+        if (parts.length > 2) {
+            const description = parts[2];
+            // Example format: "Chave de Acesso da NF-e: 12345... (44 digits)"
+            const match = description.match(/(\d{44})/);
+            if (match && match[1]) {
+                return { key: match[1] };
+            }
+        }
+    }
+    return null;
+};
+
+
 const parseSpedLineForData = (line: string, participants: Map<string, string>): Partial<KeyInfo> | null => {
     const parts = line.split('|');
     const docModel = parts[4]; // COD_MOD - 55 for NFe, 57 for CTe
@@ -178,6 +194,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         let spedInfo: SpedInfo | null = null;
         const allSpedKeys = new Map<string, Partial<KeyInfo>>();
         const participants = parseAllParticipants(spedFileContent);
+        const keysInTxt = new Set<string>();
         
         const lines = spedFileContent.split('\n');
         if (lines.length > 0 && lines[0]) {
@@ -186,12 +203,22 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         
         for (const line of lines) {
             const trimmedLine = line.trim();
-            let parsedData = parseSpedLineForData(trimmedLine, participants);
+            const parsedData = parseSpedLineForData(trimmedLine, participants);
             
             if (parsedData && parsedData.key) {
-                 const cleanKey = normalizeKey(parsedData.key);
-                 if (!allSpedKeys.has(cleanKey)) {
+                const cleanKey = normalizeKey(parsedData.key);
+                if (!allSpedKeys.has(cleanKey)) {
                     allSpedKeys.set(cleanKey, parsedData);
+                }
+                keysInTxt.add(cleanKey);
+            }
+             // Also parse D195 for referenced NF-e keys
+            const nfeInCteKey = parseNfeInCte(trimmedLine);
+            if (nfeInCteKey && nfeInCteKey.key) {
+                const cleanNfeKey = normalizeKey(nfeInCteKey.key);
+                keysInTxt.add(cleanNfeKey);
+                if (!allSpedKeys.has(cleanNfeKey)) {
+                    allSpedKeys.set(cleanNfeKey, { key: cleanNfeKey, docType: 'NFe', comment: 'Referenciada em CT-e' });
                 }
             }
         }
@@ -209,11 +236,9 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             .map(row => normalizeKey(row['Chave de acesso']))
             .filter(key => key);
         const spreadsheetKeys = new Set(spreadsheetKeysArray);
-
-        const keysInTxt = new Set(Array.from(allSpedKeys.keys()).map(k => normalizeKey(k)));
+        
         const canceledXmlKeys = new Set((processedData['Notas Canceladas'] || []).map(r => normalizeKey(r['Chave de acesso'])));
         
-
         const keysNotFoundInTxt = [...spreadsheetKeys]
             .filter(key => !keysInTxt.has(key))
             .map(key => {
@@ -979,5 +1004,4 @@ export async function downloadHistoryData(verificationId: string) {
     // This function is being removed as we are no longer storing the full processed data.
     return { error: "A funcionalidade de download do histórico foi descontinuada para resolver problemas de limite de tamanho do banco de dados." };
 }
-    
-
+      
