@@ -201,8 +201,8 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
 
             if (key && key.length === 44) {
                 spedKeys.add(key);
+                // Only parse detailed info if the key is new to avoid redundant processing
                 if (!allSpedKeyInfo.has(key)) {
-                    // Get detailed info for the key if needed later
                     const parsedData = parseSpedLineForData(trimmedLine, participants);
                     if (parsedData) {
                          allSpedKeyInfo.set(key, parsedData);
@@ -987,5 +987,3 @@ export async function downloadHistoryData(verificationId: string) {
     return { error: "A funcionalidade de download do histórico foi descontinuada para resolver problemas de limite de tamanho do banco de dados." };
 }
       
-
-    
