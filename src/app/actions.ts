@@ -25,8 +25,8 @@ export type KeyInfo = {
     partnerName?: string;
     emissionDate?: string;
     value?: number;
-    docType?: 'NFe' | 'CTe';
-    direction?: 'Entrada' | 'Saída';
+    docType?: 'NFe' | 'CTe' | 'N/A';
+    direction?: 'Entrada' | 'Saída' | 'N/A';
 };
 
 
@@ -256,8 +256,8 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                     emissionDate: spedData?.emissionDate || '',
                     value: spedData?.value || 0,
                     comment: spedData?.comment || '',
-                    docType: spedData?.docType,
-                    direction: spedData?.direction
+                    docType: spedData?.docType || 'N/A',
+                    direction: spedData?.direction || 'N/A'
                 }
             });
         
