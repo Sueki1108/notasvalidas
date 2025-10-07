@@ -21,8 +21,8 @@ const normalizeKey = (value: any): string => {
 export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, exceptionKeys: ExceptionKeys, companyCnpj: string | null): DataFrames {
     const processedDfs: DataFrames = JSON.parse(JSON.stringify(dfs));
 
-    const nfe = processedDfs["NF-Stock NFE"] || [];
-    const cte = processedDfs["NF-Stock CTE"] || [];
+    const nfe = (processedDfs["NF-Stock NFE"] || []).map(d => ({ ...d, docType: 'NFe' }));
+    const cte = (processedDfs["NF-Stock CTE"] || []).map(d => ({ ...d, docType: 'CTe' }));
     const allNotes = [...nfe, ...cte];
     
     processedDfs["Notas Canceladas"] = allNotes.filter(row => row && canceledKeys.has(normalizeKey(row['Chave de acesso'])));
@@ -53,7 +53,6 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
                 const cleanKey = normalizeKey(nota['Chave de acesso']);
 
                 if (!exceptionKeySet.has(cleanKey)) {
-                     // Include if it's an outgoing note OR if it's an incoming devolution
                      if (nota.uploadSource === 'saida' || (nota.uploadSource === 'entrada' && nota.isOwnEmissionDevolution)) {
                         ownEmissionValidKeys.add(cleanKey);
                      }
@@ -64,7 +63,6 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
 
     processedDfs["Emissão Própria"] = ownEmissionNotes;
 
-    // Filter out own emission returns and exceptions from 'Notas Válidas'
     const notasValidas = allNotes.filter(row =>
         row &&
         !exceptionKeySet.has(normalizeKey(row['Chave de acesso'])) &&

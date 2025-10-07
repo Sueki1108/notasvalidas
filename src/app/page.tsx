@@ -324,9 +324,13 @@ export default function Home() {
         }
     };
 
-    const processAndFilterData = (allNfe: any[], allCte: any[], selectedMonths: Set<string>) => {
+    const processAndFilterData = async (selectedMonths: Set<string>) => {
         setProcessing(true);
         try {
+            const allNfe: any[] = [];
+            const allCte: any[] = [];
+            const allNfeItensEntrada: any[] = [];
+            const allNfeItensSaida: any[] = [];
             const exceptionKeys: ExceptionKeys = {
                 OperacaoNaoRealizada: new Set<string>(),
                 Desconhecimento: new Set<string>(),
@@ -336,20 +340,44 @@ export default function Home() {
 
             const getMonthYear = (dateStr: string) => {
                 if (!dateStr) return null;
-                try {
-                    return format(parseISO(dateStr), "MM/yyyy");
-                } catch {
-                    return null;
-                }
+                try { return format(parseISO(dateStr), "MM/yyyy"); } catch { return null; }
+            };
+
+            const processXmlFiles = async (fileList: File[], category: string) => {
+                const type = category.includes('CTe') ? 'CTe' : 'NFe';
+                const uploadSource = category.includes('Saída') ? 'saida' : 'entrada';
+                
+                for (const file of fileList) {
+                   const fileContent = await file.text();
+                   const xmlData = type === 'NFe' 
+                       ? extractNfeDataFromXml(fileContent, uploadSource) 
+                       : extractCteDataFromXml(fileContent, uploadSource);
+
+                   if (!xmlData) continue;
+                   
+                   const monthYear = getMonthYear(xmlData.nota?.['Data de Emissão']);
+                   if (!monthYear || !selectedMonths.has(monthYear)) continue;
+
+                   if (type === 'NFe') allNfe.push(xmlData); else allCte.push(xmlData);
+
+                   if(xmlData.itens){
+                       if(uploadSource === 'entrada') allNfeItensEntrada.push(...xmlData.itens);
+                       else allNfeItensSaida.push(...xmlData.itens);
+                   }
+               }
             };
             
-            const filteredNfe = allNfe.filter(n => selectedMonths.has(getMonthYear(n.nota['Data de Emissão'])!));
-            const filteredCte = allCte.filter(c => selectedMonths.has(getMonthYear(c.nota['Data de Emissão'])!));
-
-            const canceledKeys = new Set<string>();
-            const allNfeItens: any[] = [];
+            for (const category of Object.keys(files)) {
+                const fileList = files[category];
+                if (fileList && fileList.length > 0) {
+                     if(category.includes('XML')) {
+                        await processXmlFiles(fileList, category);
+                     }
+                }
+            }
             
-            [...filteredNfe, ...filteredCte].forEach(xmlData => {
+            const canceledKeys = new Set<string>();
+            [...allNfe, ...allCte].forEach(xmlData => {
                  if (xmlData.isEvent) {
                     if (xmlData.eventType === 'Cancelamento') {
                         canceledKeys.add(xmlData.key);
@@ -357,26 +385,21 @@ export default function Home() {
                          const eventSet = exceptionKeys[xmlData.eventType as keyof typeof exceptionKeys];
                          if (eventSet) eventSet.add(xmlData.key);
                     }
-                } else if (xmlData.nota) {
-                    if (xmlData.nota['Status']?.includes('Cancelada')) {
-                        canceledKeys.add(xmlData.nota['Chave de acesso']);
-                    }
-                    if ('itens' in xmlData && xmlData.itens) {
-                        allNfeItens.push(...xmlData.itens);
-                    }
+                } else if (xmlData.nota && xmlData.nota['Status']?.includes('Cancelada')) {
+                    canceledKeys.add(xmlData.nota['Chave de acesso']);
                 }
             });
 
 
             const initialFrames = {
-                'NF-Stock NFE': filteredNfe,
-                'NF-Stock CTE': filteredCte,
-                'Itens de Entrada': allNfeItens,
-                'Itens de Saída': allNfeItens,
+                'NF-Stock NFE': allNfe.map(d => d.nota).filter(Boolean),
+                'NF-Stock CTE': allCte.map(d => d.nota).filter(Boolean),
+                'Itens de Entrada': allNfeItensEntrada,
+                'Itens de Saída': allNfeItensSaida,
                 'NF-Stock Emitidas': [] 
             };
             
-            const firstSpedLine = spedFile ? (spedFile.text()).toString().split('\n')[0]?.trim() || "" : "";
+            const firstSpedLine = spedFile ? (await spedFile.text()).split('\n')[0]?.trim() || "" : "";
             const tempSpedInfo = parseSpedInfo(firstSpedLine);
             const companyCnpj = tempSpedInfo ? tempSpedInfo.cnpj : null;
 
@@ -403,63 +426,41 @@ export default function Home() {
         setKeyCheckResult(null);
         
         if (!Object.values(files).some(fileList => fileList && fileList.length > 0)) {
-            toast({ variant: "destructive", title: "Nenhum arquivo carregado", description: "Por favor, carregue pelo menos um arquivo XML ou de exceção." });
+            toast({ variant: "destructive", title: "Nenhum arquivo carregado", description: "Por favor, carregue pelo menos um arquivo XML." });
             return;
         }
 
         setProcessing(true);
-        const allNfe: any[] = [];
-        const allCte: any[] = [];
         const months = new Set<string>();
 
         const getMonthYear = (dateStr: string) => {
             if (!dateStr) return null;
-            try {
-                return format(parseISO(dateStr), "MM/yyyy");
-            } catch {
-                return null;
-            }
+            try { return format(parseISO(dateStr), "MM/yyyy"); } catch { return null; }
         };
 
-        const processXmlFiles = async (fileList: File[], category: string) => {
+        const checkFileDates = async (fileList: File[], category: string) => {
              const type = category.includes('CTe') ? 'CTe' : 'NFe';
-             const uploadSource = category.includes('Saída') ? 'saida' : 'entrada';
-             
              for (const file of fileList) {
                 const fileContent = await file.text();
-                const xmlData = type === 'NFe' 
-                    ? extractNfeDataFromXml(fileContent, uploadSource) 
-                    : extractCteDataFromXml(fileContent, uploadSource);
-
-                if (!xmlData) continue;
-
-                const noteWithItems = { ...xmlData.nota, itens: ('itens' in xmlData && xmlData.itens) ? xmlData.itens : [] };
-                if (type === 'NFe') {
-                    allNfe.push(noteWithItems);
-                } else {
-                    allCte.push(noteWithItems);
-                }
-                
-                const monthYear = getMonthYear(noteWithItems.nota['Data de Emissão']);
-                if (monthYear) {
-                    months.add(monthYear);
+                const xmlData = type === 'NFe' ? extractNfeDataFromXml(fileContent, 'check') : extractCteDataFromXml(fileContent, 'check');
+                if (xmlData?.nota) {
+                    const monthYear = getMonthYear(xmlData.nota['Data de Emissão']);
+                    if (monthYear) months.add(monthYear);
                 }
             }
         };
         
-        for(const category of requiredFilesForStep1) {
+        for(const category of Object.keys(files)) {
             const fileList = files[category];
-            if(fileList && fileList.length > 0) {
-                 if(category.includes('XML')) {
-                    await processXmlFiles(fileList, category);
-                 }
+            if(fileList && fileList.length > 0 && category.includes('XML')) {
+                await checkFileDates(fileList, category);
             }
         }
         
         const sortedMonths = Array.from(months).sort((a, b) => {
             const [aMonth, aYear] = a.split('/');
             const [bMonth, bYear] = b.split('/');
-            return new Date(`${aYear}-${aMonth}-01`).getTime() - new Date(`${bYear}-${bMonth}-01`).getTime();
+            return new Date(parseInt(aYear), parseInt(aMonth) - 1).getTime() - new Date(parseInt(bYear), parseInt(bMonth) - 1).getTime();
         });
 
         if (sortedMonths.length > 1) {
@@ -468,17 +469,16 @@ export default function Home() {
             setTempSelectedMonths(new Set(sortedMonths)); // Pre-select all
             setIsMonthModalOpen(true);
         } else {
-            const selectedMonths = new Set(sortedMonths);
-            setSelectedMonths(selectedMonths);
-            processAndFilterData(allNfe, allCte, selectedMonths);
+            const selected = new Set(sortedMonths);
+            setSelectedMonths(selected);
+            await processAndFilterData(selected);
         }
     };
     
-    const handleMonthSelectionConfirm = () => {
+    const handleMonthSelectionConfirm = async () => {
         setIsMonthModalOpen(false);
         setSelectedMonths(tempSelectedMonths);
-        // We need to re-run the file processing with the filtered months
-        handleProcessPrimaryFiles(); // This seems recursive, let's rethink this
+        await processAndFilterData(tempSelectedMonths);
     };
 
     const handleValidateWithSped = async () => {
@@ -505,14 +505,14 @@ export default function Home() {
                 setSpedInfo(info);
             }
             
-            const finalValidationResult = await validateWithSped(results, spedFileContent);
+            const validationResult = await validateWithSped(results, spedFileContent);
 
-            if (finalValidationResult.error) {
-                throw new Error(finalValidationResult.error);
+            if (validationResult.error) {
+                throw new Error(validationResult.error);
             }
 
-            setKeyCheckResult(finalValidationResult.keyCheckResults || null);
-            setSpedInfo(finalValidationResult.spedInfo || info);
+            setKeyCheckResult(validationResult.keyCheckResults || null);
+            setSpedInfo(validationResult.spedInfo || info);
             
             toast({ title: "Validação SPED Concluída", description: "A verificação das chaves foi finalizada." });
         } catch (err: any) {
@@ -544,8 +544,8 @@ export default function Home() {
                 "Chaves Válidas": "Chaves Validas",
             };
             const orderedSheetNames = [
-                "Notas Válidas", "Itens de Entrada", "Emissão Própria", "NF-Stock Emitidas", "Itens de Saída", "Chaves Válidas", "Imobilizados", "Notas Canceladas",
-                "NF-Stock NFE Operação Não Realizada", "NF-Stock NFE Operação Desconhecida", "NF-Stock CTE Desacordo de Serviço", "Estornos"
+                "Notas Válidas", "Itens de Entrada", "Emissão Própria", "Itens de Saída", "Chaves Válidas", "Imobilizados", "Notas Canceladas",
+                "Estornos", "NF-Stock NFE Operação Não Realizada", "NF-Stock NFE Operação Desconhecida", "NF-Stock CTE Desacordo de Serviço"
             ].filter(name => results[name] && results[name].length > 0);
 
             orderedSheetNames.forEach(sheetName => {
