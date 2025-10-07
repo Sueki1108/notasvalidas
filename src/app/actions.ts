@@ -192,9 +192,9 @@ const forceCellAsString = (worksheet: XLSX.WorkSheet, headerName: string) => {
 export async function validateWithSped(processedData: DataFrames, spedFileContent: string) {
     try {
         let spedInfo: SpedInfo | null = null;
-        const allSpedKeys = new Map<string, Partial<KeyInfo>>();
+        const spedKeys = new Set<string>();
+        const allSpedKeyInfo = new Map<string, Partial<KeyInfo>>();
         const participants = parseAllParticipants(spedFileContent);
-        const keysInTxt = new Set<string>();
         
         const lines = spedFileContent.split('\n');
         if (lines.length > 0 && lines[0]) {
@@ -203,22 +203,26 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         
         for (const line of lines) {
             const trimmedLine = line.trim();
-            const parsedData = parseSpedLineForData(trimmedLine, participants);
+            const parts = trimmedLine.split('|');
+            let key = '';
             
-            if (parsedData && parsedData.key) {
-                const cleanKey = normalizeKey(parsedData.key);
-                if (!allSpedKeys.has(cleanKey)) {
-                    allSpedKeys.set(cleanKey, parsedData);
-                }
-                keysInTxt.add(cleanKey);
+            // C100 for NF-e
+            if (parts.length > 9 && parts[1] === 'C100' && parts[4] === '55') {
+                 key = normalizeKey(parts[9]);
+            } 
+            // D100 for CT-e
+            else if (parts.length > 10 && parts[1] === 'D100' && parts[4] === '57') {
+                 key = normalizeKey(parts[10]);
             }
-             // Also parse D195 for referenced NF-e keys
-            const nfeInCteKey = parseNfeInCte(trimmedLine);
-            if (nfeInCteKey && nfeInCteKey.key) {
-                const cleanNfeKey = normalizeKey(nfeInCteKey.key);
-                keysInTxt.add(cleanNfeKey);
-                if (!allSpedKeys.has(cleanNfeKey)) {
-                    allSpedKeys.set(cleanNfeKey, { key: cleanNfeKey, docType: 'NFe', comment: 'Referenciada em CT-e' });
+
+            if (key && key.length === 44) {
+                spedKeys.add(key);
+                if (!allSpedKeyInfo.has(key)) {
+                    // Get detailed info for the key if needed later
+                    const parsedData = parseSpedLineForData(trimmedLine, participants);
+                    if (parsedData) {
+                         allSpedKeyInfo.set(key, parsedData);
+                    }
                 }
             }
         }
@@ -240,7 +244,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         const canceledXmlKeys = new Set((processedData['Notas Canceladas'] || []).map(r => normalizeKey(r['Chave de acesso'])));
         
         const keysNotFoundInTxt = [...spreadsheetKeys]
-            .filter(key => !keysInTxt.has(key))
+            .filter(key => !spedKeys.has(key))
             .map(key => {
                 const note = allNotesMap.get(key);
                 const isCte = note && ( (note.docType && note.docType === 'CTe') || (note.uploadSource && note.uploadSource.includes('CTe')) || (normalizeKey(note['Chave de acesso']).substring(20, 22) === '57'));
@@ -256,15 +260,10 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                 }
             });
 
-        const keysInTxtNotInSheet = [...keysInTxt]
-            .filter(key => {
-                const spedData = allSpedKeys.get(key);
-                const isCancelledInSped = spedData?.comment === 'Documento Cancelado/Denegado no SPED';
-                const isCancelledInXml = canceledXmlKeys.has(key);
-                return !spreadsheetKeys.has(key) && !isCancelledInSped && !isCancelledInXml;
-            })
+        const keysInTxtNotInSheet = [...spedKeys]
+            .filter(key => !spreadsheetKeys.has(key) && !canceledXmlKeys.has(key))
             .map(key => {
-                const spedData = allSpedKeys.get(key);
+                const spedData = allSpedKeyInfo.get(key);
                 return {
                     key: key,
                     origin: 'sped' as 'sped',
@@ -278,7 +277,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             });
         
         const duplicateKeysInSheet = findDuplicates(spreadsheetKeysArray);
-        const duplicateKeysInTxt = findDuplicates(Array.from(allSpedKeys.keys()).map(k => normalizeKey(k)));
+        const duplicateKeysInTxt = findDuplicates(Array.from(spedKeys));
 
         const keyCheckResults: KeyCheckResult = { 
             keysNotFoundInTxt, 
@@ -287,7 +286,6 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             duplicateKeysInTxt,
         };
         
-        // This is the CRITICAL change. We are no longer saving the huge `processedData` blob.
         if (spedInfo && spedInfo.cnpj) {
             const docRef = doc(db, "verifications", spedInfo.cnpj);
             
@@ -295,7 +293,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                 cnpj: spedInfo.cnpj,
                 companyName: spedInfo.companyName,
                 competence: spedInfo.competence,
-                keyCheckResults: keyCheckResults, // Only save the results, not the raw data
+                keyCheckResults: keyCheckResults, 
                 verifiedAt: serverTimestamp(),
             };
 
