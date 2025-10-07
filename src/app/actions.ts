@@ -185,7 +185,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             spedInfo = parseSpedInfo(lines[0].trim());
         }
         
-        // Step 1: Reliably extract all keys from SPED C100 and D100 records.
+        // Step 1: Reliably extract all keys from SPED C100 and D100 records and enrich data.
         for (const line of lines) {
             const trimmedLine = line.trim();
             const parts = trimmedLine.split('|');
