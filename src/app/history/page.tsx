@@ -33,6 +33,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import type { KeyInfo, KeyCheckResult } from "@/app/actions";
+import { downloadHistoryData } from "@/app/actions";
+
 
 const forceCellAsString = (worksheet: XLSX.WorkSheet, headerName: string) => {
     const headerAddress = Object.keys(worksheet).find(key => worksheet[key].v === headerName);
@@ -180,9 +182,35 @@ export default function HistoryPage() {
         return (results.keysInTxtNotInSheet?.length || 0) + (results.keysNotFoundInTxt?.length || 0);
     }
     
-    const getTotalKeysCount = (v: Verification) => {
-         // Since processedData is no longer saved, we can't get the total keys count
-         return 'N/A';
+    const handleDownload = async (verificationId: string, type: 'processing' | 'validation') => {
+        toast({ title: "Preparando download...", description: "Aguarde enquanto geramos sua planilha." });
+        try {
+            const result = await downloadHistoryData(verificationId);
+            if(result.error) throw new Error(result.error);
+
+            let base64Data, filename;
+            if (type === 'processing' && result.processingBase64) {
+                base64Data = result.processingBase64;
+                filename = `processamento_principal_${verificationId.substring(0,8)}.xlsx`;
+            } else if (type === 'validation' && result.validationBase64) {
+                base64Data = result.validationBase64;
+                filename = `validacao_sped_${verificationId.substring(0,8)}.xlsx`;
+            }
+
+            if(base64Data && filename) {
+                const link = document.createElement('a');
+                link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64Data}`;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                toast({ title: "Download Iniciado!", description: `O arquivo ${filename} está sendo baixado.` });
+            } else {
+                 throw new Error("Nenhum dado encontrado para este tipo de relatório.");
+            }
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: "Erro no Download", description: err.message });
+        }
     }
 
 
@@ -287,9 +315,22 @@ export default function HistoryPage() {
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="text-right">
-                                                     <Button variant="outline" size="sm" onClick={() => setSelectedVerification(v)}>
-                                                        <Search className="mr-2 h-4 w-4" /> Ver Detalhes
-                                                    </Button>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="outline" size="sm">Ações <ChevronDown className="ml-2 h-4 w-4" /></Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent>
+                                                            <DropdownMenuItem onClick={() => setSelectedVerification(v)}>
+                                                                <Search className="mr-2 h-4 w-4" /> Ver Detalhes
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => handleDownload(v.id, 'processing')}>
+                                                                <Download className="mr-2 h-4 w-4" /> Baixar Proc. Principal
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => handleDownload(v.id, 'validation')}>
+                                                                <Download className="mr-2 h-4 w-4" /> Baixar Validação SPED
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
                                                 </TableCell>
                                             </TableRow>
                                         )})}

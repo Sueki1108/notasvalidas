@@ -3,7 +3,7 @@
 
 import { useContext, useState } from "react";
 import * as XLSX from "xlsx";
-import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon, FolderSync, Search, Replace } from "lucide-react";
+import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon, FolderSync, Search, Replace, Download as DownloadIcon } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -623,6 +623,16 @@ export default function Home() {
                                             {processing ? "Processando..." : "Processar Arquivos"}
                                         </Button>
                                     )}
+                                     {results && (
+                                         <div className="flex flex-col gap-2 sm:flex-row">
+                                            <Button onClick={handleDownload} className="w-full">
+                                                <DownloadIcon className="mr-2"/> Baixar Planilha Processada
+                                            </Button>
+                                            <Button onClick={() => setActiveTab('validate')} className="w-full">
+                                                Ir para Validação SPED
+                                            </Button>
+                                         </div>
+                                    )}
                                 </CardContent>
                             </Card>
                         </TabsContent>
@@ -725,7 +735,7 @@ export default function Home() {
                                         </div>
                                     </div>
                                     <Button onClick={handleDownload} disabled={!results}>
-                                        Baixar Planilha (.xlsx)
+                                        <DownloadIcon className="mr-2"/>Baixar Planilha (.xlsx)
                                     </Button>
                                 </div>
                             </CardHeader>

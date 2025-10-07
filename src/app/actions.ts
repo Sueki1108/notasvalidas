@@ -974,6 +974,79 @@ export async function separateXmlFromExcel(data: { excelFile: string, zipFile: s
         return { error: error.message || "Ocorreu um erro ao separar os arquivos XML." };
     }
 }
+
+
+export async function downloadHistoryData(verificationId: string) {
+    if (!verificationId) {
+        return { error: "ID da verificação é obrigatório." };
+    }
+
+    try {
+        const docRef = doc(db, "verifications", verificationId);
+        const docSnap = await getDoc(docRef);
+
+        if (!docSnap.exists()) {
+            return { error: "Histórico não encontrado." };
+        }
+
+        const data = docSnap.data();
+        const results = data.processedData;
+        const keyCheckResults = data.keyCheckResults;
+
+        // Gerar Planilha de Processamento Principal
+        const wbProcessing = XLSX.utils.book_new();
+        const sheetNameMap: { [key: string]: string } = {
+            "NF-Stock NFE Operação Não Realizada": "NFE Op Nao Realizada",
+            "NF-Stock NFE Operação Desconhecida": "NFE Op Desconhecida",
+            "NF-Stock CTE Desacordo de Serviço": "CTE Desacordo Servico",
+            "Estornos": "Estornos",
+            "NF-Stock Emitidas": "NF Emitidas",
+            "Notas Válidas": "Notas Validas",
+            "Emissão Própria": "Emissao Propria",
+            "Notas Canceladas": "Notas Canceladas",
+            "Itens de Entrada": "Itens de Entrada",
+            "Itens de Saída": "Itens de Saida",
+            "Imobilizados": "Imobilizados",
+            "Chaves Válidas": "Chaves Validas",
+        };
+        const orderedSheetNames = [
+            "Notas Válidas", "Itens de Entrada", "Emissão Própria", "NF-Stock Emitidas", "Itens de Saída", "Chaves Válidas", "Imobilizados", "Notas Canceladas",
+            "NF-Stock NFE Operação Não Realizada", "NF-Stock NFE Operação Desconhecida", "NF-Stock CTE Desacordo de Serviço", "Estornos"
+        ];
+
+        orderedSheetNames.forEach(sheetName => {
+            if (results[sheetName] && results[sheetName].length > 0) {
+                const worksheet = XLSX.utils.json_to_sheet(results[sheetName]);
+                worksheet['!cols'] = Object.keys(results[sheetName][0] || {}).map(() => ({ wch: 20 }));
+                const excelSheetName = sheetNameMap[sheetName] || sheetName;
+                forceCellAsString(worksheet, "Chave de acesso");
+                forceCellAsString(worksheet, "Chave");
+                XLSX.utils.book_append_sheet(wbProcessing, worksheet, excelSheetName);
+            }
+        });
+        const processingBase64 = XLSX.write(wbProcessing, { bookType: 'xlsx', type: 'base64' });
+
+        // Gerar Planilha de Validação SPED
+        const wbValidation = XLSX.utils.book_new();
+        if (keyCheckResults) {
+            const { keysNotFoundInTxt, keysInTxtNotInSheet } = keyCheckResults;
+            const notFoundSheet = XLSX.utils.json_to_sheet(keysNotFoundInTxt);
+            forceCellAsString(notFoundSheet, "key");
+            XLSX.utils.book_append_sheet(wbValidation, notFoundSheet, "Nao Encontradas no SPED");
+            
+            const notInSheet = XLSX.utils.json_to_sheet(keysInTxtNotInSheet);
+            forceCellAsString(notInSheet, "key");
+            XLSX.utils.book_append_sheet(wbValidation, notInSheet, "Apenas no SPED");
+        }
+        const validationBase64 = XLSX.write(wbValidation, { bookType: 'xlsx', type: 'base64' });
+
+        return { processingBase64, validationBase64 };
+
+    } catch (error: any) {
+        console.error("Erro ao gerar planilhas do histórico:", error);
+        return { error: error.message || "Ocorreu um erro ao buscar os dados do histórico." };
+    }
+}
       
 
     
