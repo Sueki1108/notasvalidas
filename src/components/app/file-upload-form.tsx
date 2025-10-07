@@ -1,7 +1,7 @@
 "use client"
 
 import type { ChangeEvent } from "react";
-import { Upload, FileCheck } from "lucide-react";
+import { Upload, FileCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export type FileList = Record<string, File[] | null>;
@@ -41,14 +41,18 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
                 <div key={name} className={`relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-secondary/50 p-4 transition-all min-h-[160px] ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
                     {files[name] && files[name]!.length > 0 ? (
                         <>
-                            {!disabled && (
-                                <div className="absolute right-1 top-1">
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onClearFile(name)}>
-                                        <span className="sr-only">Limpar</span>
-                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                    </Button>
-                                </div>
-                            )}
+                            <div className="absolute right-1 top-1 flex gap-1">
+                                {!disabled && (
+                                     <label htmlFor={name} className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-7 w-7 cursor-pointer hover:bg-accent hover:text-accent-foreground">
+                                        <Upload className="h-4 w-4" />
+                                        <span className="sr-only">Adicionar mais arquivos</span>
+                                     </label>
+                                )}
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onClearFile(name)} disabled={disabled}>
+                                    <Trash2 className="h-4 w-4" />
+                                    <span className="sr-only">Limpar</span>
+                                </Button>
+                            </div>
                             <div className="flex flex-col items-center gap-2 text-center">
                                 <FileCheck className="h-10 w-10 text-primary" />
                                 <p className="font-semibold">{getDisplayName(name)}</p>
@@ -66,18 +70,18 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
                                     Clique para carregar
                                 </p>
                             </label>
-                            <input
-                                id={name}
-                                name={name}
-                                type="file"
-                                accept={getFileAcceptType(name)}
-                                className="sr-only"
-                                onChange={onFileChange}
-                                multiple={isMultiple(name)}
-                                disabled={disabled}
-                            />
                         </>
                     )}
+                    <input
+                        id={name}
+                        name={name}
+                        type="file"
+                        accept={getFileAcceptType(name)}
+                        className="sr-only"
+                        onChange={onFileChange}
+                        multiple={isMultiple(name)}
+                        disabled={disabled}
+                    />
                 </div>
             ))}
         </div>

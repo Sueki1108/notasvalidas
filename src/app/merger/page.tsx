@@ -4,7 +4,7 @@
 import * as React from "react";
 import { useState, type ChangeEvent } from "react";
 import Link from 'next/link';
-import { Sheet, UploadCloud, Group, Download, Trash2, File, Loader2, History, ChevronDown, FileText, FolderSync, Search, Replace } from "lucide-react";
+import { Sheet, UploadCloud, Group, Download, Trash2, File as FileIcon, Loader2, History, ChevronDown, FileText, FolderSync, Search, Replace } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -205,11 +205,11 @@ export default function MergerPage() {
 
                             {files.length > 0 && (
                                 <div className="space-y-2">
-                                    <h4 className="font-medium">Arquivos Carregados:</h4>
+                                    <h4 className="font-medium">Arquivos Carregados ({files.length}):</h4>
                                     <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 rounded-md border p-4">
                                         {files.map((file, index) => (
                                             <li key={index} className="flex items-center gap-2 text-sm">
-                                                <File className="h-4 w-4 text-primary"/>
+                                                <FileIcon className="h-4 w-4 text-primary"/>
                                                 <span className="truncate">{file.name}</span>
                                             </li>
                                         ))}
@@ -219,7 +219,7 @@ export default function MergerPage() {
 
                              {error && (
                                 <Alert variant="destructive">
-                                    <File className="h-4 w-4" />
+                                    <FileIcon className="h-4 w-4" />
                                     <AlertTitle>Erro</AlertTitle>
                                     <AlertDescription>{error}</AlertDescription>
                                 </Alert>

@@ -281,7 +281,7 @@ export default function SageItensNfPage() {
 
                             {files.length > 0 && (
                                 <div className="space-y-2">
-                                    <h4 className="font-medium">Arquivos Carregados:</h4>
+                                    <h4 className="font-medium">Arquivos Carregados ({files.length}):</h4>
                                     <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 rounded-md border p-4">
                                         {files.map((file, index) => (
                                             <li key={index} className="flex items-center gap-2 text-sm">

@@ -305,9 +305,10 @@ export default function Home() {
             if (fileName === 'SPED TXT') {
                 setSpedFile(selectedFiles[0]);
             } else {
-                const currentFiles = files[fileName] || [];
-                const newFiles = { ...files, [fileName]: [...currentFiles, ...Array.from(selectedFiles)] };
-                setFiles(newFiles);
+                setFiles(prev => ({
+                    ...prev,
+                    [fileName]: [...(prev[fileName] || []), ...Array.from(selectedFiles)]
+                }));
             }
         }
     };
