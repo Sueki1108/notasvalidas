@@ -23,9 +23,15 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
 
     const nfe = (processedDfs["NF-Stock NFE"] || []).map(d => ({ ...d, docType: 'NFe' }));
     const cte = (processedDfs["NF-Stock CTE"] || []).map(d => ({ ...d, docType: 'CTe' }));
-    const allNotes = [...nfe, ...cte];
+    let allNotes = [...nfe, ...cte];
     
+    // 1. Isolate Canceled Notes First
     processedDfs["Notas Canceladas"] = allNotes.filter(row => row && canceledKeys.has(normalizeKey(row['Chave de acesso'])));
+    
+    // 2. Remove canceled notes from the main pool to ensure they don't appear anywhere else.
+    allNotes = allNotes.filter(row => row && !canceledKeys.has(normalizeKey(row['Chave de acesso'])));
+
+    // Process other exceptions from the now clean 'allNotes' pool
     processedDfs["NF-Stock NFE Operação Não Realizada"] = allNotes.filter(row => row && exceptionKeys.OperacaoNaoRealizada.has(normalizeKey(row['Chave de acesso'])));
     processedDfs["NF-Stock NFE Operação Desconhecida"] = allNotes.filter(row => row && exceptionKeys.Desconhecimento.has(normalizeKey(row['Chave de acesso'])));
     processedDfs["NF-Stock CTE Desacordo de Serviço"] = allNotes.filter(row => row && exceptionKeys.Desacordo.has(normalizeKey(row['Chave de acesso'])));
@@ -33,7 +39,7 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
 
 
     const exceptionKeySet = new Set([
-        ...Array.from(canceledKeys),
+        // ...Array.from(canceledKeys), // No longer needed here as they are already filtered out
         ...Array.from(exceptionKeys.OperacaoNaoRealizada),
         ...Array.from(exceptionKeys.Desconhecimento),
         ...Array.from(exceptionKeys.Desacordo),
@@ -43,7 +49,7 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
     const ownEmissionNotes: any[] = [];
     const ownEmissionValidKeys = new Set<string>();
 
-    const allNfeNotes = (processedDfs["NF-Stock NFE"] || []);
+    const allNfeNotes = allNotes.filter(n => n.docType === 'NFe');
 
     if (companyCnpj) {
         allNfeNotes.forEach(nota => {
@@ -53,7 +59,7 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
                 const cleanKey = normalizeKey(nota['Chave de acesso']);
 
                 if (!exceptionKeySet.has(cleanKey)) {
-                     if (nota.uploadSource === 'saida' || (nota.uploadSource === 'entrada' && nota.isOwnEmissionDevolution)) {
+                     if (nota.uploadSource === 'saida' || nota.isOwnEmissionDevolution) {
                         ownEmissionValidKeys.add(cleanKey);
                      }
                 }
@@ -83,7 +89,8 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
         row && ownEmissionValidKeys.has(normalizeKey(row["Chave de acesso"]))
     );
 
-    processedDfs["NF-Stock Emitidas"] = (processedDfs["NF-Stock Emitidas"] || []).filter(row => row && !canceledKeys.has(normalizeKey(row['Chave de acesso'])));
+    // This sheet is deprecated and will be removed, but we clear it for safety
+    processedDfs["NF-Stock Emitidas"] = [];
     
     if (processedDfs["Itens de Entrada"] && processedDfs["Itens de Entrada"].length > 0) {
         processedDfs["Imobilizados"] = processedDfs["Itens de Entrada"].filter(row => {
