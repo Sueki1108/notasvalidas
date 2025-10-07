@@ -94,22 +94,6 @@ const parseAllParticipants = (spedFileContent: string) => {
     return participants;
 };
 
-const parseNfeInCte = (line: string): { key: string } | null => {
-    if (line.startsWith('|D195|')) {
-        const parts = line.split('|');
-        if (parts.length > 2) {
-            const description = parts[2];
-            // Example format: "Chave de Acesso da NF-e: 12345... (44 digits)"
-            const match = description.match(/(\d{44})/);
-            if (match && match[1]) {
-                return { key: match[1] };
-            }
-        }
-    }
-    return null;
-};
-
-
 const parseSpedLineForData = (line: string, participants: Map<string, string>): Partial<KeyInfo> | null => {
     const parts = line.split('|');
     const docModel = parts[4]; // COD_MOD - 55 for NFe, 57 for CTe
