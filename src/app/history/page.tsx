@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, Sheet, History, Search, ArrowLeft, CheckCircle, XCircle, MessageSquare, Group, FileText, ChevronDown, FolderSync, Replace, Copy, Download } from "lucide-react";
 import Link from 'next/link';
+import * as XLSX from "xlsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +34,19 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import type { KeyInfo, KeyCheckResult } from "@/app/actions";
 
+const forceCellAsString = (worksheet: XLSX.WorkSheet, headerName: string) => {
+    const headerAddress = Object.keys(worksheet).find(key => worksheet[key].v === headerName);
+    if (!headerAddress) return;
+    const headerCol = headerAddress.replace(/\d+$/, '');
+    for (const key in worksheet) {
+        if (key.startsWith(headerCol) && key !== headerAddress) {
+            if (worksheet[key].t === 'n') { // if it's a number
+                worksheet[key].t = 's'; // change type to string
+                worksheet[key].v = String(worksheet[key].v); // ensure value is a string
+            }
+        }
+    }
+};
 
 type VerificationKey = KeyInfo & {
   foundInSped: boolean;

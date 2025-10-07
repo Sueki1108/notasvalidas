@@ -156,6 +156,20 @@ const normalizeKey = (key: any): string => {
     return String(key).replace(/\D/g, '').trim();
 }
 
+const forceCellAsString = (worksheet: XLSX.WorkSheet, headerName: string) => {
+    const headerAddress = Object.keys(worksheet).find(key => worksheet[key].v === headerName);
+    if (!headerAddress) return;
+    const headerCol = headerAddress.replace(/\d+$/, '');
+    for (const key in worksheet) {
+        if (key.startsWith(headerCol) && key !== headerAddress) {
+            if (worksheet[key].t === 'n') { // if it's a number
+                worksheet[key].t = 's'; // change type to string
+                worksheet[key].v = String(worksheet[key].v); // ensure value is a string
+            }
+        }
+    }
+};
+
 
 export async function validateWithSped(processedData: DataFrames, spedFileContent: string) {
     try {
@@ -440,20 +454,6 @@ function getValueByPath(obj: any, path: string | string[]): any {
     }
     return current !== undefined && current !== null ? String(current) : 'N/A';
 }
-
-const forceCellAsString = (worksheet: XLSX.WorkSheet, headerName: string) => {
-    const headerAddress = Object.keys(worksheet).find(key => worksheet[key].v === headerName);
-    if (!headerAddress) return;
-    const headerCol = headerAddress.replace(/\d+$/, '');
-    for (const key in worksheet) {
-        if (key.startsWith(headerCol) && key !== headerAddress) {
-            if (worksheet[key].t === 'n') { // if it's a number
-                worksheet[key].t = 's'; // change type to string
-                worksheet[key].v = String(worksheet[key].v); // ensure value is a string
-            }
-        }
-    }
-};
 
 export async function extractNfeData(files: { name: string, content: string }[]) {
      const SPECIFIC_TAGS_MAP: { [key: string]: string[] } = {
@@ -828,7 +828,7 @@ const getPaths = (obj: any, parentPath = ''): string[] => {
 
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            const newPath = parentPath ? `${parentPath}/${key}` : key;
+            const newPath = parentKey ? `${parentKey}/${key}` : key;
             paths.push(newPath);
             if (typeof obj[key] === 'object') {
                 paths = paths.concat(getPaths(obj[key], newPath));
@@ -972,3 +972,4 @@ export async function separateXmlFromExcel(data: { excelFile: string, zipFile: s
       
 
     
+

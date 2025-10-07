@@ -24,6 +24,20 @@ type ProcessedData = {
     [key: string]: any[];
 }
 
+const forceCellAsString = (worksheet: XLSX.WorkSheet, headerName: string) => {
+    const headerAddress = Object.keys(worksheet).find(key => worksheet[key].v === headerName);
+    if (!headerAddress) return;
+    const headerCol = headerAddress.replace(/\d+$/, '');
+    for (const key in worksheet) {
+        if (key.startsWith(headerCol) && key !== headerAddress) {
+            if (worksheet[key].t === 'n') { // if it's a number
+                worksheet[key].t = 's'; // change type to string
+                worksheet[key].v = String(worksheet[key].v); // ensure value is a string
+            }
+        }
+    }
+};
+
 export default function SageItensNfPage() {
     const [files, setFiles] = useState<File[]>([]);
     const [processing, setProcessing] = useState(false);
@@ -162,7 +176,7 @@ export default function SageItensNfPage() {
 
         for (const sheetName in processedData) {
             const final_df_data = processedData[sheetName].map(row => {
-                const descontoStr = String(row['Desconto'] || '').replace('.', ',');
+                const descontoStr = String(row['Desconto'] || '');
                 const valorItemStr = String(row['Valor do Item'] || '').replace('.', ',');
                 row['Chave'] = descontoStr + valorItemStr;
                 return row;
@@ -171,6 +185,7 @@ export default function SageItensNfPage() {
             const worksheet = XLSX.utils.json_to_sheet(final_df_data);
              if (final_df_data.length > 0) {
                 worksheet['!cols'] = Object.keys(final_df_data[0] || {}).map(() => ({ wch: 20 }));
+                 forceCellAsString(worksheet, "Chave");
             }
             XLSX.utils.book_append_sheet(writer, worksheet, sheetName);
         }
