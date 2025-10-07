@@ -143,7 +143,7 @@ export default function MergerPage() {
                                 <DropdownMenuItem asChild>
                                     <Link href="/sage-itens-nf" className="flex items-center gap-2 w-full"><FileText />Sage - Itens da NF</Link>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem asChild>
+                                 <DropdownMenuItem asChild>
                                     <Link href="/unify-folders" className="flex items-center gap-2 w-full"><FolderSync />Unificar Pastas</Link>
                                 </DropdownMenuItem>
                                  <DropdownMenuItem asChild>
@@ -188,7 +188,7 @@ export default function MergerPage() {
                                     <UploadCloud className="h-12 w-12 text-muted-foreground" />
                                     <p className="mt-4 font-semibold">Clique para carregar as planilhas</p>
                                     <p className="text-sm text-muted-foreground">
-                                        Você pode selecionar múltiplos arquivos
+                                        Você pode selecionar múltiplos arquivos (.xlsx, .xls, .csv, .ods)
                                     </p>
                                 </label>
                                 <input

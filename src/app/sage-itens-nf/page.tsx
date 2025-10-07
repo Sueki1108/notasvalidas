@@ -89,16 +89,14 @@ export default function SageItensNfPage() {
         try {
             for (const file of files) {
                 const sheetName = file.name.replace(/\.[^/.]+$/, "");
-                const fileExtension = file.name.split('.').pop()?.toLowerCase();
                 
-                let workbook;
-                 // For all formats, read as buffer, then standardize to ODS in memory
+                // For all formats, read as buffer, then standardize to ODS in memory
                 const bufferContent = await file.arrayBuffer();
                 const initialWorkbook = XLSX.read(bufferContent, { type: 'buffer' });
                 
                 // Standardize to ODS in memory
                 const odsOutput = XLSX.write(initialWorkbook, { bookType: 'ods', type: 'buffer' });
-                workbook = XLSX.read(odsOutput, { type: 'buffer' });
+                const workbook = XLSX.read(odsOutput, { type: 'buffer' });
 
 
                 const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
