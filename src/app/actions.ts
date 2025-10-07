@@ -94,20 +94,6 @@ const parseAllParticipants = (spedFileContent: string) => {
     return participants;
 };
 
-// New helper function to parse D195 for NFe keys
-const parseNfeInCte = (line: string): Partial<KeyInfo> | null => {
-    if (line.startsWith('|D195|')) {
-        const parts = line.split('|');
-        // The NFe key can be in the description field (part 3)
-        const description = parts[3] || '';
-        const keyMatch = description.match(/chv_nfe\s*([0-9]{44})/i);
-        if (keyMatch && keyMatch[1]) {
-            return { key: keyMatch[1], docType: 'NFe', comment: 'Referenciada em CT-e' };
-        }
-    }
-    return null;
-}
-
 const parseSpedLineForData = (line: string, participants: Map<string, string>): Partial<KeyInfo> | null => {
     const parts = line.split('|');
     const docModel = parts[4]; // COD_MOD - 55 for NFe, 57 for CTe
@@ -200,14 +186,8 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         
         for (const line of lines) {
             const trimmedLine = line.trim();
-            // Try parsing as C100/D100 first
             let parsedData = parseSpedLineForData(trimmedLine, participants);
             
-            // If not found, try parsing as D195 for referenced NFe
-            if (!parsedData) {
-                parsedData = parseNfeInCte(trimmedLine);
-            }
-
             if (parsedData && parsedData.key) {
                  const cleanKey = normalizeKey(parsedData.key);
                  if (!allSpedKeys.has(cleanKey)) {
@@ -1000,3 +980,4 @@ export async function downloadHistoryData(verificationId: string) {
     return { error: "A funcionalidade de download do histórico foi descontinuada para resolver problemas de limite de tamanho do banco de dados." };
 }
     
+
