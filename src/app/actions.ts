@@ -2,7 +2,7 @@
 'use server';
 
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, serverTimestamp, updateDoc, query, orderBy } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
@@ -177,7 +177,10 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         const allSpedKeys = new Map<string, Partial<KeyInfo>>();
         
         // This is the definitive list of valid notes from the XML/Excel processing step
-        const allNotesFromXmls = [...(processedData["Notas Válidas"] || []), ...(processedData["Emissão Própria"] || [])];
+        const allNotesFromXmls = [
+            ...(processedData["Notas Válidas"] || []), 
+            ...(processedData["Emissão Própria"] || [])
+        ];
         const allNotesMap = new Map(allNotesFromXmls.map(note => [
             normalizeKey(note['Chave de acesso']), 
             note
@@ -972,4 +975,3 @@ export async function separateXmlFromExcel(data: { excelFile: string, zipFile: s
       
 
     
-

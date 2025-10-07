@@ -34,6 +34,12 @@ const normalizeKey = (key: any): string => {
     return String(key).replace(/\D/g, '').trim();
 }
 
+type ExceptionKeys = {
+    OperacaoNaoRealizada: Set<string>;
+    Desconhecimento: Set<string>;
+    Desacordo: Set<string>;
+    Estorno: Set<string>;
+};
 
 const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
     const parser = new DOMParser();
@@ -439,34 +445,14 @@ export default function Home() {
         try {
             const spedFileContent = await spedFile.text();
             
-            // Re-run processing with final CNPJ if not already done
             const info = parseSpedInfo(spedFileContent.split('\n')[0]?.trim() || "");
             if (!info || !info.cnpj) {
                 throw new Error("Não foi possível extrair o CNPJ da empresa do arquivo SPED. Verifique a primeira linha (|0000|).");
             }
             if (!spedInfo || spedInfo.cnpj !== info.cnpj) {
                 setSpedInfo(info);
-                 const reprocessedData = processDataFrames(
-                    { // Reconstruct initial frames from results
-                        'NF-Stock NFE': results['NF-Stock NFE'] || [],
-                        'NF-Stock CTE': results['NF-Stock CTE'] || [],
-                        'Itens de Entrada': results['Itens de Entrada'] || [],
-                        'Itens de Saída': results['Itens de Saída'] || [],
-                        'NF-Stock Emitidas': results['NF-Stock Emitidas'] || [],
-                    }, 
-                    new Set((results['Notas Canceladas'] || []).map(r => normalizeKey(r['Chave de acesso']))),
-                    {
-                        OperacaoNaoRealizada: new Set((results["NF-Stock NFE Operação Não Realizada"] || []).map(r => normalizeKey(r['Chave de acesso']))),
-                        Desconhecimento: new Set((results["NF-Stock NFE Operação Desconhecida"] || []).map(r => normalizeKey(r['Chave de acesso']))),
-                        Desacordo: new Set((results["NF-Stock CTE Desacordo de Serviço"] || []).map(r => normalizeKey(r['Chave de acesso']))),
-                        Estorno: new Set((results["Estornos"] || []).map(r => normalizeKey(r['Chave de acesso']))),
-                    },
-                    info.cnpj
-                );
-                setResults(reprocessedData);
             }
             
-
             const finalValidationResult = await validateWithSped(results, spedFileContent);
 
             if (finalValidationResult.error) {
@@ -474,13 +460,12 @@ export default function Home() {
             }
 
             setKeyCheckResult(finalValidationResult.keyCheckResults || null);
-            setSpedInfo(finalValidationResult.spedInfo || null);
+            setSpedInfo(finalValidationResult.spedInfo || info);
             
             toast({ title: "Validação SPED Concluída", description: "A verificação das chaves foi finalizada." });
         } catch (err: any) {
              setError(err.message || "Ocorreu um erro desconhecido na validação.");
              setKeyCheckResult(null);
-             setSpedInfo(null);
              toast({ variant: "destructive", title: "Erro na Validação SPED", description: err.message });
         } finally {
             setValidating(false);
@@ -760,5 +745,3 @@ export default function Home() {
         </div>
     );
 }
-
-    
