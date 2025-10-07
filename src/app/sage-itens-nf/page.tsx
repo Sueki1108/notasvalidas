@@ -273,7 +273,7 @@ export default function SageItensNfPage() {
                                     className="sr-only"
                                     onChange={handleFileChange}
                                     multiple
-                                    accept=".xlsx,.xls,.csv,.ods,.slk,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/vnd.oasis.opendocument.spreadsheet,text/x-slk"
+                                    accept=".xlsx,.xls,.csv,.ods,.slk,application/vnd.oasis.opendocument.spreadsheet,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/x-slk"
                                 />
                             </div>
 
@@ -340,3 +340,4 @@ export default function SageItensNfPage() {
         </div>
     );
 }
+

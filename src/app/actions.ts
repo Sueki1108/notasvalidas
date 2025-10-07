@@ -190,11 +190,11 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             const parts = trimmedLine.split('|');
             let key = '';
             
-            // C100 for NF-e
+            // Simplified key extraction - C100 for NF-e
             if (parts.length > 9 && parts[1] === 'C100' && parts[4] === '55') {
                  key = normalizeKey(parts[9]);
             } 
-            // D100 for CT-e
+            // Simplified key extraction - D100 for CT-e
             else if (parts.length > 10 && parts[1] === 'D100' && parts[4] === '57') {
                  key = normalizeKey(parts[10]);
             }
@@ -211,16 +211,16 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             }
         }
         
-        const allNotesFromXmls = [
+        const validSheetNotes = [
             ...(processedData["Notas Válidas"] || []), 
             ...(processedData["Emissão Própria"] || [])
         ];
-        const allNotesMap = new Map(allNotesFromXmls.map(note => [
+        const validSheetMap = new Map(validSheetNotes.map(note => [
             normalizeKey(note['Chave de acesso']), 
             note
         ]));
 
-        const spreadsheetKeysArray = allNotesFromXmls
+        const spreadsheetKeysArray = validSheetNotes
             .map(row => normalizeKey(row['Chave de acesso']))
             .filter(key => key);
         const spreadsheetKeys = new Set(spreadsheetKeysArray);
@@ -230,7 +230,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         const keysNotFoundInTxt = [...spreadsheetKeys]
             .filter(key => !spedKeys.has(key))
             .map(key => {
-                const note = allNotesMap.get(key);
+                const note = validSheetMap.get(key);
                 const isCte = note && ( (note.docType && note.docType === 'CTe') || (note.uploadSource && note.uploadSource.includes('CTe')) || (normalizeKey(note['Chave de acesso']).substring(20, 22) === '57'));
                 const isSaida = note && spedInfo && note['Emitente CPF/CNPJ'] === spedInfo.cnpj;
                 return {
