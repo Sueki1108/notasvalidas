@@ -39,7 +39,6 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
 
 
     const exceptionKeySet = new Set([
-        // ...Array.from(canceledKeys), // No longer needed here as they are already filtered out
         ...Array.from(exceptionKeys.OperacaoNaoRealizada),
         ...Array.from(exceptionKeys.Desconhecimento),
         ...Array.from(exceptionKeys.Desacordo),
