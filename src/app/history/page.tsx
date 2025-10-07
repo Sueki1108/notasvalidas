@@ -33,7 +33,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import type { KeyInfo, KeyCheckResult } from "@/app/actions";
-import { downloadHistoryData } from "@/app/actions";
+
 
 
 const forceCellAsString = (worksheet: XLSX.WorkSheet, headerName: string) => {
@@ -182,34 +182,56 @@ export default function HistoryPage() {
         return (results.keysInTxtNotInSheet?.length || 0) + (results.keysNotFoundInTxt?.length || 0);
     }
     
-    const handleDownload = async (verificationId: string, type: 'processing' | 'validation') => {
-        toast({ title: "Preparando download...", description: "Aguarde enquanto geramos sua planilha." });
+    const handleDownloadDiscrepancies = (verification: Verification) => {
+        if (!verification || !verification.keyCheckResults) {
+            toast({ variant: 'destructive', title: 'Erro', description: 'Nenhum dado de divergência para baixar.' });
+            return;
+        }
+        
         try {
-            const result = await downloadHistoryData(verificationId);
-            if(result.error) throw new Error(result.error);
+            const wb = XLSX.utils.book_new();
 
-            let base64Data, filename;
-            if (type === 'processing' && result.processingBase64) {
-                base64Data = result.processingBase64;
-                filename = `processamento_principal_${verificationId.substring(0,8)}.xlsx`;
-            } else if (type === 'validation' && result.validationBase64) {
-                base64Data = result.validationBase64;
-                filename = `validacao_sped_${verificationId.substring(0,8)}.xlsx`;
+            const { keysNotFoundInTxt, keysInTxtNotInSheet } = verification.keyCheckResults;
+            
+            if (keysNotFoundInTxt.length > 0) {
+                 const sheetData = keysNotFoundInTxt.map(item => ({
+                    'Chave': item.key,
+                    'Tipo': item.docType || 'N/A',
+                    'Direção': item.direction || 'N/A',
+                    'Parceiro': item.partnerName || 'N/A',
+                    'Emissão': formatDate(item.emissionDate),
+                    'Valor': item.value ? item.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'N/A',
+                    'Comentário': item.comment || ''
+                }));
+                const ws = XLSX.utils.json_to_sheet(sheetData);
+                forceCellAsString(ws, 'Chave');
+                XLSX.utils.book_append_sheet(wb, ws, "Apenas na Planilha");
             }
-
-            if(base64Data && filename) {
-                const link = document.createElement('a');
-                link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64Data}`;
-                link.download = filename;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                toast({ title: "Download Iniciado!", description: `O arquivo ${filename} está sendo baixado.` });
+            
+            if (keysInTxtNotInSheet.length > 0) {
+                const sheetData = keysInTxtNotInSheet.map(item => ({
+                    'Chave': item.key,
+                    'Tipo': item.docType || 'N/A',
+                    'Direção': item.direction || 'N/A',
+                    'Parceiro': item.partnerName || 'N/A',
+                    'Emissão': formatDate(item.emissionDate),
+                    'Valor': item.value ? item.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'N/A',
+                    'Comentário SPED': item.comment || ''
+                }));
+                const ws = XLSX.utils.json_to_sheet(sheetData);
+                forceCellAsString(ws, 'Chave');
+                XLSX.utils.book_append_sheet(wb, ws, "Apenas no SPED");
+            }
+            
+            if (wb.SheetNames.length > 0) {
+                XLSX.writeFile(wb, `divergencias_${verification.cnpj}_${verification.competence.replace('/', '-')}.xlsx`);
+                toast({ title: 'Download Iniciado', description: 'Planilha de divergências gerada com sucesso.'});
             } else {
-                 throw new Error("Nenhum dado encontrado para este tipo de relatório.");
+                 toast({ title: 'Sem Divergências', description: 'Nenhuma divergência encontrada para baixar.'});
             }
-        } catch (err: any) {
-            toast({ variant: 'destructive', title: "Erro no Download", description: err.message });
+            
+        } catch(err: any) {
+            toast({ variant: 'destructive', title: 'Erro no Download', description: err.message });
         }
     }
 
@@ -323,11 +345,8 @@ export default function HistoryPage() {
                                                             <DropdownMenuItem onClick={() => setSelectedVerification(v)}>
                                                                 <Search className="mr-2 h-4 w-4" /> Ver Detalhes
                                                             </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => handleDownload(v.id, 'processing')}>
-                                                                <Download className="mr-2 h-4 w-4" /> Baixar Proc. Principal
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => handleDownload(v.id, 'validation')}>
-                                                                <Download className="mr-2 h-4 w-4" /> Baixar Validação SPED
+                                                            <DropdownMenuItem onClick={() => handleDownloadDiscrepancies(v)}>
+                                                                <Download className="mr-2 h-4 w-4" /> Baixar Divergências
                                                             </DropdownMenuItem>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
@@ -426,3 +445,4 @@ export default function HistoryPage() {
         </div>
     );
 }
+

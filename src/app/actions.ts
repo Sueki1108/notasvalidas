@@ -94,6 +94,19 @@ const parseAllParticipants = (spedFileContent: string) => {
     return participants;
 };
 
+// New helper function to parse D195 for NFe keys
+const parseNfeInCte = (line: string): Partial<KeyInfo> | null => {
+    if (line.startsWith('|D195|')) {
+        const parts = line.split('|');
+        // The NFe key can be in the description field (part 3)
+        const description = parts[3] || '';
+        const keyMatch = description.match(/chv_nfe\s*([0-9]{44})/i);
+        if (keyMatch && keyMatch[1]) {
+            return { key: keyMatch[1], docType: 'NFe', comment: 'Referenciada em CT-e' };
+        }
+    }
+    return null;
+}
 
 const parseSpedLineForData = (line: string, participants: Map<string, string>): Partial<KeyInfo> | null => {
     const parts = line.split('|');
@@ -165,6 +178,9 @@ const forceCellAsString = (worksheet: XLSX.WorkSheet, headerName: string) => {
             if (worksheet[key].t === 'n') { // if it's a number
                 worksheet[key].t = 's'; // change type to string
                 worksheet[key].v = String(worksheet[key].v); // ensure value is a string
+            } else if (worksheet[key].v) { // ensure any other type is also converted
+                 worksheet[key].t = 's';
+                 worksheet[key].v = String(worksheet[key].v);
             }
         }
     }
@@ -183,7 +199,15 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         }
         
         for (const line of lines) {
-            const parsedData = parseSpedLineForData(line.trim(), participants);
+            const trimmedLine = line.trim();
+            // Try parsing as C100/D100 first
+            let parsedData = parseSpedLineForData(trimmedLine, participants);
+            
+            // If not found, try parsing as D195 for referenced NFe
+            if (!parsedData) {
+                parsedData = parseNfeInCte(trimmedLine);
+            }
+
             if (parsedData && parsedData.key) {
                  const cleanKey = normalizeKey(parsedData.key);
                  if (!allSpedKeys.has(cleanKey)) {
@@ -258,6 +282,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             duplicateKeysInTxt,
         };
         
+        // This is the CRITICAL change. We are no longer saving the huge `processedData` blob.
         if (spedInfo && spedInfo.cnpj) {
             const docRef = doc(db, "verifications", spedInfo.cnpj);
             
@@ -265,7 +290,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                 cnpj: spedInfo.cnpj,
                 companyName: spedInfo.companyName,
                 competence: spedInfo.competence,
-                keyCheckResults: keyCheckResults,
+                keyCheckResults: keyCheckResults, // Only save the results, not the raw data
                 verifiedAt: serverTimestamp(),
             };
 
@@ -970,6 +995,8 @@ export async function separateXmlFromExcel(data: { excelFile: string, zipFile: s
     }
 }
       
-
+export async function downloadHistoryData(verificationId: string) {
+    // This function is being removed as we are no longer storing the full processed data.
+    return { error: "A funcionalidade de download do histórico foi descontinuada para resolver problemas de limite de tamanho do banco de dados." };
+}
     
-
