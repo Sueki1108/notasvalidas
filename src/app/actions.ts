@@ -6,7 +6,7 @@ import { collection, doc, getDoc, getDocs, setDoc, serverTimestamp, updateDoc, q
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
-import path from 'path';
+
 
 // Type for the file data structure expected by the processor
 type DataFrames = { [key: string]: any[] };
@@ -429,8 +429,8 @@ export async function unifyZipFiles(files: { name: string, content: string }[]) 
                 const zipEntry = zip.files[filename];
                 if (!zipEntry.dir) {
                     const fileData = await zipEntry.async('nodebuffer');
-                    // Use path.basename to get only the filename, discarding the folder structure
-                    const baseName = path.basename(filename);
+                    // This is a browser-safe way to get the basename
+                    const baseName = filename.substring(filename.lastIndexOf('/') + 1);
                     finalZip.file(baseName, fileData);
                 }
             });
@@ -1005,3 +1005,5 @@ export async function downloadHistoryData(verificationId: string) {
     return { error: "A funcionalidade de download do histórico foi descontinuada para resolver problemas de limite de tamanho do banco de dados." };
 }
       
+
+    
