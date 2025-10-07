@@ -32,7 +32,6 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import type { KeyInfo, KeyCheckResult } from "@/app/actions";
-import { downloadHistoryData } from "@/app/actions";
 
 
 type VerificationKey = KeyInfo & {
@@ -53,7 +52,6 @@ type Verification = {
   cnpj: string;
   competence: string;
   verifiedAt: Timestamp;
-  processedData: Record<string, any[]>;
   keyCheckResults: KeyCheckResult;
 };
 
@@ -108,7 +106,6 @@ const DetailRow = ({ item }: { item: VerificationKey }) => {
 export default function HistoryPage() {
     const [verifications, setVerifications] = useState<Verification[]>([]);
     const [loading, setLoading] = useState(true);
-    const [loadingDownload, setLoadingDownload] = useState<string | null>(null);
     const [selectedVerification, setSelectedVerification] = useState<Verification | null>(null);
     const { toast } = useToast();
 
@@ -142,34 +139,6 @@ export default function HistoryPage() {
         fetchVerifications();
     }, []);
 
-    const handleDownload = async (verificationId: string, type: 'main' | 'sped') => {
-        setLoadingDownload(verificationId + type);
-        try {
-            const result = await downloadHistoryData(verificationId);
-            if (result.error) throw new Error(result.error);
-
-            const base64Data = type === 'main' ? result.mainProcessingFile : result.spedValidationFile;
-            const filename = type === 'main' ? 'processamento_principal.xlsx' : 'validacao_sped.xlsx';
-
-            if (base64Data) {
-                const link = document.createElement('a');
-                link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64Data}`;
-                link.download = filename;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                toast({ title: 'Download Iniciado', description: `O arquivo ${filename} está sendo baixado.` });
-            } else {
-                throw new Error("Nenhum dado encontrado para download.");
-            }
-        } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Erro no Download', description: error.message });
-        } finally {
-            setLoadingDownload(null);
-        }
-    };
-
-
     const handleCloseModal = () => {
         setSelectedVerification(null);
     }
@@ -198,9 +167,8 @@ export default function HistoryPage() {
     }
     
     const getTotalKeysCount = (v: Verification) => {
-         const results = v.processedData;
-         if (!results || !results['Chaves Válidas']) return 0;
-         return results['Chaves Válidas'].length;
+         // Since processedData is no longer saved, we can't get the total keys count
+         return 'N/A';
     }
 
 
@@ -278,14 +246,12 @@ export default function HistoryPage() {
                                             <TableHead>CNPJ</TableHead>
                                             <TableHead>Competência</TableHead>
                                             <TableHead>Verificação</TableHead>
-                                            <TableHead className="text-center">Chaves</TableHead>
                                             <TableHead className="text-center">Divergências</TableHead>
                                             <TableHead className="text-right">Ações</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {verifications.map((v) => {
-                                            const totalKeys = getTotalKeysCount(v);
                                             const discrepancies = getDiscrepancyCount(v);
                                             return (
                                             <TableRow key={v.id}>
@@ -298,31 +264,15 @@ export default function HistoryPage() {
                                                         <span className="text-xs text-muted-foreground">{formatTime(v.verifiedAt)}</span>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="text-center">{totalKeys}</TableCell>
                                                 <TableCell className="text-center">
                                                     <Badge variant={discrepancies > 0 ? "destructive" : "default"} className={discrepancies > 0 ? "" : "bg-green-600"}>
                                                         {discrepancies}
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="text-right">
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button variant="outline" size="sm">Ações <ChevronDown className="ml-2 h-4 w-4" /></Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent>
-                                                            <DropdownMenuItem onClick={() => setSelectedVerification(v)}>
-                                                                <Search className="mr-2 h-4 w-4" /> Ver Detalhes
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => handleDownload(v.id, 'main')} disabled={loadingDownload === v.id + 'main'}>
-                                                                {loadingDownload === v.id + 'main' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                                                                Baixar Processamento
-                                                            </DropdownMenuItem>
-                                                             <DropdownMenuItem onClick={() => handleDownload(v.id, 'sped')} disabled={loadingDownload === v.id + 'sped'}>
-                                                                {loadingDownload === v.id + 'sped' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                                                                Baixar Validação
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
+                                                    <Button variant="outline" size="sm" onClick={() => setSelectedVerification(v)}>
+                                                        <Search className="mr-2 h-4 w-4" /> Ver Detalhes
+                                                    </Button>
                                                 </TableCell>
                                             </TableRow>
                                         )})}
@@ -418,3 +368,5 @@ export default function HistoryPage() {
         </div>
     );
 }
+
+    

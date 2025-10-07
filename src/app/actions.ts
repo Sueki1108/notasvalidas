@@ -201,7 +201,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             .filter(key => !keysInTxt.has(key))
             .map(key => {
                 const note = allNotesMap.get(key);
-                const isCte = note && note.uploadSource && note.uploadSource.includes('CTe');
+                const isCte = note && note.uploadSource && (note.uploadSource.includes('CTe') || (note['Chave de acesso'] && normalizeKey(note['Chave de acesso']).substring(20, 22) === '57'));
                 const isSaida = note && spedInfo && note['Emitente CPF/CNPJ'] === spedInfo.cnpj;
                 return {
                     key: key,
@@ -250,8 +250,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             
             const verificationData = {
                 ...spedInfo,
-                processedData: processedData, // Store all processed sheets
-                keyCheckResults: keyCheckResults, // Store validation results
+                keyCheckResults: keyCheckResults,
                 verifiedAt: serverTimestamp(),
             };
 
@@ -971,71 +970,6 @@ export async function separateXmlFromExcel(data: { excelFile: string, zipFile: s
         return { error: error.message || "Ocorreu um erro ao separar os arquivos XML." };
     }
 }
-
-
-export async function downloadHistoryData(verificationId: string) {
-    if (!verificationId) {
-        return { error: "ID da verificação é obrigatório." };
-    }
-
-    try {
-        const docRef = doc(db, "verifications", verificationId);
-        const docSnap = await getDoc(docRef);
-
-        if (!docSnap.exists()) {
-            return { error: "Histórico de verificação não encontrado." };
-        }
-
-        const historyData = docSnap.data();
-        const { processedData, keyCheckResults } = historyData;
-
-        // 1. Generate Base64 for the main processing workbook
-        const mainWorkbook = XLSX.utils.book_new();
-        const sheetNameMap: { [key: string]: string } = {
-            "NF-Stock NFE Operação Não Realizada": "NFE Op Nao Realizada",
-            "NF-Stock NFE Operação Desconhecida": "NFE Op Desconhecida",
-            "NF-Stock CTE Desacordo de Serviço": "CTE Desacordo Servico",
-            "Estornos": "Estornos",
-            "NF-Stock Emitidas": "NF Emitidas",
-            "Notas Válidas": "Notas Validas",
-            "Emissão Própria": "Emissao Propria",
-            "Notas Canceladas": "Notas Canceladas",
-            "Itens de Entrada": "Itens de Entrada",
-            "Itens de Saída": "Itens de Saida",
-            "Imobilizados": "Imobilizados",
-            "Chaves Válidas": "Chaves Validas",
-        };
-        const orderedSheetNames = [
-            "Notas Válidas", "Itens de Entrada", "Emissão Própria", "NF-Stock Emitidas", "Itens de Saída", "Chaves Válidas", "Imobilizados", "Notas Canceladas",
-            "NF-Stock NFE Operação Não Realizada", "NF-Stock NFE Operação Desconhecida", "NF-Stock CTE Desacordo de Serviço", "Estornos"
-        ].filter(name => processedData[name] && processedData[name].length > 0);
-
-        orderedSheetNames.forEach(sheetName => {
-            const worksheet = XLSX.utils.json_to_sheet(processedData[sheetName]);
-            XLSX.utils.book_append_sheet(mainWorkbook, worksheet, sheetNameMap[sheetName] || sheetName);
-        });
-        
-        const mainWbBase64 = XLSX.write(mainWorkbook, { bookType: 'xlsx', type: 'base64' });
-
-        // 2. Generate Base64 for the SPED validation workbook
-        const spedWorkbook = XLSX.utils.book_new();
-        if (keyCheckResults) {
-            const notFoundInSpedSheet = XLSX.utils.json_to_sheet(keyCheckResults.keysNotFoundInTxt || []);
-            XLSX.utils.book_append_sheet(spedWorkbook, notFoundInSpedSheet, "Nao Encontradas no SPED");
-
-            const inSpedNotValidSheet = XLSX.utils.json_to_sheet(keyCheckResults.keysInTxtNotInSheet || []);
-            XLSX.utils.book_append_sheet(spedWorkbook, inSpedNotValidSheet, "Apenas no SPED");
-        }
-        const spedWbBase64 = XLSX.write(spedWorkbook, { bookType: 'xlsx', type: 'base64' });
-
-        return {
-            mainProcessingFile: mainWbBase64,
-            spedValidationFile: spedWbBase64,
-        };
-
-    } catch (error: any) {
-        console.error("Erro ao gerar arquivos do histórico:", error);
-        return { error: error.message || "Ocorreu um erro ao baixar os dados do histórico." };
-    }
-}
       
+
+    
