@@ -305,7 +305,7 @@ export default function Home() {
             if (fileName === 'SPED TXT') {
                 setSpedFile(selectedFiles[0]);
             } else {
-                setFiles(prev => ({
+                 setFiles(prev => ({
                     ...prev,
                     [fileName]: [...(prev[fileName] || []), ...Array.from(selectedFiles)]
                 }));
@@ -338,6 +338,7 @@ export default function Home() {
                 Desacordo: new Set<string>(),
                 Estorno: new Set<string>(),
             }
+            const canceledKeys = new Set<string>();
 
             const getMonthYear = (dateStr: string) => {
                 if (!dateStr) return null;
@@ -355,9 +356,23 @@ export default function Home() {
                        : extractCteDataFromXml(fileContent, uploadSource);
 
                    if (!xmlData) continue;
+
+                   if (xmlData.isEvent) {
+                        if (xmlData.eventType === 'Cancelamento') {
+                            canceledKeys.add(xmlData.key);
+                        } else if (xmlData.eventType) {
+                            const eventSet = exceptionKeys[xmlData.eventType as keyof typeof exceptionKeys];
+                            if (eventSet) eventSet.add(xmlData.key);
+                        }
+                        continue;
+                    }
                    
                    const monthYear = getMonthYear(xmlData.nota?.['Data de Emissão']);
                    if (!monthYear || !selectedMonths.has(monthYear)) continue;
+
+                   if (xmlData.nota && xmlData.nota['Status']?.includes('Cancelada')) {
+                        canceledKeys.add(xmlData.nota['Chave de acesso']);
+                   }
 
                    if (type === 'NFe') allNfe.push(xmlData); else allCte.push(xmlData);
 
@@ -376,25 +391,11 @@ export default function Home() {
                      }
                 }
             }
-            
-            const canceledKeys = new Set<string>();
-            [...allNfe, ...allCte].forEach(xmlData => {
-                 if (xmlData.isEvent) {
-                    if (xmlData.eventType === 'Cancelamento') {
-                        canceledKeys.add(xmlData.key);
-                    } else if (xmlData.eventType) {
-                         const eventSet = exceptionKeys[xmlData.eventType as keyof typeof exceptionKeys];
-                         if (eventSet) eventSet.add(xmlData.key);
-                    }
-                } else if (xmlData.nota && xmlData.nota['Status']?.includes('Cancelada')) {
-                    canceledKeys.add(xmlData.nota['Chave de acesso']);
-                }
-            });
 
 
             const initialFrames = {
-                'NF-Stock NFE': allNfe.map(d => d.nota).filter(Boolean),
-                'NF-Stock CTE': allCte.map(d => d.nota).filter(Boolean),
+                'NF-Stock NFE': allNfe.filter(d => d.nota).map(d => d.nota),
+                'NF-Stock CTE': allCte.filter(d => d.nota).map(d => d.nota),
                 'Itens de Entrada': allNfeItensEntrada,
                 'Itens de Saída': allNfeItensSaida,
                 'NF-Stock Emitidas': [] 
