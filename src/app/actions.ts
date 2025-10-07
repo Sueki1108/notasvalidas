@@ -185,23 +185,24 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             spedInfo = parseSpedInfo(lines[0].trim());
         }
         
+        // Step 1: Reliably extract all keys from SPED C100 and D100 records.
         for (const line of lines) {
             const trimmedLine = line.trim();
             const parts = trimmedLine.split('|');
             let key = '';
             
-            // Simplified key extraction - C100 for NF-e
-            if (parts.length > 9 && parts[1] === 'C100' && parts[4] === '55') {
+            // Simplified, direct key extraction for NF-e (C100)
+            if (parts.length > 9 && parts[1] === 'C100') {
                  key = normalizeKey(parts[9]);
             } 
-            // Simplified key extraction - D100 for CT-e
-            else if (parts.length > 10 && parts[1] === 'D100' && parts[4] === '57') {
+            // Simplified, direct key extraction for CT-e (D100)
+            else if (parts.length > 10 && parts[1] === 'D100') {
                  key = normalizeKey(parts[10]);
             }
 
             if (key && key.length === 44) {
                 spedKeys.add(key);
-                // Only parse detailed info if the key is new to avoid redundant processing
+                // Step 2: Attempt to parse detailed info, but don't let it block key extraction.
                 if (!allSpedKeyInfo.has(key)) {
                     const parsedData = parseSpedLineForData(trimmedLine, participants);
                     if (parsedData) {
