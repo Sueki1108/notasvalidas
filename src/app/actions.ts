@@ -162,7 +162,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         let spedInfo: SpedInfo | null = null;
         const allSpedKeys = new Map<string, Partial<KeyInfo>>();
         
-        // Combine all valid notes (from XMLs) to create a lookup map for enrichment
+        // This is the definitive list of valid notes from the XML/Excel processing step
         const allNotesFromXmls = [...(processedData["Notas Válidas"] || []), ...(processedData["Emissão Própria"] || [])];
         const allNotesMap = new Map(allNotesFromXmls.map(note => [
             normalizeKey(note['Chave de acesso']), 
@@ -191,8 +191,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         
         const canceledXmlKeys = new Set((processedData['Notas Canceladas'] || []).map(r => normalizeKey(r['Chave de acesso'])));
         
-        // This is the definitive list of valid keys from the XML/Excel processing step
-        const spreadsheetKeysArray = (processedData['Chaves Válidas'] || [])
+        const spreadsheetKeysArray = allNotesFromXmls
             .map(row => normalizeKey(row['Chave de acesso']))
             .filter(key => key);
         const spreadsheetKeys = new Set(spreadsheetKeysArray);
@@ -201,7 +200,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             .filter(key => !keysInTxt.has(key))
             .map(key => {
                 const note = allNotesMap.get(key);
-                const isCte = note && note.uploadSource && (note.uploadSource.includes('CTe') || (note['Chave de acesso'] && normalizeKey(note['Chave de acesso']).substring(20, 22) === '57'));
+                const isCte = note && ( (note.uploadSource && note.uploadSource.includes('CTe')) || (normalizeKey(note['Chave de acesso']).substring(20, 22) === '57'));
                 const isSaida = note && spedInfo && note['Emitente CPF/CNPJ'] === spedInfo.cnpj;
                 return {
                     key: key,
