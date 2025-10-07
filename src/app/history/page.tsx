@@ -127,9 +127,10 @@ export default function HistoryPage() {
 
     const groupedKeys = useMemo(() => {
         if (!selectedVerification || !selectedVerification.keyCheckResults) {
-            return { keysNotFoundInTxt: [], keysInTxtNotInSheet: [] };
+            return { keysFoundInBoth: [], keysNotFoundInTxt: [], keysInTxtNotInSheet: [] };
         }
         return {
+            keysFoundInBoth: selectedVerification.keyCheckResults.keysFoundInBoth || [],
             keysNotFoundInTxt: selectedVerification.keyCheckResults.keysNotFoundInTxt || [],
             keysInTxtNotInSheet: selectedVerification.keyCheckResults.keysInTxtNotInSheet || [],
         };
@@ -191,43 +192,34 @@ export default function HistoryPage() {
         try {
             const wb = XLSX.utils.book_new();
 
-            const { keysNotFoundInTxt, keysInTxtNotInSheet } = verification.keyCheckResults;
+            const { keysNotFoundInTxt, keysInTxtNotInSheet, keysFoundInBoth } = verification.keyCheckResults;
             
-            if (keysNotFoundInTxt.length > 0) {
-                 const sheetData = keysNotFoundInTxt.map(item => ({
-                    'Chave': item.key,
-                    'Tipo': item.docType || 'N/A',
-                    'Direção': item.direction || 'N/A',
-                    'Parceiro': item.partnerName || 'N/A',
-                    'Emissão': formatDate(item.emissionDate),
-                    'Valor': item.value ? item.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'N/A',
-                    'Comentário': item.comment || ''
-                }));
-                const ws = XLSX.utils.json_to_sheet(sheetData);
-                forceCellAsString(ws, 'Chave');
-                XLSX.utils.book_append_sheet(wb, ws, "Apenas na Planilha");
+            const createSheet = (data: KeyInfo[], sheetName: string) => {
+                if (data.length > 0) {
+                    const sheetData = data.map(item => ({
+                        'Chave': item.key,
+                        'Tipo': item.docType || 'N/A',
+                        'Direção': item.direction || 'N/A',
+                        'Parceiro': item.partnerName || 'N/A',
+                        'Emissão': formatDate(item.emissionDate),
+                        'Valor': item.value ? item.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'N/A',
+                        'Comentário': item.comment || ''
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(sheetData);
+                    forceCellAsString(ws, 'Chave');
+                    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+                }
             }
             
-            if (keysInTxtNotInSheet.length > 0) {
-                const sheetData = keysInTxtNotInSheet.map(item => ({
-                    'Chave': item.key,
-                    'Tipo': item.docType || 'N/A',
-                    'Direção': item.direction || 'N/A',
-                    'Parceiro': item.partnerName || 'N/A',
-                    'Emissão': formatDate(item.emissionDate),
-                    'Valor': item.value ? item.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'N/A',
-                    'Comentário SPED': item.comment || ''
-                }));
-                const ws = XLSX.utils.json_to_sheet(sheetData);
-                forceCellAsString(ws, 'Chave');
-                XLSX.utils.book_append_sheet(wb, ws, "Apenas no SPED");
-            }
+            createSheet(keysNotFoundInTxt, "Apenas na Planilha");
+            createSheet(keysInTxtNotInSheet, "Apenas no SPED");
+            createSheet(keysFoundInBoth, "Encontradas em Ambos");
             
             if (wb.SheetNames.length > 0) {
-                XLSX.writeFile(wb, `divergencias_${verification.cnpj}_${verification.competence.replace('/', '-')}.xlsx`);
-                toast({ title: 'Download Iniciado', description: 'Planilha de divergências gerada com sucesso.'});
+                XLSX.writeFile(wb, `relatorio_validacao_${verification.cnpj}_${verification.competence.replace('/', '-')}.xlsx`);
+                toast({ title: 'Download Iniciado', description: 'Planilha de validação gerada com sucesso.'});
             } else {
-                 toast({ title: 'Sem Divergências', description: 'Nenhuma divergência encontrada para baixar.'});
+                 toast({ title: 'Sem Dados', description: 'Nenhum dado encontrado para baixar.'});
             }
             
         } catch(err: any) {
@@ -346,7 +338,7 @@ export default function HistoryPage() {
                                                                 <Search className="mr-2 h-4 w-4" /> Ver Detalhes
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem onClick={() => handleDownloadDiscrepancies(v)}>
-                                                                <Download className="mr-2 h-4 w-4" /> Baixar Divergências
+                                                                <Download className="mr-2 h-4 w-4" /> Baixar Relatório
                                                             </DropdownMenuItem>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
@@ -388,7 +380,25 @@ export default function HistoryPage() {
                          <div className="space-y-4">
                             <ScrollArea className="h-[60vh] w-full pr-4">
                                
-                                <Accordion type="single" collapsible defaultValue="item-2" className="w-full">
+                                <Accordion type="single" collapsible defaultValue="item-1" className="w-full">
+                                     <AccordionItem value="item-1">
+                                        <AccordionTrigger className="font-semibold">
+                                            <div className="flex items-center gap-2">
+                                                <CheckCircle className="text-green-600" />
+                                                Chaves Encontradas em Ambos ({groupedKeys.keysFoundInBoth.length})
+                                            </div>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            {groupedKeys.keysFoundInBoth.length > 0 ? (
+                                                <Table>
+                                                    <TableHeader><TableRow><TableHead>Chave</TableHead><TableHead>Tipo</TableHead><TableHead>Direção</TableHead><TableHead>Parceiro</TableHead><TableHead>Emissão</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Comentário</TableHead></TableRow></TableHeader>
+                                                    <TableBody>
+                                                        {groupedKeys.keysFoundInBoth.map((item, index) => <DetailRow key={index} item={item} />)}
+                                                    </TableBody>
+                                                </Table>
+                                            ) : <p className="pt-2 text-sm text-muted-foreground">Nenhuma chave encontrada em ambos os arquivos.</p>}
+                                        </AccordionContent>
+                                    </AccordionItem>
                                     <AccordionItem value="item-2">
                                         <AccordionTrigger className="font-semibold">
                                             <div className="flex items-center gap-2">
@@ -445,4 +455,5 @@ export default function HistoryPage() {
         </div>
     );
 }
+
 

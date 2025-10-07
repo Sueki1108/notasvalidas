@@ -31,6 +31,7 @@ export type KeyInfo = {
 
 
 export type KeyCheckResult = {
+    keysFoundInBoth: KeyInfo[];
     keysNotFoundInTxt: KeyInfo[];
     keysInTxtNotInSheet: KeyInfo[];
     duplicateKeysInSheet: string[];
@@ -252,8 +253,8 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                 return {
                     key: key,
                     origin: 'sped' as 'sped',
-                    partnerName: spedData?.partnerName || '',
-                    emissionDate: spedData?.emissionDate || '',
+                    partnerName: spedData?.partnerName || 'N/A',
+                    emissionDate: spedData?.emissionDate || 'N/A',
                     value: spedData?.value || 0,
                     comment: spedData?.comment || '',
                     docType: spedData?.docType || 'N/A',
@@ -261,10 +262,28 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                 }
             });
         
+        const keysFoundInBoth = [...spreadsheetKeys]
+            .filter(key => spedKeys.has(key))
+            .map(key => {
+                const note = validSheetMap.get(key);
+                 const isCte = note && ( (note.docType && note.docType === 'CTe') || (note.uploadSource && note.uploadSource.includes('CTe')) || (normalizeKey(note['Chave de acesso']).substring(20, 22) === '57'));
+                const isSaida = note && spedInfo && note['Emitente CPF/CNPJ'] === spedInfo.cnpj;
+                return {
+                    key: key,
+                    origin: 'planilha' as 'planilha', // Found in both, but origin is sheet for data purposes
+                    partnerName: note?.['Fornecedor/Cliente'] || '',
+                    emissionDate: note?.['Data de Emissão'] || '',
+                    value: note?.['Valor'] || 0,
+                    docType: isCte ? 'CTe' : 'NFe',
+                    direction: isSaida ? 'Saída' : 'Entrada'
+                }
+            });
+
         const duplicateKeysInSheet = findDuplicates(spreadsheetKeysArray);
         const duplicateKeysInTxt = findDuplicates(Array.from(spedKeys));
 
         const keyCheckResults: KeyCheckResult = { 
+            keysFoundInBoth,
             keysNotFoundInTxt, 
             keysInTxtNotInSheet,
             duplicateKeysInSheet: duplicateKeysInSheet || [],
