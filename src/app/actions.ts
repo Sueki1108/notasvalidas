@@ -267,8 +267,8 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         const keyCheckResults: KeyCheckResult = { 
             keysNotFoundInTxt, 
             keysInTxtNotInSheet,
-            duplicateKeysInSheet,
-            duplicateKeysInTxt,
+            duplicateKeysInSheet: duplicateKeysInSheet || [],
+            duplicateKeysInTxt: duplicateKeysInTxt || [],
         };
         
         if (spedInfo && spedInfo.cnpj) {
