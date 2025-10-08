@@ -1007,3 +1007,5 @@ export async function downloadHistoryData(verificationId: string) {
     return { error: "A funcionalidade de download do histórico foi descontinuada para resolver problemas de limite de tamanho do banco de dados." };
 }
       
+
+    
