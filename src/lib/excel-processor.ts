@@ -77,7 +77,11 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
     
     processedDfs["Notas Válidas"] = notasValidas;
 
-    const chavesValidasEntrada = new Set(notasValidas.map(row => row && normalizeKey(row["Chave de acesso"])).filter(Boolean));
+    const chavesValidasEntrada = new Set(
+        notasValidas
+            .map(row => row && normalizeKey(row["Chave de acesso"]))
+            .filter(key => key && !exceptionKeySet.has(key))
+    );
     const combinedChavesValidas = new Set([...chavesValidasEntrada, ...ownEmissionValidKeys]);
     processedDfs["Chaves Válidas"] = Array.from(combinedChavesValidas).map(key => ({ "Chave de acesso": key }));
     
