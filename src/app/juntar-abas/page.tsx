@@ -1,10 +1,10 @@
-// src/app/unify-folders/page.tsx
+// src/app/juntar-abas/page.tsx
 "use client";
 
 import * as React from "react";
 import { useState, type ChangeEvent } from "react";
 import Link from 'next/link';
-import { Sheet, UploadCloud, FolderSync, Download, Trash2, File as FileIcon, Loader2, History, ChevronDown, FileText, Group, Search, Replace, Layers } from "lucide-react";
+import { Sheet, UploadCloud, Download, Trash2, File as FileIcon, Loader2, History, Group, ChevronDown, FileText, FolderSync, Search, Replace, Layers } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,38 +15,38 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { unifyZipFiles } from "@/app/actions";
+import { joinExcelSheets } from "@/app/actions";
 
-export default function UnifyFoldersPage() {
-    const [files, setFiles] = useState<File[]>([]);
+export default function JoinSheetsPage() {
+    const [file, setFile] = useState<File | null>(null);
     const [processing, setProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const { toast } = useToast();
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            setFiles(prevFiles => [...prevFiles, ...Array.from(e.target.files!)]);
+        if (e.target.files && e.target.files.length > 0) {
+            setFile(e.target.files[0]);
         }
     };
 
-    const handleClearFiles = () => {
-        setFiles([]);
+    const handleClearFile = () => {
+        setFile(null);
         if (fileInputRef.current) {
             fileInputRef.current.value = "";
         }
         toast({
-            title: "Arquivos removidos",
-            description: "A lista de arquivos .zip foi limpa.",
+            title: "Arquivo removido",
+            description: "O arquivo foi removido.",
         });
     };
 
     const handleSubmit = async () => {
-        if (files.length === 0) {
+        if (!file) {
             toast({
                 variant: "destructive",
                 title: "Nenhum Arquivo",
-                description: "Por favor, carregue pelo menos um arquivo .zip.",
+                description: "Por favor, carregue um arquivo Excel.",
             });
             return;
         }
@@ -55,25 +55,21 @@ export default function UnifyFoldersPage() {
         setProcessing(true);
 
         try {
-            const fileContents = await Promise.all(
-                files.map(file => {
-                    return new Promise<{ name: string, content: string }>((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                             if (event.target?.result) {
-                                const content = (event.target.result as string).split(',')[1];
-                                resolve({ name: file.name, content });
-                            } else {
-                                reject(new Error(`Falha ao ler o arquivo ${file.name}`));
-                            }
-                        };
-                        reader.onerror = () => reject(new Error(`Erro ao ler o arquivo ${file.name}`));
-                        reader.readAsDataURL(file);
-                    });
-                })
-            );
-            
-            const result = await unifyZipFiles(fileContents);
+            const fileContent = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    if (event.target?.result) {
+                        const content = (event.target.result as string).split(',')[1];
+                        resolve(content);
+                    } else {
+                        reject(new Error("Falha ao ler o arquivo."));
+                    }
+                };
+                reader.onerror = () => reject(new Error("Erro ao ler o arquivo."));
+                reader.readAsDataURL(file);
+            });
+
+            const result = await joinExcelSheets({ name: file.name, content: fileContent });
 
             if (result.error) {
                 throw new Error(result.error);
@@ -86,18 +82,18 @@ export default function UnifyFoldersPage() {
                     byteNumbers[i] = byteCharacters.charCodeAt(i);
                 }
                 const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], { type: 'application/zip' });
+                const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = 'arquivos_unificados.zip';
+                link.download = 'abas_juntadas.xlsx';
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
                 
                 toast({
-                    title: "Unificação Concluída",
-                    description: "O download do seu arquivo .zip unificado foi iniciado.",
+                    title: "Processamento Concluído",
+                    description: "O download da sua planilha com as abas juntadas foi iniciado.",
                 });
             }
 
@@ -106,7 +102,7 @@ export default function UnifyFoldersPage() {
             setError(errorMessage);
             toast({
                 variant: "destructive",
-                title: "Erro na Unificação",
+                title: "Erro no Processamento",
                 description: errorMessage,
             });
         } finally {
@@ -125,7 +121,7 @@ export default function UnifyFoldersPage() {
                             <h1 className="text-xl font-bold font-headline">Excel Workflow Automator</h1>
                         </Link>
                     </div>
-                    <nav className="flex items-center gap-4">
+                     <nav className="flex items-center gap-4">
                         <Button variant="ghost" asChild>
                             <Link href="/">Processamento Principal</Link>
                         </Button>
@@ -145,9 +141,7 @@ export default function UnifyFoldersPage() {
                                 <DropdownMenuItem asChild><Link href="/separar-xml" className="flex items-center gap-2 w-full"><FileText />Separar XML</Link></DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        <Button variant="ghost" asChild>
-                           <Link href="/history">Histórico</Link>
-                        </Button>
+                        <Button variant="ghost" asChild><Link href="/history">Histórico</Link></Button>
                     </nav>
                 </div>
             </header>
@@ -157,21 +151,28 @@ export default function UnifyFoldersPage() {
                      <Card className="shadow-lg">
                         <CardHeader>
                             <div className="flex items-center gap-3">
-                                <FolderSync className="h-8 w-8 text-primary" />
+                                <Layers className="h-8 w-8 text-primary" />
                                 <div>
-                                    <CardTitle className="font-headline text-2xl">Unificador de Pastas</CardTitle>
-                                    <CardDescription>Carregue múltiplos arquivos .zip para extrair e unificar seu conteúdo em um único download.</CardDescription>
+                                    <CardTitle className="font-headline text-2xl">Juntar Abas de Planilha</CardTitle>
+                                    <CardDescription>Carregue um arquivo Excel para consolidar todas as suas abas em uma única planilha.</CardDescription>
                                 </div>
                             </div>
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <div className="relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-secondary/50 p-8 transition-all">
                                 <label htmlFor="file-upload" className="flex h-full w-full cursor-pointer flex-col items-center justify-center text-center">
-                                    <UploadCloud className="h-12 w-12 text-muted-foreground" />
-                                    <p className="mt-4 font-semibold">Clique para carregar arquivos .zip</p>
-                                    <p className="text-sm text-muted-foreground">
-                                        Você pode selecionar múltiplos arquivos
-                                    </p>
+                                    {file ? (
+                                        <>
+                                            <FileIcon className="h-12 w-12 text-primary" />
+                                            <p className="mt-4 font-semibold text-primary">{file.name}</p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <UploadCloud className="h-12 w-12 text-muted-foreground" />
+                                            <p className="mt-4 font-semibold">Clique para carregar um arquivo Excel</p>
+                                            <p className="text-sm text-muted-foreground">(.xlsx, .xls, .ods, etc)</p>
+                                        </>
+                                    )}
                                 </label>
                                 <input
                                     ref={fileInputRef}
@@ -180,24 +181,9 @@ export default function UnifyFoldersPage() {
                                     type="file"
                                     className="sr-only"
                                     onChange={handleFileChange}
-                                    multiple
-                                    accept=".zip,application/zip"
+                                    accept=".xlsx,.xls,.csv,.ods,.slk,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/vnd.oasis.opendocument.spreadsheet,text/x-slk"
                                 />
                             </div>
-
-                            {files.length > 0 && (
-                                <div className="space-y-2">
-                                    <h4 className="font-medium">Arquivos Carregados ({files.length}):</h4>
-                                    <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 rounded-md border p-4">
-                                        {files.map((file, index) => (
-                                            <li key={index} className="flex items-center gap-2 text-sm">
-                                                <FileIcon className="h-4 w-4 text-primary"/>
-                                                <span className="truncate">{file.name}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
 
                              {error && (
                                 <Alert variant="destructive">
@@ -208,11 +194,11 @@ export default function UnifyFoldersPage() {
                             )}
 
                             <div className="flex flex-col gap-2 sm:flex-row">
-                                <Button onClick={handleSubmit} disabled={processing || files.length === 0} className="flex-grow">
-                                    {processing ? <><Loader2 className="animate-spin" /> Processando...</> : <><Download /> Unificar e Baixar</>}
+                                <Button onClick={handleSubmit} disabled={processing || !file} className="flex-grow">
+                                    {processing ? <><Loader2 className="animate-spin" /> Processando...</> : <><Download /> Juntar Abas e Baixar</>}
                                 </Button>
-                                <Button onClick={handleClearFiles} variant="destructive" className="flex-shrink-0" disabled={files.length === 0}>
-                                <Trash2 /> Limpar Arquivos
+                                <Button onClick={handleClearFile} variant="destructive" className="flex-shrink-0" disabled={!file}>
+                                <Trash2 /> Limpar Arquivo
                                 </Button>
                             </div>
                         </CardContent>
@@ -228,5 +214,3 @@ export default function UnifyFoldersPage() {
         </div>
     );
 }
-
-    

@@ -420,6 +420,54 @@ export async function mergeExcelFiles(files: { name: string, content: string }[]
 }
 
 
+export async function joinExcelSheets(file: { name: string, content: string }) {
+    try {
+        const buffer = Buffer.from(file.content, 'base64');
+        const workbook = XLSX.read(buffer, { type: 'buffer' });
+        
+        const allData: any[] = [];
+        const allHeaders = new Set<string>();
+
+        // First pass: collect all headers
+        for (const sheetName of workbook.SheetNames) {
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            if (jsonData.length > 0) {
+                const headers = jsonData[0] as string[];
+                headers.forEach(header => allHeaders.add(header));
+            }
+        }
+        
+        const orderedHeaders = Array.from(allHeaders);
+
+        // Second pass: process and collect data
+        for (const sheetName of workbook.SheetNames) {
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+            allData.push(...jsonData);
+        }
+        
+        const finalSheet = XLSX.utils.json_to_sheet(allData, { header: orderedHeaders });
+        const finalWorkbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(finalWorkbook, finalSheet, "Abas Consolidadas");
+
+        const outputBuffer = XLSX.write(finalWorkbook, { bookType: 'xlsx', type: 'array' });
+        
+        let binary = '';
+        const bytes = new Uint8Array(outputBuffer);
+        for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        const base64 = btoa(binary);
+        
+        return { base64Data: base64 };
+
+    } catch (error: any) {
+        console.error("Erro ao juntar abas da planilha:", error);
+        return { error: error.message || "Ocorreu um erro ao processar o arquivo." };
+    }
+}
+
 export async function unifyZipFiles(files: { name: string, content: string }[]) {
     try {
         const finalZip = new JSZip();
