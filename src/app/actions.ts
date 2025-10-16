@@ -283,7 +283,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         const duplicateKeysInTxt = findDuplicates(Array.from(spedKeys));
 
         const keyCheckResults: KeyCheckResult = { 
-            keysFoundInBoth,
+            keysFoundInBoth: keysFoundInBoth || [],
             keysNotFoundInTxt, 
             keysInTxtNotInSheet,
             duplicateKeysInSheet: duplicateKeysInSheet || [],
@@ -1054,6 +1054,48 @@ export async function downloadHistoryData(verificationId: string) {
     // This function is being removed as we are no longer storing the full processed data.
     return { error: "A funcionalidade de download do histórico foi descontinuada para resolver problemas de limite de tamanho do banco de dados." };
 }
+
+// --- Logic for 'Solver' Tool ---
+export async function findSumCombinations(numbers: number[], target: number) {
+    let result: number[] = [];
+    
+    // Sort numbers in descending order to potentially find a solution faster
+    const sortedNumbers = [...numbers].sort((a, b) => b - a);
+
+    function find(currentTarget: number, startIndex: number, combination: number[]): boolean {
+        if (currentTarget === 0) {
+            result = combination;
+            return true;
+        }
+
+        if (currentTarget < 0 || startIndex >= sortedNumbers.length) {
+            return false;
+        }
+
+        const currentNumber = sortedNumbers[startIndex];
+
+        // Try including the current number
+        if (find(currentTarget - currentNumber, startIndex + 1, [...combination, currentNumber])) {
+            return true;
+        }
+
+        // Try excluding the current number
+        if (find(currentTarget, startIndex + 1, combination)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    find(target, 0, []);
+    
+    if (result.length > 0) {
+        return { combination: result };
+    } else {
+        return { error: "Nenhuma combinação exata foi encontrada." };
+    }
+}
       
 
     
+
