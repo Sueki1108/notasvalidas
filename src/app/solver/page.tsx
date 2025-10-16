@@ -2,6 +2,7 @@
 "use client";
 
 import * as React from "react";
+import { useState } from "react";
 import Link from 'next/link';
 import { Sheet, Wand2, Calculator, Check, X, Loader2, Trash2, ChevronDown, Group, FileText, FolderSync, Search, Replace, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
