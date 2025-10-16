@@ -2,9 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { useState } from "react";
-import Link from 'next/link';
-import { Sheet, Wand2, Calculator, Check, X, Loader2, Trash2, ChevronDown, Group, FileText, FolderSync, Search, Replace, Layers } from "lucide-react";
+import { Wand2, Calculator, Check, X, Loader2, Trash2, ChevronDown, Group, FileText, FolderSync, Search, Replace, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -14,14 +12,16 @@ import { useToast } from "@/hooks/use-toast";
 import { findSumCombinations } from "@/app/actions";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import Link from 'next/link';
+import { Sheet } from "lucide-react";
 
 
 export default function SolverPage() {
-    const [values, setValues] = useState<string>("");
-    const [target, setTarget] = useState<string>("");
-    const [processing, setProcessing] = useState(false);
-    const [result, setResult] = useState<{ value: number; inCombination: boolean }[] | null>(null);
-    const [error, setError] = useState<string | null>(null);
+    const [values, setValues] = React.useState<string>("");
+    const [target, setTarget] = React.useState<string>("");
+    const [processing, setProcessing] = React.useState(false);
+    const [result, setResult] = React.useState<{ value: number; inCombination: boolean }[] | null>(null);
+    const [error, setError] = React.useState<string | null>(null);
     const { toast } = useToast();
 
     const handleClear = () => {
