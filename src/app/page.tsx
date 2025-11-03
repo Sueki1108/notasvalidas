@@ -55,6 +55,7 @@ type ExceptionKeys = {
 };
 
 const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
+    if (typeof window === 'undefined') return null; // Guard clause for SSR
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlContent, "application/xml");
     const errorNode = xmlDoc.querySelector("parsererror");
@@ -204,6 +205,7 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
 }
 
 const extractCteDataFromXml = (xmlContent: string, uploadSource: string) => {
+    if (typeof window === 'undefined') return null; // Guard clause for SSR
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlContent, "application/xml");
     const errorNode = xmlDoc.querySelector("parsererror");

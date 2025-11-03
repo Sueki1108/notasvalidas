@@ -186,27 +186,16 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             spedInfo = parseSpedInfo(lines[0].trim());
         }
         
-        // Step 1: Reliably extract all keys from SPED C100 and D100 records and enrich data.
+        // Step 1: Reliably extract all keys from SPED and enrich data simultaneously.
         for (const line of lines) {
             const trimmedLine = line.trim();
-            const parts = trimmedLine.split('|');
-            let key = '';
+            const parsedData = parseSpedLineForData(trimmedLine, participants);
             
-            // Simplified, direct key extraction for NF-e (C100)
-            if (parts.length > 9 && parts[1] === 'C100') {
-                 key = normalizeKey(parts[9]);
-            } 
-            // Simplified, direct key extraction for CT-e (D100)
-            else if (parts.length > 10 && parts[1] === 'D100') {
-                 key = normalizeKey(parts[10]);
-            }
-
-            if (key && key.length === 44) {
-                spedKeys.add(key);
-                // Step 2: Attempt to parse detailed info, but don't let it block key extraction.
-                if (!allSpedKeyInfo.has(key)) {
-                    const parsedData = parseSpedLineForData(trimmedLine, participants);
-                    if (parsedData) {
+            if (parsedData && parsedData.key) {
+                const key = normalizeKey(parsedData.key);
+                if (key.length === 44) {
+                    spedKeys.add(key);
+                    if (!allSpedKeyInfo.has(key)) {
                          allSpedKeyInfo.set(key, parsedData);
                     }
                 }
@@ -284,8 +273,8 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
 
         const keyCheckResults: KeyCheckResult = { 
             keysFoundInBoth: keysFoundInBoth || [],
-            keysNotFoundInTxt, 
-            keysInTxtNotInSheet,
+            keysNotFoundInTxt: keysNotFoundInTxt || [],
+            keysInTxtNotInSheet: keysInTxtNotInSheet || [],
             duplicateKeysInSheet: duplicateKeysInSheet || [],
             duplicateKeysInTxt: duplicateKeysInTxt || [],
         };
@@ -1098,5 +1087,6 @@ export async function findSumCombinations(numbers: number[], target: number) {
       
 
     
+
 
 
