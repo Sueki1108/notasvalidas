@@ -559,11 +559,20 @@ export default function Home() {
                 XLSX.utils.book_append_sheet(workbook, worksheet, excelSheetName);
             });
 
-            XLSX.writeFile(workbook, "Planilhas_Processadas.xlsx");
-            toast({ title: "Download Iniciado", description: "O arquivo Excel está sendo baixado." });
+            const buffer = XLSX.write(workbook, { bookType: 'ods', type: 'array' });
+            const blob = new Blob([buffer], { type: 'application/vnd.oasis.opendocument.spreadsheet' });
+
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'Planilhas_Processadas.ods';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            toast({ title: "Download Iniciado", description: "O arquivo ODS está sendo baixado." });
         } catch (err: any) {
-            setError("Falha ao gerar o arquivo Excel.");
-            toast({ variant: "destructive", title: "Erro no Download", description: "Não foi possível gerar o arquivo Excel." });
+            setError("Falha ao gerar o arquivo ODS.");
+            toast({ variant: "destructive", title: "Erro no Download", description: "Não foi possível gerar o arquivo ODS." });
         }
     };
 
@@ -817,7 +826,7 @@ export default function Home() {
                                         </div>
                                     </div>
                                     <Button onClick={handleDownload} disabled={!results}>
-                                        <DownloadIcon className="mr-2"/>Baixar Planilha (.xlsx)
+                                        <DownloadIcon className="mr-2"/>Baixar Planilha (.ods)
                                     </Button>
                                 </div>
                             </CardHeader>

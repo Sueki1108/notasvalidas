@@ -49,7 +49,7 @@ export default function ReturnsPage() {
 
     const handleSubmit = async (type: 'devolutions' | 'referenced') => {
         const files = type === 'devolutions' ? devolutionFiles : referencedFiles;
-        const outputFilename = type === 'devolutions' ? 'relatorio_devolucoes.xlsx' : 'relatorio_referenciadas.xlsx';
+        const outputFilename = type === 'devolutions' ? 'relatorio_devolucoes.ods' : 'relatorio_referenciadas.ods';
 
         if (files.length === 0) {
             toast({
@@ -81,7 +81,7 @@ export default function ReturnsPage() {
                     byteNumbers[i] = byteCharacters.charCodeAt(i);
                 }
                 const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const blob = new Blob([byteArray], { type: 'application/vnd.oasis.opendocument.spreadsheet' });
 
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);

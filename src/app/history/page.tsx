@@ -216,7 +216,15 @@ export default function HistoryPage() {
             createSheet(keysFoundInBoth, "Encontradas em Ambos");
             
             if (wb.SheetNames.length > 0) {
-                XLSX.writeFile(wb, `relatorio_validacao_${verification.cnpj}_${verification.competence.replace('/', '-')}.xlsx`);
+                const buffer = XLSX.write(wb, { bookType: 'ods', type: 'array' });
+                const blob = new Blob([buffer], { type: 'application/vnd.oasis.opendocument.spreadsheet' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `relatorio_validacao_${verification.cnpj}_${verification.competence.replace('/', '-')}.ods`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
                 toast({ title: 'Download Iniciado', description: 'Planilha de validação gerada com sucesso.'});
             } else {
                  toast({ title: 'Sem Dados', description: 'Nenhum dado encontrado para baixar.'});
@@ -441,7 +449,3 @@ export default function HistoryPage() {
         </div>
     );
 }
-
-
-
-

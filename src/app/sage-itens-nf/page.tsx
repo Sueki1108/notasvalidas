@@ -169,7 +169,7 @@ export default function SageItensNfPage() {
             return;
         }
 
-        const output_filename = 'planilha_consolidada.xlsx';
+        const output_filename = 'planilha_consolidada.ods';
         const writer = XLSX.utils.book_new();
 
         for (const sheetName in processedData) {
@@ -188,7 +188,15 @@ export default function SageItensNfPage() {
             XLSX.utils.book_append_sheet(writer, worksheet, sheetName);
         }
 
-        XLSX.writeFile(writer, output_filename);
+        const buffer = XLSX.write(writer, { bookType: 'ods', type: 'array' });
+        const blob = new Blob([buffer], { type: 'application/vnd.oasis.opendocument.spreadsheet' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = output_filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
         toast({ title: "Download Iniciado", description: `O arquivo ${output_filename} está sendo baixado.` });
     }
 
@@ -326,6 +334,3 @@ export default function SageItensNfPage() {
         </div>
     );
 }
-
-
-

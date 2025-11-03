@@ -401,7 +401,7 @@ export async function mergeExcelFiles(files: { name: string, content: string }[]
             return { error: "Nenhum dado válido encontrado para agrupar." };
         }
         
-        const buffer = XLSX.write(mergedWorkbook, { bookType: 'xlsx', type: 'array' });
+        const buffer = XLSX.write(mergedWorkbook, { bookType: 'ods', type: 'array' });
         
         let binary = '';
         const bytes = new Uint8Array(buffer);
@@ -451,7 +451,7 @@ export async function joinExcelSheets(file: { name: string, content: string }) {
         const finalWorkbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(finalWorkbook, finalSheet, "Abas Consolidadas");
 
-        const outputBuffer = XLSX.write(finalWorkbook, { bookType: 'xlsx', type: 'array' });
+        const outputBuffer = XLSX.write(finalWorkbook, { bookType: 'ods', type: 'array' });
         
         let binary = '';
         const bytes = new Uint8Array(outputBuffer);
@@ -649,7 +649,7 @@ export async function extractNfeData(files: { name: string, content: string }[])
         }
 
 
-        const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const buffer = XLSX.write(wb, { bookType: 'ods', type: 'array' });
 
         let binary = '';
         const bytes = new Uint8Array(buffer);
@@ -769,7 +769,7 @@ export async function extractCteData(files: { name: string, content: string }[])
             XLSX.utils.book_append_sheet(wb, wsEspecificos, 'Dados Específicos');
         }
 
-        const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const buffer = XLSX.write(wb, { bookType: 'ods', type: 'array' });
 
         let binary = '';
         const bytes = new Uint8Array(buffer);
@@ -891,7 +891,7 @@ export async function extractReturnData(files: { name: string; content: string }
 
   XLSX.utils.book_append_sheet(wb, ws, 'Dados');
 
-  const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const buffer = XLSX.write(wb, { bookType: 'ods', type: 'array' });
   const base64 = Buffer.from(buffer).toString('base64');
   
   return { base64Data: base64 };
@@ -1034,7 +1034,7 @@ export async function separateXmlFromExcel(data: { excelFile: string, zipFile: s
         forceCellAsString(foundKeysWS, "Chave de Acesso Encontrada");
 
         XLSX.utils.book_append_sheet(foundKeysWB, foundKeysWS, 'Chaves Encontradas');
-        const foundKeysBase64 = XLSX.write(foundKeysWB, { bookType: 'xlsx', type: 'base64' });
+        const foundKeysBase64 = XLSX.write(foundKeysWB, { bookType: 'ods', type: 'base64' });
 
         // 4. Create result ZIP
         const outputZipBase64 = await outputZip.generateAsync({ type: 'base64' });
@@ -1098,4 +1098,5 @@ export async function findSumCombinations(numbers: number[], target: number) {
       
 
     
+
 

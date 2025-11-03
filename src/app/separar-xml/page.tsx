@@ -89,8 +89,8 @@ export default function SepararXmlPage() {
             // Trigger download for the found keys Excel file
             if (result.foundKeysExcel) {
                 const link = document.createElement('a');
-                link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${result.foundKeysExcel}`;
-                link.download = 'chaves_encontradas.xlsx';
+                link.href = `data:application/vnd.oasis.opendocument.spreadsheet;base64,${result.foundKeysExcel}`;
+                link.download = 'chaves_encontradas.ods';
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
@@ -194,7 +194,7 @@ export default function SepararXmlPage() {
                                     title="1. Planilha de Chaves"
                                     file={excelFile}
                                     onChange={(e) => handleFileChange(e, 'excel')}
-                                    accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                                    accept=".xlsx,.xls,.ods,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/vnd.oasis.opendocument.spreadsheet"
                                     id="excel-upload"
                                 />
                                 <FileUploadArea 

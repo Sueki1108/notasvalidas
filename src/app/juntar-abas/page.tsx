@@ -82,11 +82,11 @@ export default function JoinSheetsPage() {
                     byteNumbers[i] = byteCharacters.charCodeAt(i);
                 }
                 const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const blob = new Blob([byteArray], { type: 'application/vnd.oasis.opendocument.spreadsheet' });
 
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = 'abas_juntadas.xlsx';
+                link.download = 'abas_juntadas.ods';
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);

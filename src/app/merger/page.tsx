@@ -89,11 +89,11 @@ export default function MergerPage() {
                     byteNumbers[i] = byteCharacters.charCodeAt(i);
                 }
                 const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const blob = new Blob([byteArray], { type: 'application/vnd.oasis.opendocument.spreadsheet' });
 
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = 'Planilhas_Agrupadas.xlsx';
+                link.download = 'Planilhas_Agrupadas.ods';
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);

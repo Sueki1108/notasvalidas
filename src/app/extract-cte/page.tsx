@@ -74,11 +74,11 @@ export default function ExtractCtePage() {
                     byteNumbers[i] = byteCharacters.charCodeAt(i);
                 }
                 const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const blob = new Blob([byteArray], { type: 'application/vnd.oasis.opendocument.spreadsheet' });
 
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = 'dados_cte_extraidos.xlsx';
+                link.download = 'dados_cte_extraidos.ods';
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
@@ -218,4 +218,3 @@ export default function ExtractCtePage() {
 }
 
     
-
