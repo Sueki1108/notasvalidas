@@ -177,7 +177,6 @@ const forceCellAsString = (worksheet: XLSX.WorkSheet, headerName: string) => {
 export async function validateWithSped(processedData: DataFrames, spedFileContent: string) {
     try {
         let spedInfo: SpedInfo | null = null;
-        const spedKeys = new Set<string>();
         const allSpedKeyInfo = new Map<string, Partial<KeyInfo>>();
         const participants = parseAllParticipants(spedFileContent);
         
@@ -194,7 +193,6 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             if (parsedData && parsedData.key) {
                 const key = normalizeKey(parsedData.key);
                 if (key.length === 44) {
-                    spedKeys.add(key);
                     if (!allSpedKeyInfo.has(key)) {
                          allSpedKeyInfo.set(key, parsedData);
                     }
@@ -202,6 +200,8 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             }
         }
         
+        const spedKeys = Array.from(allSpedKeyInfo.keys());
+
         const validSheetNotes = [
             ...(processedData["Notas Válidas"] || []), 
             ...(processedData["Emissão Própria"] || [])
@@ -219,7 +219,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         const canceledXmlKeys = new Set((processedData['Notas Canceladas'] || []).map(r => normalizeKey(r['Chave de acesso'])));
         
         const keysNotFoundInTxt = [...spreadsheetKeys]
-            .filter(key => !spedKeys.has(key))
+            .filter(key => !spedKeys.includes(key))
             .map(key => {
                 const note = validSheetMap.get(key);
                 const isCte = note && ( (note.docType && note.docType === 'CTe') || (note.uploadSource && note.uploadSource.includes('CTe')) || (normalizeKey(note['Chave de acesso']).substring(20, 22) === '57'));
@@ -235,7 +235,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                 }
             });
 
-        const keysInTxtNotInSheet = [...spedKeys]
+        const keysInTxtNotInSheet = spedKeys
             .filter(key => !spreadsheetKeys.has(key) && !canceledXmlKeys.has(key))
             .map(key => {
                 const spedData = allSpedKeyInfo.get(key);
@@ -252,7 +252,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             });
         
         const keysFoundInBoth = [...spreadsheetKeys]
-            .filter(key => spedKeys.has(key))
+            .filter(key => spedKeys.includes(key))
             .map(key => {
                 const note = validSheetMap.get(key);
                  const isCte = note && ( (note.docType && note.docType === 'CTe') || (note.uploadSource && note.uploadSource.includes('CTe')) || (normalizeKey(note['Chave de acesso']).substring(20, 22) === '57'));
@@ -269,7 +269,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             });
 
         const duplicateKeysInSheet = findDuplicates(spreadsheetKeysArray);
-        const duplicateKeysInTxt = findDuplicates(Array.from(spedKeys));
+        const duplicateKeysInTxt = findDuplicates(spedKeys);
 
         const keyCheckResults: KeyCheckResult = { 
             keysFoundInBoth: keysFoundInBoth || [],
@@ -673,7 +673,7 @@ export async function extractCteData(files: { name: string, content: string }[])
         "CNPJ do Remetente": "cteProc/CTe/infCte/rem/CNPJ",
         "Nome do Destinatário": "cteProc/CTe/infCte/dest/xNome",
         "CNPJ do Destinatário": "cteProc/CTe/infCte/dest/CNPJ",
-        "Chave NF-e": "cteProc/CTe/infCte/infCTeNorm/infDoc/infNFe/chave",
+        "Chave NF-e": "cteProc/CTe/infCte/infCTeNorm/infDoc/infNFe",
         "Valor Total Prestação": "cteProc/CTe/infCte/vPrest/vTPrest",
         "Valor ICMS": "cteProc/CTe/infCte/imp/ICMS/ICMS00/vICMS",
         "Valor ICMS ST Retido (ICMS00)": "cteProc/CTe/infCte/imp/ICMS/ICMS00/vICMSSTRet",
@@ -688,7 +688,11 @@ export async function extractCteData(files: { name: string, content: string }[])
     ];
 
     try {
-        const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", isArray: (name) => name === "infNFe" });
+        const parser = new XMLParser({ 
+            ignoreAttributes: false, 
+            attributeNamePrefix: "@_", 
+            isArray: (name) => name === "infNFe" 
+        });
         
         const dadosCompletos: any[] = [];
         const dadosEspecificos: any[] = [];
@@ -705,19 +709,26 @@ export async function extractCteData(files: { name: string, content: string }[])
                 for (const colName in SPECIFIC_TAGS_MAP) {
                     const paths = SPECIFIC_TAGS_MAP[colName].split(',');
                     let value: any = 'N/A';
-                    for (const path of paths) {
-                        const foundValue = getValueByPath(jsonObj, path.trim());
-                        if (foundValue !== 'N/A') {
-                            value = foundValue;
-                            break;
+
+                    if (colName === "Chave NF-e") {
+                        const infNFe_array = getValueByPath(jsonObj, paths[0].trim());
+                        if (infNFe_array && infNFe_array !== 'N/A' && Array.isArray(infNFe_array)) {
+                            value = infNFe_array.map((nfe: any) => nfe.chave).join(', ');
+                        } else if (infNFe_array && typeof infNFe_array === 'object' && infNFe_array.chave) {
+                             value = infNFe_array.chave;
+                        }
+                    } else {
+                        for (const path of paths) {
+                            const foundValue = getValueByPath(jsonObj, path.trim());
+                            if (foundValue !== 'N/A') {
+                                value = foundValue;
+                                break;
+                            }
                         }
                     }
 
-                    if (Array.isArray(value)) {
-                         value = value.map(v => typeof v === 'object' ? v.chave : v).join(', ');
-                    }
 
-                    if (COLUMNS_TO_FORMAT_DECIMAL.includes(colName) && value && value !== 'N/A') {
+                    if (COLUMNS_TO_FORMAT_DECIMAL.includes(colName) && value && value !== 'N/A' && typeof value === 'string') {
                          value = parseFloat(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
                     specificData[colName] = value;
@@ -1087,6 +1098,7 @@ export async function findSumCombinations(numbers: number[], target: number) {
       
 
     
+
 
 
 
