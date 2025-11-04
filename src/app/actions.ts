@@ -673,7 +673,7 @@ export async function extractCteData(files: { name: string, content: string }[])
         "CNPJ do Remetente": "cteProc/CTe/infCte/rem/CNPJ",
         "Nome do Destinatário": "cteProc/CTe/infCte/dest/xNome",
         "CNPJ do Destinatário": "cteProc/CTe/infCte/dest/CNPJ",
-        "Chave NF-e": "cteProc/CTe/infCte/infCTeNorm/infDoc/infNFe",
+        "Chave NF-e": "cteProc/CTe/infCte/infCTeNorm/infDoc/infNFe/chave",
         "Valor Total Prestação": "cteProc/CTe/infCte/vPrest/vTPrest",
         "Valor ICMS": "cteProc/CTe/infCte/imp/ICMS/ICMS00/vICMS",
         "Valor ICMS ST Retido (ICMS00)": "cteProc/CTe/infCte/imp/ICMS/ICMS00/vICMSSTRet",
@@ -1098,6 +1098,7 @@ export async function findSumCombinations(numbers: number[], target: number) {
       
 
     
+
 
 
 
