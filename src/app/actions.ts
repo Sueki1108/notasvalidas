@@ -100,7 +100,7 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
     const docModel = parts[4]; // COD_MOD - 55 for NFe, 57 for CTe
     
     // NFe validation (C100)
-    if (parts.length > 9 && parts[1] === 'C100' && docModel === '55') {
+    if (parts[1] === 'C100' && docModel === '55') {
         const docStatus = parts[5]; // 00: Regular, 02: Cancelado
         const key = parts[9];
         const directionValue = parts[2]; // 0: Entrada, 1: Saída
@@ -128,7 +128,7 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
         };
     }
     // CTe validation (D100)
-    else if (parts.length > 10 && parts[1] === 'D100' && docModel === '57') {
+    else if (parts[1] === 'D100' && docModel === '57') {
         const key = parts[10];
         const value = parseFloat(parts[16] ? parts[16].replace(',', '.') : '0'); // vTPrest
         const emissionDate = parts[9]; // DDMMYYYY
@@ -1101,4 +1101,5 @@ export async function findSumCombinations(numbers: number[], target: number) {
       
 
     
+
 

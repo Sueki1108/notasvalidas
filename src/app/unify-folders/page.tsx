@@ -182,7 +182,7 @@ export default function UnifyFoldersPage() {
                                     className="sr-only"
                                     onChange={handleFileChange}
                                     multiple
-                                    accept=".zip,application/zip"
+                                    accept="application/zip"
                                 />
                             </div>
 
@@ -231,4 +231,5 @@ export default function UnifyFoldersPage() {
 }
 
     
+
 
