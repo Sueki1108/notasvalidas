@@ -351,12 +351,16 @@ export default function Home() {
                 const type = category.includes('CTe') ? 'CTe' : 'NFe';
                 const uploadSource = category.includes('Saída') ? 'saida' : 'entrada';
                 
-                for (const file of fileList) {
+                const filePromises = fileList.map(async file => {
                    const fileContent = await file.text();
-                   const xmlData = type === 'NFe' 
+                   return type === 'NFe' 
                        ? extractNfeDataFromXml(fileContent, uploadSource) 
                        : extractCteDataFromXml(fileContent, uploadSource);
+                });
 
+                const allXmlData = await Promise.all(filePromises);
+
+                for (const xmlData of allXmlData) {
                    if (!xmlData) continue;
 
                    if (xmlData.isEvent) {
@@ -382,7 +386,7 @@ export default function Home() {
                        if(uploadSource === 'entrada') allNfeItensEntrada.push(...xmlData.itens);
                        else allNfeItensSaida.push(...xmlData.itens);
                    }
-               }
+                }
             };
             
             for (const category of Object.keys(files)) {
@@ -444,9 +448,14 @@ export default function Home() {
 
         const checkFileDates = async (fileList: File[], category: string) => {
              const type = category.includes('CTe') ? 'CTe' : 'NFe';
-             for (const file of fileList) {
+             const filePromises = fileList.map(async (file) => {
                 const fileContent = await file.text();
-                const xmlData = type === 'NFe' ? extractNfeDataFromXml(fileContent, 'check') : extractCteDataFromXml(fileContent, 'check');
+                return type === 'NFe' ? extractNfeDataFromXml(fileContent, 'check') : extractCteDataFromXml(fileContent, 'check');
+             });
+
+             const allXmlData = await Promise.all(filePromises);
+             
+             for (const xmlData of allXmlData) {
                 if (xmlData?.nota) {
                     const monthYear = getMonthYear(xmlData.nota['Data de Emissão']);
                     if (monthYear) months.add(monthYear);
