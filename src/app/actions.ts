@@ -707,32 +707,36 @@ export async function extractCteData(files: { name: string, content: string }[])
 
                 const specificData: { [key: string]: any } = { 'Arquivo': file.name };
                 for (const colName in SPECIFIC_TAGS_MAP) {
+                    // Skip Chave NF-e from this loop, handle it separately.
+                    if (colName === "Chave NF-e") continue;
+
                     const paths = SPECIFIC_TAGS_MAP[colName].split(',');
                     let value: any = 'N/A';
-
-                    if (colName === "Chave NF-e") {
-                        const infNFe_array = getValueByPath(jsonObj, paths[0].trim());
-                        if (infNFe_array && infNFe_array !== 'N/A' && Array.isArray(infNFe_array)) {
-                            value = infNFe_array.map((nfe: any) => nfe.chave).join(', ');
-                        } else if (infNFe_array && typeof infNFe_array === 'object' && infNFe_array.chave) {
-                             value = infNFe_array.chave;
-                        }
-                    } else {
-                        for (const path of paths) {
-                            const foundValue = getValueByPath(jsonObj, path.trim());
-                            if (foundValue !== 'N/A') {
-                                value = foundValue;
-                                break;
-                            }
+                    for (const path of paths) {
+                        const foundValue = getValueByPath(jsonObj, path.trim());
+                        if (foundValue !== 'N/A') {
+                            value = foundValue;
+                            break;
                         }
                     }
-
 
                     if (COLUMNS_TO_FORMAT_DECIMAL.includes(colName) && value && value !== 'N/A' && typeof value === 'string') {
                          value = parseFloat(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
                     specificData[colName] = value;
                 }
+
+                // Correctly extract referenced NF-e keys
+                let chavesNfe = 'N/A';
+                const infNFe_array = getValueByPath(jsonObj, "cteProc/CTe/infCte/infCTeNorm/infDoc/infNFe");
+
+                if (infNFe_array && infNFe_array !== 'N/A') {
+                    const keys = Array.isArray(infNFe_array) 
+                        ? infNFe_array.map((nfe: any) => nfe.chave) 
+                        : [infNFe_array.chave];
+                    chavesNfe = keys.filter(Boolean).join(', ');
+                }
+                specificData["Chave NF-e"] = chavesNfe || 'N/A';
                 
                 const codigoTomador = specificData["Código do Tomador"];
                 specificData["Tomador do Serviço"] = TOMADOR_MAP[codigoTomador] || 'Não Informado/Erro';
@@ -1098,6 +1102,7 @@ export async function findSumCombinations(numbers: number[], target: number) {
       
 
     
+
 
 
 
