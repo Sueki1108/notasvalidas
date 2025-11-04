@@ -78,7 +78,7 @@ const parseSpedInfo = (spedLine: string): SpedInfo | null => {
 
 const parseAllParticipants = (spedFileContent: string) => {
     const participants = new Map<string, string>();
-    const lines = spedFileContent.split('\n');
+    const lines = spedFileContent.replace(/\r\n/g, '\n').split('\n');
     for (const line of lines) {
         const trimmedLine = line.trim();
         if (trimmedLine.startsWith('|0150|')) {
@@ -113,7 +113,7 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
             return { key, comment: 'Documento Cancelado/Denegado no SPED', docType: 'NFe', direction };
         }
         
-        const value = parseFloat(parts[23] || '0');
+        const value = parseFloat(parts[23] ? parts[23].replace(',', '.') : '0');
         const emissionDate = parts[10]; // DDMMYYYY
         const partnerCode = parts[3];
         const partnerName = participants.get(partnerCode) || '';
@@ -130,7 +130,7 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
     // CTe validation (D100)
     else if (parts.length > 10 && parts[1] === 'D100' && docModel === '57') {
         const key = parts[10];
-        const value = parseFloat(parts[16] || '0'); // vTPrest
+        const value = parseFloat(parts[16] ? parts[16].replace(',', '.') : '0'); // vTPrest
         const emissionDate = parts[9]; // DDMMYYYY
         const partnerCode = parts[3];
         const partnerName = participants.get(partnerCode) || '';
@@ -176,37 +176,36 @@ const forceCellAsString = (worksheet: XLSX.WorkSheet, headerName: string) => {
 
 export async function validateWithSped(processedData: DataFrames, spedFileContent: string) {
     try {
+        const normalizedContent = spedFileContent.replace(/\r\n/g, '\n');
+        const lines = normalizedContent.split('\n');
+
         let spedInfo: SpedInfo | null = null;
-        const allSpedKeyInfo = new Map<string, Partial<KeyInfo>>();
-        const participants = parseAllParticipants(spedFileContent);
-        
-        const lines = spedFileContent.split('\n');
         if (lines.length > 0 && lines[0]) {
             spedInfo = parseSpedInfo(lines[0].trim());
         }
         
+        const participants = parseAllParticipants(normalizedContent);
+        const allSpedKeyInfo = new Map<string, Partial<KeyInfo>>();
+        
         // Step 1: Reliably extract all keys from SPED and enrich data simultaneously.
         for (const line of lines) {
             const trimmedLine = line.trim();
+            if (!trimmedLine) continue;
+
             const parsedData = parseSpedLineForData(trimmedLine, participants);
             
             if (parsedData && parsedData.key) {
                 const key = normalizeKey(parsedData.key);
-                if (key.length === 44) {
-                    if (!allSpedKeyInfo.has(key)) {
-                         allSpedKeyInfo.set(key, parsedData);
-                    }
+                if (key.length === 44 && !allSpedKeyInfo.has(key)) {
+                    allSpedKeyInfo.set(key, parsedData);
                 }
             }
         }
         
         const spedKeys = Array.from(allSpedKeyInfo.keys());
 
-        const validSheetNotes = [
-            ...(processedData["Notas Válidas"] || []), 
-            ...(processedData["Emissão Própria"] || [])
-        ];
-        const validSheetMap = new Map(validSheetNotes.map(note => [
+        const validSheetNotes = processedData["Chaves Válidas"] || [];
+        const validSheetMap = new Map((processedData["Notas Válidas"] || []).map(note => [
             normalizeKey(note['Chave de acesso']), 
             note
         ]));
@@ -255,7 +254,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             .filter(key => spedKeys.includes(key))
             .map(key => {
                 const note = validSheetMap.get(key);
-                 const isCte = note && ( (note.docType && note.docType === 'CTe') || (note.uploadSource && note.uploadSource.includes('CTe')) || (normalizeKey(note['Chave de acesso']).substring(20, 22) === '57'));
+                const isCte = note && ( (note.docType && note.docType === 'CTe') || (note.uploadSource && note.uploadSource.includes('CTe')) || (normalizeKey(note['Chave de acesso']).substring(20, 22) === '57'));
                 const isSaida = note && spedInfo && note['Emitente CPF/CNPJ'] === spedInfo.cnpj;
                 return {
                     key: key,
@@ -1102,6 +1101,7 @@ export async function findSumCombinations(numbers: number[], target: number) {
       
 
     
+
 
 
 
