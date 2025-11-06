@@ -32,6 +32,7 @@ export type KeyInfo = {
 
 
 export type KeyCheckResult = {
+    allSpedKeys: KeyInfo[];
     keysFoundInBoth: KeyInfo[];
     keysNotFoundInTxt: KeyInfo[];
     keysInTxtNotInSheet: KeyInfo[];
@@ -217,7 +218,13 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             }
         }
         
-        const spedKeys = Array.from(allSpedKeyInfo.keys());
+        const allSpedKeys: KeyInfo[] = Array.from(allSpedKeyInfo.entries()).map(([key, data]) => ({
+            key,
+            origin: 'sped',
+            ...data
+        } as KeyInfo));
+        
+        const spedKeys = allSpedKeys.map(k => k.key);
 
         const validSheetNotes = processedData["Chaves Válidas"] || [];
         const validSheetMap = new Map((processedData["Notas Válidas"] || []).map(note => [
@@ -286,6 +293,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         const duplicateKeysInTxt = findDuplicates(spedKeys);
 
         const keyCheckResults: KeyCheckResult = { 
+            allSpedKeys: allSpedKeys || [],
             keysFoundInBoth: keysFoundInBoth || [],
             keysNotFoundInTxt: keysNotFoundInTxt || [],
             keysInTxtNotInSheet: keysInTxtNotInSheet || [],
@@ -1272,6 +1280,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
       
 
     
+
 
 
 

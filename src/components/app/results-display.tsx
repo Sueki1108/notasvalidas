@@ -25,7 +25,8 @@ export function ResultsDisplay({ results }: ResultsDisplayProps) {
 
     const orderedSheetNames = [
         "Notas Válidas", "Itens de Entrada", "Emissão Própria", "Itens de Saída", "Chaves Válidas", "Imobilizados",
-        "Notas Canceladas", "NF-Stock NFE Operação Não Realizada", "NF-Stock NFE Operação Desconhecida", "NF-Stock CTE Desacordo de Serviço"
+        "Notas Canceladas", "NF-Stock NFE Operação Não Realizada", "NF-Stock NFE Operação Desconhecida", "NF-Stock CTE Desacordo de Serviço",
+        "Chaves Encontradas no SPED"
     ].filter(name => results[name] && results[name].length > 0);
     
     useEffect(() => {

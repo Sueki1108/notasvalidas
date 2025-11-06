@@ -494,6 +494,7 @@ export default function Home() {
         setKeyCheckResult(null);
 
         let consolidatedResults: KeyCheckResult = {
+            allSpedKeys: [],
             keysFoundInBoth: [],
             keysNotFoundInTxt: [],
             keysInTxtNotInSheet: [],
@@ -506,12 +507,6 @@ export default function Home() {
             for (const spedFile of spedFiles) {
                 const spedFileContent = await spedFile.text();
                 
-                const info = parseSpedInfo(spedFileContent.split('\n')[0]?.trim() || "");
-                if (!info || !info.cnpj) {
-                    toast({ variant: "destructive", title: "Erro no SPED", description: `Não foi possível extrair o CNPJ do arquivo ${spedFile.name}.` });
-                    continue;
-                }
-                
                 const validationResult = await validateWithSped(results, spedFileContent);
                 
                 if (validationResult.error) {
@@ -520,18 +515,22 @@ export default function Home() {
                 }
 
                 if (validationResult.keyCheckResults) {
+                    consolidatedResults.allSpedKeys.push(...validationResult.keyCheckResults.allSpedKeys);
                     consolidatedResults.keysFoundInBoth.push(...validationResult.keyCheckResults.keysFoundInBoth);
                     consolidatedResults.keysNotFoundInTxt.push(...validationResult.keyCheckResults.keysNotFoundInTxt);
                     consolidatedResults.keysInTxtNotInSheet.push(...validationResult.keyCheckResults.keysInTxtNotInSheet);
                     consolidatedResults.duplicateKeysInSheet.push(...validationResult.keyCheckResults.duplicateKeysInSheet);
                     consolidatedResults.duplicateKeysInTxt.push(...validationResult.keyCheckResults.duplicateKeysInTxt);
                 }
-                lastSpedInfo = validationResult.spedInfo || info;
+                lastSpedInfo = validationResult.spedInfo || null;
             }
 
             setKeyCheckResult(consolidatedResults);
-            if (lastSpedInfo) {
+             if (lastSpedInfo) {
                 setSpedInfo(lastSpedInfo);
+            }
+            if (results) {
+                setResults({ ...results, "Chaves Encontradas no SPED": consolidatedResults.allSpedKeys });
             }
             
             toast({ title: "Validação SPED Concluída", description: `A verificação das chaves para ${spedFiles.length} arquivo(s) foi finalizada.` });
@@ -615,10 +614,12 @@ export default function Home() {
                 "Itens de Saída": "Itens de Saida",
                 "Imobilizados": "Imobilizados",
                 "Chaves Válidas": "Chaves Validas",
+                "Chaves Encontradas no SPED": "Chaves SPED"
             };
             const orderedSheetNames = [
                 "Notas Válidas", "Itens de Entrada", "Emissão Própria", "Itens de Saída", "Chaves Válidas", "Imobilizados",
-                 "Notas Canceladas", "NF-Stock NFE Operação Não Realizada", "NF-Stock NFE Operação Desconhecida", "NF-Stock CTE Desacordo de Serviço"
+                 "Notas Canceladas", "NF-Stock NFE Operação Não Realizada", "NF-Stock NFE Operação Desconhecida", "NF-Stock CTE Desacordo de Serviço",
+                 "Chaves Encontradas no SPED"
             ].filter(name => results[name] && results[name].length > 0);
 
             orderedSheetNames.forEach(sheetName => {
@@ -985,3 +986,4 @@ export default function Home() {
         </div>
     );
 }
+
