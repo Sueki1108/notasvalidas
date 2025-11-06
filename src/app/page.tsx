@@ -310,6 +310,8 @@ export default function Home() {
     const handleClearFile = (fileName: string) => {
         if (fileName === 'SPED TXT') {
             setSpedFiles(null);
+            setSpedInfo(null);
+            setKeyCheckResult(null);
             const input = document.querySelector(`input[name="SPED TXT"]`) as HTMLInputElement;
             if (input) input.value = "";
         } else if (taxSheetFiles.includes(fileName)) {
@@ -509,49 +511,32 @@ export default function Home() {
         setError(null);
         setValidating(true);
         setKeyCheckResult(null);
-
-        let consolidatedResults: KeyCheckResult = {
-            allSpedKeys: [],
-            keysFoundInBoth: [],
-            keysNotFoundInTxt: [],
-            keysInTxtNotInSheet: [],
-            duplicateKeysInSheet: [],
-            duplicateKeysInTxt: [],
-        };
-        let lastSpedInfo: SpedInfo | null = null;
         
         try {
-            for (const spedFile of spedFiles) {
-                const spedFileContent = await spedFile.text();
-                
-                const validationResult = await validateWithSped(results, spedFileContent);
-                
-                if (validationResult.error) {
-                    toast({ variant: "destructive", title: `Erro na validação de ${spedFile.name}`, description: validationResult.error });
-                    continue;
-                }
-
-                if (validationResult.keyCheckResults) {
-                    consolidatedResults.allSpedKeys.push(...validationResult.keyCheckResults.allSpedKeys);
-                    consolidatedResults.keysFoundInBoth.push(...validationResult.keyCheckResults.keysFoundInBoth);
-                    consolidatedResults.keysNotFoundInTxt.push(...validationResult.keyCheckResults.keysNotFoundInTxt);
-                    consolidatedResults.keysInTxtNotInSheet.push(...validationResult.keyCheckResults.keysInTxtNotInSheet);
-                    consolidatedResults.duplicateKeysInSheet.push(...validationResult.keyCheckResults.duplicateKeysInSheet);
-                    consolidatedResults.duplicateKeysInTxt.push(...validationResult.keyCheckResults.duplicateKeysInTxt);
-                }
-                lastSpedInfo = validationResult.spedInfo || null;
+            // Only using the first SPED file for now.
+            const spedFile = spedFiles[0];
+            const spedFileContent = await spedFile.text();
+            
+            const validationResult = await validateWithSped(results, spedFileContent);
+            
+            if (validationResult.error) {
+                throw new Error(validationResult.error);
             }
 
-            setKeyCheckResult(consolidatedResults);
-             if (lastSpedInfo) {
-                setSpedInfo(lastSpedInfo);
+            if (validationResult.keyCheckResults) {
+                 setKeyCheckResult(validationResult.keyCheckResults);
             }
-             if (results) {
-                setResults({ ...results, "Chaves Encontradas no SPED": consolidatedResults.allSpedKeys });
+            if (validationResult.spedInfo) {
+                setSpedInfo(validationResult.spedInfo);
             }
             
-            toast({ title: "Validação SPED Concluída", description: `A verificação das chaves para ${spedFiles.length} arquivo(s) foi finalizada.` });
-            setActiveTab('advanced');
+            // Add SPED keys to the main results for display
+            if (results && validationResult.keyCheckResults?.allSpedKeys) {
+                setResults({ ...results, "Chaves Encontradas no SPED": validationResult.keyCheckResults.allSpedKeys });
+            }
+            
+            toast({ title: "Validação SPED Concluída", description: `A verificação das chaves foi finalizada.` });
+            
         } catch (err: any) {
              setError(err.message || "Ocorreu um erro desconhecido na validação.");
              setKeyCheckResult(null);
@@ -942,8 +927,34 @@ export default function Home() {
                                         onClearFile={handleClearFile}
                                     />
                                     <Button onClick={handleValidateWithSped} disabled={validating || !spedFiles || spedFiles.length === 0} className="w-full">
-                                        {validating ? "Validando..." : "Validar com SPED"}
+                                        {validating ? "Validando e Extraindo Dados do SPED..." : "Validar e Extrair Dados do SPED"}
                                     </Button>
+                                    
+                                     {spedInfo && (
+                                        <Alert variant="default" className="border-primary/50">
+                                            <FileTextIcon className="h-4 w-4" />
+                                            <AlertTitle>Resumo do Arquivo SPED</AlertTitle>
+                                            <AlertDescription>
+                                                <p><strong>Empresa:</strong> {spedInfo.companyName}</p>
+                                                <p><strong>CNPJ:</strong> {formatCnpj(spedInfo.cnpj)}</p>
+                                                <p><strong>Competência:</strong> {spedInfo.competence}</p>
+                                                <p><strong>Total de Chaves Encontradas:</strong> {keyCheckResults?.allSpedKeys.length || 0}</p>
+                                            </AlertDescription>
+                                        </Alert>
+                                    )}
+
+                                    {keyCheckResults && (
+                                        <div className="mt-6">
+                                            <h3 className="text-xl font-bold mb-4">Resultados da Validação</h3>
+                                             <KeyResultsDisplay results={keyCheckResults} cnpj={spedInfo?.cnpj || null} />
+                                        </div>
+                                    )}
+
+                                    {validating && (
+                                        <div className="flex justify-center p-8">
+                                            <Cpu className="h-8 w-8 animate-spin" />
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
                         </TabsContent>
@@ -1124,30 +1135,6 @@ export default function Home() {
                             </CardContent>
                         </Card>
                     )}
-                    
-                    {activeTab === 'validate' && (validating || keyCheckResults) &&
-                        <Card className="shadow-lg mt-8">
-                            <CardHeader>
-                                <div className="flex items-center gap-3 p-4 bg-secondary rounded-lg">
-                                    <AlertTriangle className="h-8 w-8 text-amber-600" />
-                                    <div>
-                                        <h3 className="font-headline text-xl">Resultados da Validação SPED</h3>
-                                        <p className="text-muted-foreground">Comparação entre os XMLs/planilhas e o arquivo SPED TXT.</p>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                 {validating ? (
-                                    <div className="space-y-4">
-                                       <Skeleton className="h-8 w-full" />
-                                       <Skeleton className="h-32 w-full" />
-                                    </div>
-                                 ) : keyCheckResults && spedInfo && (
-                                     <KeyResultsDisplay results={keyCheckResults} cnpj={spedInfo.cnpj} />
-                                 )}
-                            </CardContent>
-                        </Card>
-                    }
                 </div>
             </main>
 
