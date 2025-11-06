@@ -569,10 +569,17 @@ export default function Home() {
             return;
         }
 
-        if (!results || !(results['Itens de Entrada'] || results['Itens de Saída'])) {
+        if (!results) {
             toast({ variant: "destructive", title: "Dados XML não processados", description: "Processe os arquivos XML na Etapa 1 primeiro." });
             return;
         }
+        
+        const xmlItems = [...(results['Itens de Entrada'] || []), ...(results['Itens de Saída'] || [])];
+        if (xmlItems.length === 0) {
+            toast({ variant: "destructive", title: "Nenhum item XML encontrado", description: "Não há itens nas abas 'Itens de Entrada' ou 'Itens de Saída' para comparar." });
+            return;
+        }
+
 
         setError(null);
         setComparing(true);
@@ -590,8 +597,6 @@ export default function Home() {
                     });
                 }
             }
-            
-            const xmlItems = [...(results['Itens de Entrada'] || []), ...(results['Itens de Saída'] || [])];
 
             const result = await compareCfopData({
                 xmlItemsData: xmlItems,
@@ -954,47 +959,54 @@ export default function Home() {
                                     </div>
                                 </CardHeader>
                                 <CardContent>
-                                     <Tabs defaultValue="impostos">
-                                        <TabsList className="grid w-full grid-cols-4">
-                                            <TabsTrigger value="impostos">Impostos</TabsTrigger>
-                                            <TabsTrigger value="compare-xml-sage">Comparação XML X Sage</TabsTrigger>
+                                     <Tabs defaultValue="impostos-comparacao">
+                                        <TabsList className="grid w-full grid-cols-3">
+                                            <TabsTrigger value="impostos-comparacao">Impostos e Comparações</TabsTrigger>
                                             <TabsTrigger value="compare-cfop-accounting">CFOP x Contabilização</TabsTrigger>
                                             <TabsTrigger value="cte-analysis">Análise de CT-e</TabsTrigger>
                                         </TabsList>
-                                        <TabsContent value="impostos" className="mt-4">
-                                             <Card>
-                                                <CardHeader>
-                                                    <CardTitle>Planilhas de Impostos</CardTitle>
-                                                    <CardDescription>Carregue aqui as planilhas para cada tipo de imposto que deseja analisar.</CardDescription>
-                                                </CardHeader>
-                                                <CardContent>
-                                                    <FileUploadForm
-                                                        requiredFiles={taxSheetFiles}
-                                                        files={taxFiles}
-                                                        onFileChange={handleFileChange}
-                                                        onClearFile={handleClearFile}
-                                                    />
-                                                </CardContent>
-                                             </Card>
-                                        </TabsContent>
-                                        <TabsContent value="compare-xml-sage" className="mt-4">
-                                             <Card>
-                                                <CardHeader>
-                                                     <div className="flex items-center gap-3">
-                                                        <GitCompare className="h-8 w-8 text-primary" />
-                                                        <div>
-                                                            <CardTitle className="font-headline text-xl">Comparar Itens (XML vs. Sage)</CardTitle>
-                                                            <CardDescription>As planilhas carregadas na aba 'Impostos' serão usadas para esta comparação.</CardDescription>
-                                                        </div>
-                                                    </div>
-                                                </CardHeader>
-                                                <CardContent className="space-y-6">
-                                                   <Button onClick={handleCompareCfop} disabled={comparing || !Object.values(taxFiles).some(f => f)} className="w-full">
-                                                        {comparing ? "Comparando..." : "Comparar Itens"}
-                                                    </Button>
-                                                    {cfopComparisonResult && <CfopResultsDisplay results={cfopComparisonResult} />}
-                                                </CardContent>
-                                            </Card>
+                                        <TabsContent value="impostos-comparacao" className="mt-4">
+                                            <Tabs defaultValue="impostos">
+                                                <TabsList>
+                                                    <TabsTrigger value="impostos">Carregar Planilhas</TabsTrigger>
+                                                    <TabsTrigger value="compare-xml-sage">Comparação XML X Sage</TabsTrigger>
+                                                </TabsList>
+                                                <TabsContent value="impostos" className="mt-4">
+                                                    <Card>
+                                                        <CardHeader>
+                                                            <CardTitle>Planilhas de Impostos</CardTitle>
+                                                            <CardDescription>Carregue aqui as planilhas para cada tipo de imposto que deseja analisar.</CardDescription>
+                                                        </CardHeader>
+                                                        <CardContent>
+                                                            <FileUploadForm
+                                                                requiredFiles={taxSheetFiles}
+                                                                files={taxFiles}
+                                                                onFileChange={handleFileChange}
+                                                                onClearFile={handleClearFile}
+                                                            />
+                                                        </CardContent>
+                                                    </Card>
+                                                </TabsContent>
+                                                <TabsContent value="compare-xml-sage" className="mt-4">
+                                                    <Card>
+                                                        <CardHeader>
+                                                            <div className="flex items-center gap-3">
+                                                                <GitCompare className="h-8 w-8 text-primary" />
+                                                                <div>
+                                                                    <CardTitle className="font-headline text-xl">Comparar Itens (XML vs. Sage)</CardTitle>
+                                                                    <CardDescription>As planilhas carregadas na aba anterior serão usadas para esta comparação.</CardDescription>
+                                                                </div>
+                                                            </div>
+                                                        </CardHeader>
+                                                        <CardContent className="space-y-6">
+                                                        <Button onClick={handleCompareCfop} disabled={comparing || !Object.values(taxFiles).some(f => f)} className="w-full">
+                                                                {comparing ? "Comparando..." : "Comparar Itens"}
+                                                            </Button>
+                                                            {cfopComparisonResult && <CfopResultsDisplay results={cfopComparisonResult} />}
+                                                        </CardContent>
+                                                    </Card>
+                                                </TabsContent>
+                                            </Tabs>
                                         </TabsContent>
                                         <TabsContent value="compare-cfop-accounting" className="mt-4">
                                             <Card>
