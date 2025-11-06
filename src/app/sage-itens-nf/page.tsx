@@ -84,26 +84,21 @@ export default function SageItensNfPage() {
         setProcessing(true);
         setProcessedData(null);
 
-        const dfs_to_write: ProcessedData = {};
+        const allItems: any[] = [];
 
         try {
             for (const file of files) {
-                const sheetName = file.name.replace(/\.[^/.]+$/, "");
+                const sourceFileName = file.name;
                 
-                // For all formats, read as buffer, then standardize to ODS in memory
                 const bufferContent = await file.arrayBuffer();
                 const initialWorkbook = XLSX.read(bufferContent, { type: 'buffer' });
                 
-                // Standardize to ODS in memory
                 const odsOutput = XLSX.write(initialWorkbook, { bookType: 'ods', type: 'buffer' });
                 const workbook = XLSX.read(odsOutput, { type: 'buffer' });
-
 
                 const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
                 const df: any[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
 
-
-                // Convert to array of objects with new headers
                 let dataAsObjects = df.map(row => {
                     const obj: {[key: string]: any} = {};
                     newHeaders.forEach((header, index) => {
@@ -112,7 +107,6 @@ export default function SageItensNfPage() {
                     return obj;
                 });
 
-                // Replicate NF and CFOP
                 let lastNfNumber: any = null;
                 let lastCfop: any = null;
                 dataAsObjects.forEach(row => {
@@ -126,21 +120,21 @@ export default function SageItensNfPage() {
                     }
                 });
 
-                // Filter rows
                 let filteredData = dataAsObjects.filter(row => 
                     row['Itens da Nota'] && 
                     String(row['Itens da Nota']).toUpperCase() !== 'ITENS DA NOTA' &&
                     String(row['Itens da Nota']).toUpperCase() !== 'TOTAL'
                 );
 
-                // Add to dfs_to_write
-                if (!dfs_to_write[sheetName]) {
-                    dfs_to_write[sheetName] = [];
-                }
-                dfs_to_write[sheetName].push(...filteredData);
+                const dataWithSource = filteredData.map(row => ({
+                    ...row,
+                    "Arquivo de Origem": sourceFileName
+                }))
+
+                allItems.push(...dataWithSource);
             }
             
-            setProcessedData(dfs_to_write);
+            setProcessedData({ "Itens Consolidados": allItems });
             toast({
                 title: "Processamento Concluído",
                 description: "Os arquivos foram processados com sucesso. Você pode baixar a planilha consolidada.",
@@ -160,7 +154,7 @@ export default function SageItensNfPage() {
     };
     
     const handleDownload = () => {
-        if (!processedData) {
+        if (!processedData || !processedData["Itens Consolidados"] || processedData["Itens Consolidados"].length === 0) {
              toast({
                 variant: "destructive",
                 title: "Sem dados",
@@ -172,22 +166,22 @@ export default function SageItensNfPage() {
         const output_filename = 'planilha_consolidada.ods';
         const writer = XLSX.utils.book_new();
 
-        for (const sheetName in processedData) {
-            const final_df_data = processedData[sheetName].map(row => {
-                const descontoStr = String(row['Desconto'] || '');
-                const valorItemStr = String(row['Valor do Item'] || '').replace('.', ',');
-                row['Chave'] = descontoStr + valorItemStr;
-                return row;
-            });
-            
-            const worksheet = XLSX.utils.json_to_sheet(final_df_data);
-             if (final_df_data.length > 0) {
-                worksheet['!cols'] = Object.keys(final_df_data[0] || {}).map(() => ({ wch: 20 }));
-                 forceCellAsString(worksheet, "Chave");
-            }
-            XLSX.utils.book_append_sheet(writer, worksheet, sheetName);
-        }
+        const dataForSheet = processedData["Itens Consolidados"].map(row => {
+            const descontoStr = String(row['Desconto'] || '');
+            const valorItemStr = String(row['Valor do Item'] || '').replace('.', ',');
+            row['Chave'] = descontoStr + valorItemStr;
+            return row;
+        });
 
+        const worksheet = XLSX.utils.json_to_sheet(dataForSheet);
+        if (dataForSheet.length > 0) {
+            const newHeader = ["Arquivo de Origem", ...Object.keys(dataForSheet[0]).filter(k => k !== "Arquivo de Origem")];
+            XLSX.utils.sheet_add_json(worksheet, dataForSheet, {header: newHeader, skipHeader: true});
+            worksheet['!cols'] = newHeader.map(() => ({ wch: 20 }));
+            forceCellAsString(worksheet, "Chave");
+        }
+        XLSX.utils.book_append_sheet(writer, worksheet, "Itens Consolidados");
+       
         const buffer = XLSX.write(writer, { bookType: 'ods', type: 'array' });
         const blob = new Blob([buffer], { type: 'application/vnd.oasis.opendocument.spreadsheet' });
         const link = document.createElement('a');
@@ -246,7 +240,7 @@ export default function SageItensNfPage() {
                                 <FileText className="h-8 w-8 text-primary" />
                                 <div>
                                     <CardTitle className="font-headline text-2xl">Sage - Processador de Itens de NF</CardTitle>
-                                    <CardDescription>Carregue suas planilhas para replicar o CFOP e o número da NF nos itens.</CardDescription>
+                                    <CardDescription>Carregue suas planilhas para consolidar os itens em uma única tabela.</CardDescription>
                                 </div>
                             </div>
                         </CardHeader>
@@ -310,13 +304,13 @@ export default function SageItensNfPage() {
                     {processedData && (
                         <Card>
                             <CardHeader>
-                                <CardTitle>Resultados Processados</CardTitle>
-                                <CardDescription>Dados após o processamento. Você pode baixar o arquivo consolidado.</CardDescription>
+                                <CardTitle>Resultados Consolidados</CardTitle>
+                                <CardDescription>Dados de todos os arquivos processados. Você pode baixar o arquivo consolidado.</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 {Object.entries(processedData).map(([sheetName, data]) => (
                                     <div key={sheetName} className="mb-8">
-                                        <h3 className="text-xl font-semibold mb-4">{sheetName}</h3>
+                                        <h3 className="text-xl font-semibold mb-4">{sheetName} ({data.length} itens)</h3>
                                         <DataTable columns={getColumns(data)} data={data} />
                                     </div>
                                 ))}
