@@ -17,17 +17,18 @@ interface FileUploadFormProps {
 
 export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile, disabled = false }: FileUploadFormProps) {
     const getFileAcceptType = (fileName: string) => {
-        if (fileName.toLowerCase().includes('txt') || fileName.toLowerCase().includes('lote')) {
+        if (fileName.toLowerCase().includes('sped txt')) {
             return '.txt, text/plain';
         }
         if (fileName.toLowerCase().includes('xml')) {
             return '.xml, text/xml';
         }
+        // Tratar "Lote de Contabilização" e outras planilhas da mesma forma.
         return ".xlsx,.xls,.csv,.ods,.slk,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/vnd.oasis.opendocument.spreadsheet,text/x-slk";
     }
     
     const isMultiple = (fileName: string) => {
-        if (fileName.toLowerCase().includes('planilha') || fileName.toLowerCase().includes('lote')) {
+        if (fileName.toLowerCase().includes('planilha') || fileName.toLowerCase().includes('lote') || fileName.toLowerCase().includes('sped')) {
             return false;
         }
          return true;
