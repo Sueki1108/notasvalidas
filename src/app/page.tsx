@@ -358,11 +358,9 @@ export default function Home() {
                        : extractCteDataFromXml(fileContent, uploadSource);
                 });
 
-                const allXmlData = await Promise.all(filePromises);
+                const allXmlData = (await Promise.all(filePromises)).filter(Boolean);
 
                 for (const xmlData of allXmlData) {
-                   if (!xmlData) continue;
-
                    if (xmlData.isEvent) {
                         if (xmlData.eventType === 'Cancelamento') {
                             canceledKeys.add(xmlData.key);
@@ -454,7 +452,7 @@ export default function Home() {
                 return type === 'NFe' ? extractNfeDataFromXml(fileContent, 'check') : extractCteDataFromXml(fileContent, 'check');
              });
 
-             const allXmlData = await Promise.all(filePromises);
+             const allXmlData = (await Promise.all(filePromises)).filter(Boolean);
              
              for (const xmlData of allXmlData) {
                 if (xmlData?.nota) {
