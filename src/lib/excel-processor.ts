@@ -52,16 +52,10 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
 
     if (companyCnpj) {
         allNfeNotes.forEach(nota => {
-            if (nota && nota['Emitente CPF/CNPJ'] === companyCnpj) {
+            const cleanKey = normalizeKey(nota['Chave de acesso']);
+            if (nota && nota['Emitente CPF/CNPJ'] === companyCnpj && !exceptionKeySet.has(cleanKey)) {
                 ownEmissionNotes.push(nota);
-                
-                const cleanKey = normalizeKey(nota['Chave de acesso']);
-
-                if (!exceptionKeySet.has(cleanKey)) {
-                     if (nota.uploadSource === 'saida' || nota.isOwnEmissionDevolution) {
-                        ownEmissionValidKeys.add(cleanKey);
-                     }
-                }
+                ownEmissionValidKeys.add(cleanKey);
             }
         });
     }
@@ -71,8 +65,7 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
     const notasValidas = allNotes.filter(row =>
         row &&
         !exceptionKeySet.has(normalizeKey(row['Chave de acesso'])) &&
-        !ownEmissionNotes.some(own => normalizeKey(own['Chave de acesso']) === normalizeKey(row['Chave de acesso'])) &&
-        !row.isOwnEmissionDevolution
+        !ownEmissionNotes.some(own => normalizeKey(own['Chave de acesso']) === normalizeKey(row['Chave de acesso']))
     );
     
     processedDfs["Notas Válidas"] = notasValidas;

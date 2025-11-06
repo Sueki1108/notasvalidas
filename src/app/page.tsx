@@ -101,16 +101,17 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
         }
     }
 
-
     const emit = infNFe.getElementsByTagName('emit')[0];
     const dest = infNFe.getElementsByTagName('dest')[0];
     const total = infNFe.getElementsByTagName('ICMSTot')[0];
-    const protNFe = xmlDoc.getElementsByTagName('protNFe')[0];
-
-    if (!ide || !emit || !total ) return null;
     
+    // Correct way to get the official access key
+    const protNFe = xmlDoc.getElementsByTagName('protNFe')[0];
     const infProt = protNFe ? protNFe.getElementsByTagName('infProt')[0] : null;
     const chNFe = normalizeKey(infProt ? getValue('chNFe', infProt) : (infNFe.getAttribute('Id') || '').replace('NFe',''));
+
+    if (!ide || !emit || !total || !chNFe) return null;
+    
     const cStat = infProt ? getValue('cStat', infProt) : '0';
 
     const numeroNF = getValue('nNF', ide);
@@ -118,7 +119,6 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
     
     const firstItemCfop = infNFe.getElementsByTagName('det')[0]?.getElementsByTagName('prod')[0]?.getElementsByTagName('CFOP')[0]?.textContent || '';
     const isOwnEmissionDevolution = (uploadSource === 'entrada' && (firstItemCfop.startsWith('1') || firstItemCfop.startsWith('2')));
-
 
     const nota = {
         'Chave de acesso': chNFe,
@@ -134,7 +134,6 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
         'uploadSource': uploadSource,
         'isOwnEmissionDevolution': isOwnEmissionDevolution
     };
-
 
     const itens: any[] = [];
     const detElements = Array.from(infNFe.getElementsByTagName('det'));
@@ -351,12 +350,11 @@ export default function Home() {
                 const type = category.includes('CTe') ? 'CTe' : 'NFe';
                 const uploadSource = category.includes('Saída') ? 'saida' : 'entrada';
                 
-                const filePromises = fileList.map(async file => {
-                   const fileContent = await file.text();
+                const filePromises = fileList.map(file => file.text().then(fileContent => {
                    return type === 'NFe' 
                        ? extractNfeDataFromXml(fileContent, uploadSource) 
                        : extractCteDataFromXml(fileContent, uploadSource);
-                });
+                }));
 
                 const allXmlData = (await Promise.all(filePromises)).filter(Boolean);
 
@@ -447,10 +445,10 @@ export default function Home() {
 
         const checkFileDates = async (fileList: File[], category: string) => {
              const type = category.includes('CTe') ? 'CTe' : 'NFe';
-             const filePromises = fileList.map(async (file) => {
-                const fileContent = await file.text();
+
+             const filePromises = fileList.map(file => file.text().then(fileContent => {
                 return type === 'NFe' ? extractNfeDataFromXml(fileContent, 'check') : extractCteDataFromXml(fileContent, 'check');
-             });
+             }));
 
              const allXmlData = (await Promise.all(filePromises)).filter(Boolean);
              
