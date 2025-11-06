@@ -38,6 +38,13 @@ export type KeyCheckResult = {
     duplicateKeysInTxt: string[];
 };
 
+export type CfopComparisonResult = {
+    foundInBoth: any[];
+    onlyInXml: any[];
+    onlyInSheet: any[];
+}
+
+
 const findDuplicates = (arr: string[]): string[] => {
     const seen = new Set<string>();
     const duplicates = new Set<string>();
@@ -97,16 +104,27 @@ const parseAllParticipants = (spedFileContent: string) => {
 
 const parseSpedLineForData = (line: string, participants: Map<string, string>): Partial<KeyInfo> | null => {
     const parts = line.split('|');
-    const docModel = parts[4]; // COD_MOD - 55 for NFe, 57 for CTe
-    
+    if (parts.length < 2) return null;
+
+    const recordType = parts[1];
+
     // NFe validation (C100)
-    if (parts[1] === 'C100' && docModel === '55') {
+    if (recordType === 'C100') {
+        const docModel = parts[4]; // COD_MOD - 55 for NFe
+        if (docModel !== '55') return null;
+
         const docStatus = parts[5]; // 00: Regular, 02: Cancelado
-        const key = parts[9];
         const directionValue = parts[2]; // 0: Entrada, 1: Saída
+
+        let key = '';
+        if (directionValue === '0') { // Entrada
+            key = parts[9];
+        } else if (directionValue === '1') { // Saída
+            key = parts[9]; 
+        }
         
         if (!key || key.length !== 44) return null;
-
+        
         const direction = directionValue === '0' ? 'Entrada' : 'Saída';
 
         if (['02', '03', '04', '05'].includes(docStatus)) {
@@ -128,25 +146,28 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
         };
     }
     // CTe validation (D100)
-    else if (parts[1] === 'D100' && docModel === '57') {
+    else if (recordType === 'D100') {
+        const docModel = parts[4]; // COD_MOD - 57 for CTe
+        if (docModel !== '57') return null;
+
         const key = parts[10];
+        if (!key || key.length !== 44) return null;
+
         const value = parseFloat(parts[16] ? parts[16].replace(',', '.') : '0'); // vTPrest
         const emissionDate = parts[9]; // DDMMYYYY
         const partnerCode = parts[3];
         const partnerName = participants.get(partnerCode) || '';
         const directionValue = parts[2]; // 0: Saída (emissao propria), 1: Entrada (tomador) - Invertido pro CTe
-        
-        if (key && key.length === 44) {
-            const direction = directionValue === '0' ? 'Saída' : 'Entrada';
-            return {
-                key,
-                value,
-                emissionDate: emissionDate ? `${emissionDate.substring(0,2)}/${emissionDate.substring(2,4)}/${emissionDate.substring(4,8)}` : '',
-                partnerName,
-                docType: 'CTe',
-                direction
-            };
-        }
+        const direction = directionValue === '0' ? 'Saída' : 'Entrada';
+
+        return {
+            key,
+            value,
+            emissionDate: emissionDate ? `${emissionDate.substring(0,2)}/${emissionDate.substring(2,4)}/${emissionDate.substring(4,8)}` : '',
+            partnerName,
+            docType: 'CTe',
+            direction
+        };
     }
     return null;
 }
@@ -187,7 +208,6 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
         const participants = parseAllParticipants(normalizedContent);
         const allSpedKeyInfo = new Map<string, Partial<KeyInfo>>();
         
-        // Step 1: Reliably extract all keys from SPED and enrich data simultaneously.
         for (const line of lines) {
             const trimmedLine = line.trim();
             if (!trimmedLine) continue;
@@ -706,7 +726,6 @@ export async function extractCteData(files: { name: string, content: string }[])
 
                 const specificData: { [key: string]: any } = { 'Arquivo': file.name };
                 for (const colName in SPECIFIC_TAGS_MAP) {
-                    // Skip Chave NF-e from this loop, handle it separately.
                     if (colName === "Chave NF-e") continue;
 
                     const paths = SPECIFIC_TAGS_MAP[colName].split(',');
@@ -1098,9 +1117,89 @@ export async function findSumCombinations(numbers: number[], target: number) {
         return { error: "Nenhuma combinação exata foi encontrada." };
     }
 }
+
+// --- Logic for CFOP Comparison ---
+
+export async function compareCfopData(data: { xmlItemsData: any[], cfopSheetData: string }): Promise<CfopComparisonResult> {
+    const { xmlItemsData, cfopSheetData } = data;
+    const newHeaders = [
+        'Itens da Nota', 'Valor do Item', 'Desconto', 'Frete/Seg/Desp',
+        'CFOP', 'CST', 'Base', 'Alíquota', 'Valor', 'Aux 1', 'Aux 2', 'CFOP Replicado'
+    ];
+
+    try {
+        const workbook = XLSX.read(cfopSheetData, { type: 'binary' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const df: any[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+        let dataAsObjects = df.map(row => {
+            const obj: {[key: string]: any} = {};
+            newHeaders.forEach((header, index) => {
+                obj[header] = row[index];
+            });
+            return obj;
+        });
+
+        let lastNfNumber: any = null;
+        let lastCfop: any = null;
+        dataAsObjects.forEach(row => {
+            if (!row['Itens da Nota'] || String(row['Itens da Nota']).trim() === '') {
+                lastNfNumber = row['Desconto'];
+                lastCfop = row['CFOP'];
+            }
+            row['Número da NF'] = lastNfNumber;
+            row['CFOP Replicado'] = lastCfop;
+        });
+
+        let sheetItems = dataAsObjects.filter(row => 
+            row['Itens da Nota'] && 
+            String(row['Itens da Nota']).toUpperCase() !== 'ITENS DA NOTA' &&
+            String(row['Itens da Nota']).toUpperCase() !== 'TOTAL'
+        );
+        
+        const createComparisonKey = (nf: any, value: any) => `${nf}_${(Math.round(parseFloat(String(value).replace(',', '.')) * 100) / 100).toFixed(2)}`;
+
+        const sheetItemsMap = new Map(sheetItems.map(item => [
+            createComparisonKey(item['Número da NF'], item['Valor do Item']),
+            item
+        ]));
+        
+        const xmlItemsMap = new Map(xmlItemsData.map(item => [
+             createComparisonKey(item['Número da NF'], item['Valor Total do Produto']),
+            item
+        ]));
+
+        const foundInBoth: any[] = [];
+        const onlyInXml: any[] = [];
+        
+        xmlItemsMap.forEach((xmlItem, key) => {
+            if (sheetItemsMap.has(key)) {
+                const sheetItem = sheetItemsMap.get(key);
+                foundInBoth.push({ ...xmlItem, 'CFOP Planilha': sheetItem?.['CFOP Replicado'] });
+                sheetItemsMap.delete(key); // Remove from map to find what's left
+            } else {
+                onlyInXml.push(xmlItem);
+            }
+        });
+
+        const onlyInSheet = Array.from(sheetItemsMap.values());
+        
+        return { foundInBoth, onlyInXml, onlyInSheet };
+
+    } catch (error: any) {
+        console.error("Erro ao comparar dados de CFOP:", error);
+        return { 
+            error: error.message || "Ocorreu um erro na comparação de CFOPs.",
+            foundInBoth: [],
+            onlyInXml: [],
+            onlyInSheet: []
+        } as any;
+    }
+}
       
 
     
+
 
 
 

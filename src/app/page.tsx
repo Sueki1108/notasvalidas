@@ -3,7 +3,7 @@
 
 import { useContext, useState } from "react";
 import * as XLSX from "xlsx";
-import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon, FolderSync, Search, Replace, Download as DownloadIcon, Layers, Wand2 } from "lucide-react";
+import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon, FolderSync, Search, Replace, Download as DownloadIcon, Layers, Wand2, GitCompare } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,7 +26,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { ResultsDisplay } from "@/components/app/results-display";
 import { KeyResultsDisplay } from "@/components/app/key-results-display";
-import { validateWithSped, type KeyCheckResult, type SpedInfo } from "@/app/actions";
+import { validateWithSped, compareCfopData, type KeyCheckResult, type SpedInfo, type CfopComparisonResult } from "@/app/actions";
 import { processDataFrames } from "@/lib/excel-processor";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -38,6 +38,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AppContext } from "@/context/AppContext";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { CfopResultsDisplay } from "@/components/app/cfop-results-display";
 
 
 type DataFrames = { [key: string]: any[] };
@@ -252,12 +253,16 @@ export default function Home() {
       setFiles,
       spedFiles,
       setSpedFiles,
+      cfopFile,
+      setCfopFile,
       results,
       setResults,
       keyCheckResults,
       setKeyCheckResult,
       spedInfo,
       setSpedInfo,
+      cfopComparisonResult,
+      setCfopComparisonResult,
       activeTab,
       setActiveTab,
       clearAllData,
@@ -268,6 +273,7 @@ export default function Home() {
 
     const [processing, setProcessing] = useState(false);
     const [validating, setValidating] = useState(false);
+    const [comparing, setComparing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isMonthModalOpen, setIsMonthModalOpen] = useState(false);
     const [tempSelectedMonths, setTempSelectedMonths] = useState<Set<string>>(new Set());
@@ -286,6 +292,8 @@ export default function Home() {
         if (selectedFiles && selectedFiles.length > 0) {
             if (fileName === 'SPED TXT') {
                 setSpedFiles(prev => [...(prev || []), ...Array.from(selectedFiles)]);
+            } else if (fileName === 'Planilha de Comparação CFOP') {
+                setCfopFile(selectedFiles[0]);
             } else {
                  setFiles(prev => ({
                     ...prev,
@@ -299,6 +307,10 @@ export default function Home() {
         if (fileName === 'SPED TXT') {
             setSpedFiles(null);
             const input = document.querySelector(`input[name="SPED TXT"]`) as HTMLInputElement;
+            if (input) input.value = "";
+        } else if (fileName === 'Planilha de Comparação CFOP') {
+            setCfopFile(null);
+            const input = document.querySelector(`input[name="Planilha de Comparação CFOP"]`) as HTMLInputElement;
             if (input) input.value = "";
         } else {
             setFiles(prev => ({...prev, [fileName]: null}));
@@ -331,13 +343,16 @@ export default function Home() {
                 const type = category.includes('CTe') ? 'CTe' : 'NFe';
                 const uploadSource = category.includes('Saída') ? 'saida' : 'entrada';
                 
-                const filePromises = fileList.map(file => file.text().then(fileContent => {
-                   return type === 'NFe' 
-                       ? extractNfeDataFromXml(fileContent, uploadSource) 
-                       : extractCteDataFromXml(fileContent, uploadSource);
-                }));
+                const fileReadPromises = fileList.map(file => file.text());
+                const fileContents = await Promise.all(fileReadPromises);
 
-                const allXmlData = (await Promise.all(filePromises)).filter(Boolean);
+                const parsingPromises = fileContents.map(content => {
+                    return Promise.resolve(
+                        type === 'NFe' ? extractNfeDataFromXml(content, uploadSource) : extractCteDataFromXml(content, uploadSource)
+                    );
+                });
+
+                const allXmlData = (await Promise.all(parsingPromises)).filter(Boolean);
 
                 for (const xmlData of allXmlData) {
                    if (!xmlData) continue;
@@ -396,7 +411,7 @@ export default function Home() {
             if (companyCnpj) {
                 setSpedInfo(tempSpedInfo);
             }
-            toast({ title: "Processamento Inicial Concluído", description: "Arquivos XML processados. Carregue o SPED para finalizar." });
+            toast({ title: "Processamento Inicial Concluído", description: "Arquivos XML processados. Avance para as próximas etapas." });
             setActiveTab('validate');
         } catch (err: any) {
             setError(err.message || "Ocorreu um erro desconhecido.");
@@ -536,12 +551,63 @@ export default function Home() {
             }
             
             toast({ title: "Validação SPED Concluída", description: `A verificação das chaves para ${spedFiles.length} arquivo(s) foi finalizada.` });
+            setActiveTab('compare-cfop');
         } catch (err: any) {
              setError(err.message || "Ocorreu um erro desconhecido na validação.");
              setKeyCheckResult(null);
              toast({ variant: "destructive", title: "Erro na Validação SPED", description: err.message });
         } finally {
             setValidating(false);
+        }
+    };
+    
+    const handleCompareCfop = async () => {
+        if (!cfopFile) {
+            toast({ variant: "destructive", title: "Planilha Ausente", description: "Por favor, carregue a planilha de comparação CFOP." });
+            return;
+        }
+        if (!results || !(results['Itens de Entrada'] || results['Itens de Saída'])) {
+             toast({ variant: "destructive", title: "Dados não processados", description: "Processe os arquivos XML na Etapa 1 primeiro." });
+            return;
+        }
+
+        setError(null);
+        setComparing(true);
+        setCfopComparisonResult(null);
+
+        try {
+            const fileContent = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    if (event.target?.result) {
+                        resolve(event.target.result as string);
+                    } else {
+                        reject(new Error("Falha ao ler a planilha."));
+                    }
+                };
+                reader.onerror = () => reject(new Error("Erro ao ler a planilha."));
+                reader.readAsBinaryString(cfopFile);
+            });
+            
+            const xmlItems = [...(results['Itens de Entrada'] || []), ...(results['Itens de Saída'] || [])];
+
+            const result = await compareCfopData({
+                xmlItemsData: xmlItems,
+                cfopSheetData: fileContent,
+            });
+            
+            if (result.error) throw new Error(result.error);
+            
+            setCfopComparisonResult(result);
+
+            toast({ title: "Comparação CFOP Concluída", description: "A verificação dos itens foi finalizada." });
+
+        } catch (err: any) {
+            setError(err.message || "Ocorreu um erro na comparação de CFOPs.");
+            setCfopComparisonResult(null);
+            toast({ variant: "destructive", title: "Erro na Comparação", description: err.message });
+        } finally {
+            setComparing(false);
         }
     };
 
@@ -705,9 +771,10 @@ export default function Home() {
                     </div>
 
                     <Tabs value={activeTab} onValueChange={setActiveTab}>
-                        <TabsList className="grid w-full grid-cols-2">
-                            <TabsTrigger value="process">1. Processamento Principal</TabsTrigger>
+                        <TabsList className="grid w-full grid-cols-3">
+                            <TabsTrigger value="process">1. Processamento XML</TabsTrigger>
                             <TabsTrigger value="validate" disabled={!results}>2. Validação SPED</TabsTrigger>
+                            <TabsTrigger value="compare-cfop" disabled={!results}>3. Comparação CFOP</TabsTrigger>
                         </TabsList>
                         <TabsContent value="process" className="mt-6">
                             <Card className="shadow-lg">
@@ -715,8 +782,8 @@ export default function Home() {
                                     <div className="flex items-center gap-3">
                                         <UploadCloud className="h-8 w-8 text-primary" />
                                         <div>
-                                            <CardTitle className="font-headline text-2xl">Carregar XMLs e Exceções</CardTitle>
-                                            <CardDescription>Faça o upload dos arquivos XML e das planilhas de exceção.</CardDescription>
+                                            <CardTitle className="font-headline text-2xl">Carregar Arquivos XML</CardTitle>
+                                            <CardDescription>Faça o upload dos arquivos XML de entrada, saída e exceções.</CardDescription>
                                         </div>
                                     </div>
                                 </CardHeader>
@@ -747,7 +814,7 @@ export default function Home() {
                             </Card>
                         </TabsContent>
                         <TabsContent value="validate" className="mt-6">
-                            <Card className="shadow-lg">
+                             <Card className="shadow-lg">
                                 <CardHeader>
                                     <div className="flex items-center gap-3">
                                         <KeyRound className="h-8 w-8 text-primary" />
@@ -769,44 +836,43 @@ export default function Home() {
                                     </Button>
                                 </CardContent>
                             </Card>
-
-                             {validating && (
-                                <Card className="shadow-lg mt-8">
-                                    <CardHeader>
-                                        <div className="flex items-center gap-3">
-                                            <BrainCircuit className="h-8 w-8 text-primary animate-pulse" />
-                                            <div>
-                                                <CardTitle className="font-headline text-2xl">Validando SPED...</CardTitle>
-                                                <CardDescription>Aguarde enquanto as chaves são comparadas.</CardDescription>
-                                            </div>
+                        </TabsContent>
+                        <TabsContent value="compare-cfop" className="mt-6">
+                             <Card className="shadow-lg">
+                                <CardHeader>
+                                    <div className="flex items-center gap-3">
+                                        <GitCompare className="h-8 w-8 text-primary" />
+                                        <div>
+                                            <CardTitle className="font-headline text-2xl">Comparar Itens e CFOP</CardTitle>
+                                            <CardDescription>Carregue a planilha de referência para comparar os itens extraídos dos XMLs.</CardDescription>
                                         </div>
-                                    </CardHeader>
-                                     <CardContent className="space-y-4">
-                                       <Skeleton className="h-8 w-full" />
-                                       <Skeleton className="h-32 w-full" />
-                                    </CardContent>
-                                </Card>
-                            )}
-
-                             {keyCheckResults && spedInfo && (
-                                <Card className="shadow-lg mt-8">
-                                    <CardHeader>
-                                        <div className="flex items-center gap-3 p-4 bg-secondary rounded-lg">
-                                            <AlertTriangle className="h-8 w-8 text-amber-600" />
-                                            <div>
-                                                <h3 className="font-headline text-xl">Resultados da Validação SPED</h3>
-                                                <p className="text-muted-foreground">Comparação entre os XMLs/planilhas e o arquivo SPED TXT.</p>
-                                            </div>
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent>
-                                         <KeyResultsDisplay results={keyCheckResults} cnpj={spedInfo.cnpj} />
-                                    </CardContent>
-                                </Card>
-                            )}
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="space-y-6">
+                                   <FileUploadForm
+                                        requiredFiles={["Planilha de Comparação CFOP"]}
+                                        files={{ "Planilha de Comparação CFOP": cfopFile ? [cfopFile] : null }}
+                                        onFileChange={handleFileChange}
+                                        onClearFile={handleClearFile}
+                                    />
+                                    <Button onClick={handleCompareCfop} disabled={comparing || !cfopFile} className="w-full">
+                                        {comparing ? "Comparando..." : "Comparar Itens"}
+                                    </Button>
+                                </CardContent>
+                            </Card>
                         </TabsContent>
                     </Tabs>
                     
+                     {error && (
+                        <Alert variant="destructive" className="mt-8">
+                            <FileText className="h-4 w-4" />
+                            <AlertTitle>Erro</AlertTitle>
+                            <AlertDescription>{error}</AlertDescription>
+                        </Alert>
+                    )}
+                    
+                    {/* ----- Display Results Sections ----- */}
+
                     {processing && (
                         <Card className="shadow-lg mt-8">
                             <CardHeader>
@@ -824,24 +890,16 @@ export default function Home() {
                             </CardContent>
                         </Card>
                     )}
-
-                     {error && (
-                        <Alert variant="destructive" className="mt-8">
-                            <FileText className="h-4 w-4" />
-                            <AlertTitle>Erro</AlertTitle>
-                            <AlertDescription>{error}</AlertDescription>
-                        </Alert>
-                    )}
-
-                    {results && (
+                    
+                     {activeTab === 'process' && results && (
                         <Card className="shadow-lg mt-8">
                             <CardHeader>
                                 <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
                                     <div className="flex items-center gap-3">
                                         <FileText className="h-8 w-8 text-primary" />
                                         <div>
-                                            <CardTitle className="font-headline text-2xl">Resultados do Processamento</CardTitle>
-                                            <CardDescription>Visualize e baixe os dados processados.</CardDescription>
+                                            <CardTitle className="font-headline text-2xl">Resultados do Processamento XML</CardTitle>
+                                            <CardDescription>Visualize e baixe os dados processados dos arquivos XML.</CardDescription>
                                         </div>
                                     </div>
                                     <Button onClick={handleDownload} disabled={!results}>
@@ -854,6 +912,54 @@ export default function Home() {
                             </CardContent>
                         </Card>
                     )}
+                    
+                    {activeTab === 'validate' && (validating || keyCheckResults) &&
+                        <Card className="shadow-lg mt-8">
+                            <CardHeader>
+                                <div className="flex items-center gap-3 p-4 bg-secondary rounded-lg">
+                                    <AlertTriangle className="h-8 w-8 text-amber-600" />
+                                    <div>
+                                        <h3 className="font-headline text-xl">Resultados da Validação SPED</h3>
+                                        <p className="text-muted-foreground">Comparação entre os XMLs/planilhas e o arquivo SPED TXT.</p>
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                 {validating ? (
+                                    <div className="space-y-4">
+                                       <Skeleton className="h-8 w-full" />
+                                       <Skeleton className="h-32 w-full" />
+                                    </div>
+                                 ) : keyCheckResults && spedInfo && (
+                                     <KeyResultsDisplay results={keyCheckResults} cnpj={spedInfo.cnpj} />
+                                 )}
+                            </CardContent>
+                        </Card>
+                    }
+                    
+                    {activeTab === 'compare-cfop' && (comparing || cfopComparisonResult) &&
+                        <Card className="shadow-lg mt-8">
+                            <CardHeader>
+                                <div className="flex items-center gap-3 p-4 bg-secondary rounded-lg">
+                                    <GitCompare className="h-8 w-8 text-blue-600" />
+                                    <div>
+                                        <h3 className="font-headline text-xl">Resultados da Comparação CFOP</h3>
+                                        <p className="text-muted-foreground">Comparação entre os itens dos XMLs e a planilha de referência.</p>
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                 {comparing ? (
+                                    <div className="space-y-4">
+                                       <Skeleton className="h-8 w-full" />
+                                       <Skeleton className="h-32 w-full" />
+                                    </div>
+                                 ) : cfopComparisonResult && (
+                                     <CfopResultsDisplay result={cfopComparisonResult} />
+                                 )}
+                            </CardContent>
+                        </Card>
+                    }
                 </div>
             </main>
 
