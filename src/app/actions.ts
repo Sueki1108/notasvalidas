@@ -111,9 +111,13 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
     if (parts.length < 2) return null;
 
     const recordType = parts[1];
-    const directionValue = parts[2];
-
+    
     let key = '';
+    let direction = 'N/A';
+    let docType : 'NFe' | 'CTe' | 'N/A' = 'N/A';
+    let value = 0;
+    let emissionDate = '';
+    let partnerName = '';
 
     if (recordType === 'C100') {
         const docModel = parts[4]; 
@@ -122,23 +126,24 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
         const docStatus = parts[5];
         if (['02', '03', '04', '05'].includes(docStatus)) return null;
         
-        // For both Entrada (0) and Saída (1), the key is at index 9
         key = parts[9]; 
         
         if (!key || key.length !== 44) return null;
         
-        const direction = directionValue === '0' ? 'Entrada' : 'Saída';
-        const value = parseFloat(parts[12] ? parts[12].replace(',', '.') : '0');
-        const emissionDate = parts[10]; 
+        const directionValue = parts[2]; // 0 = Entrada, 1 = Saída
+        direction = directionValue === '0' ? 'Entrada' : 'Saída';
+        docType = 'NFe';
+        value = parseFloat(parts[12] ? parts[12].replace(',', '.') : '0');
+        emissionDate = parts[10]; 
         const partnerCode = parts[3];
-        const partnerName = participants.get(partnerCode) || '';
+        partnerName = participants.get(partnerCode) || '';
 
         return {
             key,
             value,
             emissionDate: emissionDate ? `${emissionDate.substring(0,2)}/${emissionDate.substring(2,4)}/${emissionDate.substring(4,8)}` : '',
             partnerName,
-            docType: 'NFe',
+            docType,
             direction
         };
     }
@@ -150,18 +155,20 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
         
         if (!key || key.length !== 44) return null;
         
-        const value = parseFloat(parts[16] ? parts[16].replace(',', '.') : '0'); 
-        const emissionDate = parts[9];
+        const directionValue = parts[2];
+        direction = directionValue === '0' ? 'Saída' : 'Entrada';
+        docType = 'CTe';
+        value = parseFloat(parts[16] ? parts[16].replace(',', '.') : '0'); 
+        emissionDate = parts[9];
         const partnerCode = parts[3];
-        const partnerName = participants.get(partnerCode) || '';
-        const direction = directionValue === '0' ? 'Saída' : 'Entrada';
+        partnerName = participants.get(partnerCode) || '';
 
         return {
             key,
             value,
             emissionDate: emissionDate ? `${emissionDate.substring(0,2)}/${emissionDate.substring(2,4)}/${emissionDate.substring(4,8)}` : '',
             partnerName,
-            docType: 'CTe',
+            docType,
             direction
         };
     }
@@ -1147,6 +1154,7 @@ const TAX_RELEVANT_COLUMNS: { [key: string]: { sheet: string[]; xml: string[] } 
 };
 
 const getCfopDescription = (cfop: string) => {
+    if (!cfop) return 'N/A';
     const code = parseInt(cfop, 10);
     return cfopDescriptions[code] || 'Descrição não encontrada';
 };
@@ -1200,7 +1208,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
         
         const createSheetComparisonKey = (row: any) => {
             const nf = row['Número da NF'];
-            const value = row['Valor do Item']; 
+            const value = row['Valor do Item']; // Use this field from the sheet now
             return `${nf}_${(Math.round(parseFloat(String(value).replace(',', '.')) * 100) / 100).toFixed(2)}`;
         };
         
@@ -1249,10 +1257,10 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
             const onlyInXml: any[] = [];
             
             localXmlItemsMap.forEach((xmlItem, key) => {
-                const sheetItem = sheetItemsMap.get(key);
-                if (sheetItem) {
+                if (sheetItemsMap.has(key)) {
+                    const sheetItem = sheetItemsMap.get(key);
                     const transformedXml = transformRow(xmlItem, 'xml', relevantCols);
-                    const transformedSheet = transformRow(sheetItem, 'sheet', relevantCols);
+                    const transformedSheet = transformRow(sheetItem!, 'sheet', relevantCols);
                     foundInBoth.push({ ...transformedXml, ...transformedSheet });
                     sheetItemsMap.delete(key);
                 } else {
@@ -1280,6 +1288,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
       
 
     
+
 
 
 
