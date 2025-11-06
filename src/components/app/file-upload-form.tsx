@@ -32,7 +32,7 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
     }
     
     const isMultiple = (fileName: string) => {
-         return !fileName.toLowerCase().includes('sped txt');
+         return true; // Always allow multiple files
     }
 
     return (

@@ -10,8 +10,8 @@ type DataFrames = { [key: string]: any[] };
 interface AppContextType {
     files: FileList;
     setFiles: React.Dispatch<React.SetStateAction<FileList>>;
-    spedFile: File | null;
-    setSpedFile: React.Dispatch<React.SetStateAction<File | null>>;
+    spedFiles: File[] | null;
+    setSpedFiles: React.Dispatch<React.SetStateAction<File[] | null>>;
     results: DataFrames | null;
     setResults: React.Dispatch<React.SetStateAction<DataFrames | null>>;
     keyCheckResults: KeyCheckResult | null;
@@ -39,8 +39,8 @@ const initialFilesState: FileList = {
 export const AppContext = createContext<AppContextType>({
     files: initialFilesState,
     setFiles: () => {},
-    spedFile: null,
-    setSpedFile: () => {},
+    spedFiles: null,
+    setSpedFiles: () => {},
     results: null,
     setResults: () => {},
     keyCheckResults: null,
@@ -58,7 +58,7 @@ export const AppContext = createContext<AppContextType>({
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
     const [files, setFiles] = useState<FileList>(initialFilesState);
-    const [spedFile, setSpedFile] = useState<File | null>(null);
+    const [spedFiles, setSpedFiles] = useState<File[] | null>(null);
     const [results, setResults] = useState<DataFrames | null>(null);
     const [keyCheckResults, setKeyCheckResult] = useState<KeyCheckResult | null>(null);
     const [spedInfo, setSpedInfo] = useState<SpedInfo | null>(null);
@@ -68,7 +68,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     const clearAllData = () => {
         setFiles(initialFilesState);
-        setSpedFile(null);
+        setSpedFiles(null);
         setResults(null);
         setKeyCheckResult(null);
         setSpedInfo(null);
@@ -83,7 +83,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     return (
         <AppContext.Provider value={{ 
             files, setFiles, 
-            spedFile, setSpedFile, 
+            spedFiles, setSpedFiles, 
             results, setResults, 
             keyCheckResults, setKeyCheckResult,
             spedInfo, setSpedInfo,

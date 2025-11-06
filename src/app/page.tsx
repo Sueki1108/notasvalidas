@@ -267,8 +267,8 @@ export default function Home() {
     const {
       files,
       setFiles,
-      spedFile,
-      setSpedFile,
+      spedFiles,
+      setSpedFiles,
       results,
       setResults,
       keyCheckResults,
@@ -305,7 +305,7 @@ export default function Home() {
         const fileName = e.target.name;
         if (selectedFiles && selectedFiles.length > 0) {
             if (fileName === 'SPED TXT') {
-                setSpedFile(selectedFiles[0]);
+                setSpedFiles(prev => [...(prev || []), ...Array.from(selectedFiles)]);
             } else {
                  setFiles(prev => ({
                     ...prev,
@@ -317,7 +317,7 @@ export default function Home() {
 
     const handleClearFile = (fileName: string) => {
         if (fileName === 'SPED TXT') {
-            setSpedFile(null);
+            setSpedFiles(null);
             const input = document.querySelector(`input[name="SPED TXT"]`) as HTMLInputElement;
             if (input) input.value = "";
         } else {
@@ -407,7 +407,8 @@ export default function Home() {
                 'NF-Stock Emitidas': [] 
             };
             
-            const firstSpedLine = spedFile ? (await spedFile.text()).split('\n')[0]?.trim() || "" : "";
+            const firstSpedFile = spedFiles && spedFiles.length > 0 ? spedFiles[0] : null;
+            const firstSpedLine = firstSpedFile ? (await firstSpedFile.text()).split('\n')[0]?.trim() || "" : "";
             const tempSpedInfo = parseSpedInfo(firstSpedLine);
             const companyCnpj = tempSpedInfo ? tempSpedInfo.cnpj : null;
 
@@ -495,8 +496,8 @@ export default function Home() {
     };
 
     const handleValidateWithSped = async () => {
-        if (!spedFile) {
-            toast({ variant: "destructive", title: "Arquivo SPED Ausente", description: "Por favor, carregue o arquivo SPED TXT." });
+        if (!spedFiles || spedFiles.length === 0) {
+            toast({ variant: "destructive", title: "Arquivo SPED Ausente", description: "Por favor, carregue pelo menos um arquivo SPED TXT." });
             return;
         }
         if (!results) {
@@ -507,27 +508,49 @@ export default function Home() {
         setError(null);
         setValidating(true);
         setKeyCheckResult(null);
+
+        let consolidatedResults: KeyCheckResult = {
+            keysFoundInBoth: [],
+            keysNotFoundInTxt: [],
+            keysInTxtNotInSheet: [],
+            duplicateKeysInSheet: [],
+            duplicateKeysInTxt: [],
+        };
+        let lastSpedInfo: SpedInfo | null = null;
+        
         try {
-            const spedFileContent = await spedFile.text();
-            
-            const info = parseSpedInfo(spedFileContent.split('\n')[0]?.trim() || "");
-            if (!info || !info.cnpj) {
-                throw new Error("Não foi possível extrair o CNPJ da empresa do arquivo SPED. Verifique a primeira linha (|0000|).");
-            }
-            if (!spedInfo || spedInfo.cnpj !== info.cnpj) {
-                setSpedInfo(info);
-            }
-            
-            const validationResult = await validateWithSped(results, spedFileContent);
+            for (const spedFile of spedFiles) {
+                const spedFileContent = await spedFile.text();
+                
+                const info = parseSpedInfo(spedFileContent.split('\n')[0]?.trim() || "");
+                if (!info || !info.cnpj) {
+                    toast({ variant: "destructive", title: "Erro no SPED", description: `Não foi possível extrair o CNPJ do arquivo ${spedFile.name}.` });
+                    continue; // Pula para o próximo arquivo
+                }
+                
+                const validationResult = await validateWithSped(results, spedFileContent);
+                
+                if (validationResult.error) {
+                    toast({ variant: "destructive", title: `Erro na validação de ${spedFile.name}`, description: validationResult.error });
+                    continue;
+                }
 
-            if (validationResult.error) {
-                throw new Error(validationResult.error);
+                if (validationResult.keyCheckResults) {
+                    consolidatedResults.keysFoundInBoth.push(...validationResult.keyCheckResults.keysFoundInBoth);
+                    consolidatedResults.keysNotFoundInTxt.push(...validationResult.keyCheckResults.keysNotFoundInTxt);
+                    consolidatedResults.keysInTxtNotInSheet.push(...validationResult.keyCheckResults.keysInTxtNotInSheet);
+                    consolidatedResults.duplicateKeysInSheet.push(...validationResult.keyCheckResults.duplicateKeysInSheet);
+                    consolidatedResults.duplicateKeysInTxt.push(...validationResult.keyCheckResults.duplicateKeysInTxt);
+                }
+                lastSpedInfo = validationResult.spedInfo || info;
             }
 
-            setKeyCheckResult(validationResult.keyCheckResults || null);
-            setSpedInfo(validationResult.spedInfo || info);
+            setKeyCheckResult(consolidatedResults);
+            if (lastSpedInfo) {
+                setSpedInfo(lastSpedInfo);
+            }
             
-            toast({ title: "Validação SPED Concluída", description: "A verificação das chaves foi finalizada." });
+            toast({ title: "Validação SPED Concluída", description: `A verificação das chaves para ${spedFiles.length} arquivo(s) foi finalizada.` });
         } catch (err: any) {
              setError(err.message || "Ocorreu um erro desconhecido na validação.");
              setKeyCheckResult(null);
@@ -752,11 +775,11 @@ export default function Home() {
                                 <CardContent className="space-y-6">
                                    <FileUploadForm
                                         requiredFiles={["SPED TXT"]}
-                                        files={{ "SPED TXT": spedFile ? [spedFile] : null }}
+                                        files={{ "SPED TXT": spedFiles }}
                                         onFileChange={handleFileChange}
                                         onClearFile={handleClearFile}
                                     />
-                                    <Button onClick={handleValidateWithSped} disabled={validating || !spedFile} className="w-full">
+                                    <Button onClick={handleValidateWithSped} disabled={validating || !spedFiles || spedFiles.length === 0} className="w-full">
                                         {validating ? "Validando..." : "Validar com SPED"}
                                     </Button>
                                 </CardContent>
