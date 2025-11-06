@@ -1423,7 +1423,7 @@ export async function compareCfopAndAccounting(data: {
 
             const nfMatch = parts[5]?.match(/Nota (\d+)/);
             const nfNumber = nfMatch ? nfMatch[1].trim() : null;
-            const accountDescription = parts[4]?.trim(); 
+            const accountDescription = parts[4]?.trim(); // Correctly get the 'Descrição' column
 
             if (nfNumber && accountDescription) {
                 if (!accountingMap.has(nfNumber)) {
@@ -1472,6 +1472,7 @@ export async function compareCfopAndAccounting(data: {
       
 
     
+
 
 
 
