@@ -53,11 +53,11 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
             if (!nota) return;
             const cleanKey = normalizeKey(nota['Chave de acesso']);
             if (exceptionKeySet.has(cleanKey)) return;
+            
+            const isOwnEmissionByCnpj = nota['Emitente CPF/CNPJ'] === companyCnpj;
+            const isOwnEmissionDevolution = nota.uploadSource === 'entrada' && (String(nota.CFOP).startsWith('1') || String(nota.CFOP).startsWith('2'));
 
-            const isOwnEmission = nota['Emitente CPF/CNPJ'] === companyCnpj;
-            const isDevolution = nota.uploadSource === 'entrada' && (String(nota.CFOP).startsWith('1') || String(nota.CFOP).startsWith('2'));
-
-            if (isOwnEmission || isDevolution) {
+            if (isOwnEmissionByCnpj || isOwnEmissionDevolution) {
                 ownEmissionNotes.push(nota);
                 ownEmissionKeys.add(cleanKey);
             }
