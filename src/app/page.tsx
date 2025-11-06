@@ -122,6 +122,7 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
         'Destinatário': dest ? getValue('xNome', dest) : '',
         'Fornecedor/Cliente': isSaida ? (dest ? getValue('xNome', dest): '') : (getValue('xNome', emit)),
         'uploadSource': uploadSource,
+        'docType': 'NFe',
     };
 
     const itens: any[] = [];
@@ -232,7 +233,8 @@ const extractCteDataFromXml = (xmlContent: string, uploadSource: string) => {
         'Emitente CPF/CNPJ': getValue('CNPJ', emit) || getValue('CPF', emit),
         'Emitente': getValue('xNome', emit),
         'Fornecedor/Cliente': getValue('xNome', emit),
-        'uploadSource': uploadSource
+        'uploadSource': uploadSource,
+        'docType': 'CTe',
     };
 
     return { nota };
@@ -358,7 +360,13 @@ export default function Home() {
                       canceledKeys.add(xmlData.nota['Chave de acesso']);
                 }
 
-                if (xmlData.nota?.docType === 'NFe') allNfe.push(xmlData); else if (xmlData.nota?.docType === 'CTe') allCte.push(xmlData);
+                if (xmlData.nota) {
+                    if (xmlData.nota.docType === 'NFe') {
+                        allNfe.push(xmlData);
+                    } else if (xmlData.nota.docType === 'CTe') {
+                        allCte.push(xmlData);
+                    }
+                }
 
                 if(xmlData.itens){
                     const uploadSource = xmlData.nota.uploadSource;
@@ -922,7 +930,7 @@ export default function Home() {
                         </Card>
                     )}
                     
-                     {activeTab === 'process' && results && (
+                     {results && (
                         <Card className="shadow-lg mt-8">
                             <CardHeader>
                                 <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
