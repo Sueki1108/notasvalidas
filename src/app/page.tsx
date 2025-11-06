@@ -529,7 +529,7 @@ export default function Home() {
              if (lastSpedInfo) {
                 setSpedInfo(lastSpedInfo);
             }
-            if (results) {
+             if (results) {
                 setResults({ ...results, "Chaves Encontradas no SPED": consolidatedResults.allSpedKeys });
             }
             
@@ -930,7 +930,7 @@ export default function Home() {
                         </Card>
                     )}
                     
-                     {results && (
+                     {activeTab === 'process' && results && (
                         <Card className="shadow-lg mt-8">
                             <CardHeader>
                                 <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -986,4 +986,3 @@ export default function Home() {
         </div>
     );
 }
-
