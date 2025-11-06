@@ -813,7 +813,7 @@ export async function extractCteData(files: { name: string, content: string }[])
         const buffer = XLSX.write(wb, { bookType: 'ods', type: 'array' });
 
         let binary = '';
-        const bytes = new Uint8Array(outputBuffer);
+        const bytes = new Uint8Array(buffer);
         for (let i = 0; i < bytes.byteLength; i++) {
             binary += String.fromCharCode(bytes[i]);
         }
@@ -832,7 +832,7 @@ export async function analyzeCteData(data: { cteFiles: { name: string, content: 
     try {
         const parser = new XMLParser({
             ignoreAttributes: true,
-            isArray: (name) => name === "infNFe"
+            isArray: (name, jpath) => name === "infNFe" || (jpath.endsWith('.det') && name === 'det')
         });
 
         // 1. Create a map of NF-e Saída for quick lookup
@@ -840,15 +840,14 @@ export async function analyzeCteData(data: { cteFiles: { name: string, content: 
         for (const file of nfeSaidaFiles) {
             try {
                 const jsonObj = parser.parse(file.content);
+                const chaveNFe = jsonObj.nfeProc?.protNFe?.infProt?.chNFe;
                 const infNFe = jsonObj.nfeProc?.NFe?.infNFe;
-                if (!infNFe) continue;
+                if (!infNFe || !chaveNFe) continue;
 
-                const chaveNFe = (infNFe['@_Id'] || '').replace('NFe', '');
                 const firstItemCfop = infNFe.det?.[0]?.prod?.CFOP || infNFe.det?.prod?.CFOP || 'N/A';
                 
-                if (chaveNFe) {
-                    nfeSaidaMap.set(chaveNFe, { cfop: firstItemCfop });
-                }
+                nfeSaidaMap.set(chaveNFe, { cfop: firstItemCfop });
+                
             } catch (e) {
                 console.warn(`Could not parse NF-e file ${file.name}, skipping.`, e);
             }
@@ -858,52 +857,49 @@ export async function analyzeCteData(data: { cteFiles: { name: string, content: 
         const cteRemetente: any[] = [];
         const cteDestinatario: any[] = [];
         
-        const extractedCtes = await extractCteData(cteFiles);
-        if (!extractedCtes.base64Data) { // This is a trick: extractCteData returns base64 on success. We need the raw data. Let's re-parse.
-             const cteDetailsPromises = cteFiles.map(async (file) => {
-                const jsonObj = parser.parse(file.content);
-                const specificData: { [key: string]: any } = {};
+        const cteDetailsPromises = cteFiles.map(async (file) => {
+            const jsonObj = parser.parse(file.content);
+            const specificData: { [key: string]: any } = {};
 
-                // Re-implementing parts of extractCteData to get structured data
-                const remCnpj = getValueByPath(jsonObj, "cteProc/CTe/infCte/rem/CNPJ");
-                const destCnpj = getValueByPath(jsonObj, "cteProc/CTe/infCte/dest/CNPJ");
-                
-                specificData['Número CT-e'] = getValueByPath(jsonObj, "cteProc/CTe/infCte/ide/nCT");
-                specificData['Chave CT-e'] = getValueByPath(jsonObj, "cteProc/protCTe/infProt/chCTe");
-                specificData['Nome do Remetente'] = getValueByPath(jsonObj, "cteProc/CTe/infCte/rem/xNome");
-                specificData['CNPJ do Remetente'] = remCnpj;
-                specificData['Nome do Destinatário'] = getValueByPath(jsonObj, "cteProc/CTe/infCte/dest/xNome");
-                specificData['CNPJ do Destinatário'] = destCnpj;
-                specificData['Valor Total Prestação'] = getValueByPath(jsonObj, "cteProc/CTe/infCte/vPrest/vTPrest");
-                
-                let chavesNfe = [];
-                const infNFe_array = getValueByPath(jsonObj, "cteProc/CTe/infCte/infCTeNorm/infDoc/infNFe");
-                if (infNFe_array && infNFe_array !== 'N/A') {
-                    chavesNfe = Array.isArray(infNFe_array) 
-                        ? infNFe_array.map((nfe: any) => nfe.chave).filter(Boolean) 
-                        : [infNFe_array.chave].filter(Boolean);
-                }
-                specificData['Chave NF-e'] = chavesNfe.join(', ');
+            // Re-implementing parts of extractCteData to get structured data
+            const remCnpj = getValueByPath(jsonObj, "cteProc/CTe/infCte/rem/CNPJ");
+            const destCnpj = getValueByPath(jsonObj, "cteProc/CTe/infCte/dest/CNPJ");
+            
+            specificData['Número CT-e'] = getValueByPath(jsonObj, "cteProc/CTe/infCte/ide/nCT");
+            specificData['Chave CT-e'] = getValueByPath(jsonObj, "cteProc/protCTe/infProt/chCTe");
+            specificData['Nome do Remetente'] = getValueByPath(jsonObj, "cteProc/CTe/infCte/rem/xNome");
+            specificData['CNPJ do Remetente'] = remCnpj;
+            specificData['Nome do Destinatário'] = getValueByPath(jsonObj, "cteProc/CTe/infCte/dest/xNome");
+            specificData['CNPJ do Destinatário'] = destCnpj;
+            specificData['Valor Total Prestação'] = getValueByPath(jsonObj, "cteProc/CTe/infCte/vPrest/vTPrest");
+            
+            let chavesNfe = [];
+            const infNFe_array = getValueByPath(jsonObj, "cteProc/CTe/infCte/infCTeNorm/infDoc/infNFe");
+            if (infNFe_array && infNFe_array !== 'N/A') {
+                chavesNfe = Array.isArray(infNFe_array) 
+                    ? infNFe_array.map((nfe: any) => nfe.chave).filter(Boolean) 
+                    : [infNFe_array.chave].filter(Boolean);
+            }
+            specificData['Chave NF-e'] = chavesNfe.join(', ');
 
-                // 3. Cross-reference and enrich
-                let cfopOrigem = 'N/A';
-                if (chavesNfe.length > 0) {
-                    const nfeData = nfeSaidaMap.get(chavesNfe[0]); // Check first referenced key
-                    if (nfeData) {
-                        cfopOrigem = nfeData.cfop;
-                    }
+            // 3. Cross-reference and enrich
+            let cfopOrigem = 'N/A';
+            if (chavesNfe.length > 0) {
+                const nfeData = nfeSaidaMap.get(chavesNfe[0]); // Check first referenced key
+                if (nfeData) {
+                    cfopOrigem = nfeData.cfop;
                 }
-                specificData['CFOP da NF-e de Origem'] = cfopOrigem;
-                
-                // 4. Classify
-                if (remCnpj === companyCnpj) {
-                    cteRemetente.push(specificData);
-                } else if (destCnpj === companyCnpj) {
-                    cteDestinatario.push(specificData);
-                }
-            });
-            await Promise.all(cteDetailsPromises);
-        }
+            }
+            specificData['CFOP da NF-e de Origem'] = cfopOrigem;
+            
+            // 4. Classify
+            if (remCnpj === companyCnpj) {
+                cteRemetente.push(specificData);
+            } else if (destCnpj === companyCnpj) {
+                cteDestinatario.push(specificData);
+            }
+        });
+        await Promise.all(cteDetailsPromises);
 
         return { cteRemetente, cteDestinatario };
 
@@ -1472,6 +1468,7 @@ export async function compareCfopAndAccounting(data: {
       
 
     
+
 
 
 
