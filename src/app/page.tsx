@@ -3,7 +3,7 @@
 
 import { useContext, useState } from "react";
 import * as XLSX from "xlsx";
-import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon, FolderSync, Search, Replace, Download as DownloadIcon, Layers, Wand2, GitCompare, FileWarning } from "lucide-react";
+import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon, FolderSync, Search, Replace, Download as DownloadIcon, Layers, Wand2, GitCompare, FileWarning, LandPlot } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -244,8 +244,8 @@ export default function Home() {
       setFiles,
       spedFiles,
       setSpedFiles,
-      cfopFile,
-      setCfopFile,
+      taxFiles,
+      setTaxFiles,
       results,
       setResults,
       keyCheckResults,
@@ -273,6 +273,7 @@ export default function Home() {
 
     const primaryXmlFiles = ["XMLs de Entrada (NFe)", "XMLs de Entrada (CTe)", "XMLs de Saída"];
     const manifestationXmlFiles = ["XMLs de Operação Não Realizada", "XMLs de Desconhecimento do Destinatário", "XMLs de Desacordo (CTe)"];
+    const taxSheetFiles = ["Planilha ICMS", "Planilha ICMS ST", "Planilha PIS", "Planilha COFINS", "Planilha IPI"];
     
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFiles = e.target.files;
@@ -280,8 +281,8 @@ export default function Home() {
         if (selectedFiles && selectedFiles.length > 0) {
             if (fileName === 'SPED TXT') {
                 setSpedFiles(prev => [...(prev || []), ...Array.from(selectedFiles)]);
-            } else if (fileName === 'Planilha de Comparação CFOP') {
-                setCfopFile(selectedFiles[0]);
+            } else if (taxSheetFiles.includes(fileName)) {
+                 setTaxFiles(prev => ({ ...prev, [fileName]: selectedFiles[0] }));
             } else {
                  setFiles(prev => ({
                     ...prev,
@@ -296,9 +297,9 @@ export default function Home() {
             setSpedFiles(null);
             const input = document.querySelector(`input[name="SPED TXT"]`) as HTMLInputElement;
             if (input) input.value = "";
-        } else if (fileName === 'Planilha de Comparação CFOP') {
-            setCfopFile(null);
-            const input = document.querySelector(`input[name="Planilha de Comparação CFOP"]`) as HTMLInputElement;
+        } else if (taxSheetFiles.includes(fileName)) {
+            setTaxFiles(prev => ({...prev, [fileName]: null}));
+            const input = document.querySelector(`input[name="${fileName}"]`) as HTMLInputElement;
             if (input) input.value = "";
         } else {
             setFiles(prev => ({...prev, [fileName]: null}));
@@ -326,57 +327,53 @@ export default function Home() {
                 try { return format(parseISO(dateStr), "MM/yyyy"); } catch { return null; }
             };
 
-            const processXmlFiles = async (fileList: File[], category: string) => {
-                const type = category.includes('CTe') ? 'CTe' : 'NFe';
-                const uploadSource = category.includes('Saída') ? 'saida' : (category.includes('Entrada') ? 'entrada' : 'exception');
-                
-                const fileReadPromises = fileList.map(file => file.text());
-                const fileContents = await Promise.all(fileReadPromises);
+            const processXmlPromises = Object.keys(files).map(category => {
+              const fileList = files[category];
+              if (!fileList || fileList.length === 0) return Promise.resolve();
 
-                const parsingPromises = fileContents.map(content => {
-                    return Promise.resolve(
-                        type === 'NFe' ? extractNfeDataFromXml(content, uploadSource) : extractCteDataFromXml(content, uploadSource)
-                    );
-                });
+              const type = category.includes('CTe') ? 'CTe' : 'NFe';
+              const uploadSource = category.includes('Saída') ? 'saida' : (category.includes('Entrada') ? 'entrada' : 'exception');
 
-                const allXmlData = (await Promise.all(parsingPromises)).filter(Boolean);
+              const fileReadPromises = fileList.map(file => file.text());
 
-                for (const xmlData of allXmlData) {
-                   if (!xmlData) continue;
-                   if (xmlData.isEvent) {
-                        if (xmlData.eventType === 'Cancelamento') {
-                            canceledKeys.add(xmlData.key);
-                        } else if (xmlData.eventType) {
-                            const eventSet = exceptionKeys[xmlData.eventType as keyof typeof exceptionKeys];
-                            if (eventSet) eventSet.add(xmlData.key);
-                        }
-                        continue;
+              return Promise.all(fileReadPromises).then(fileContents => {
+                const parsingPromises = fileContents.map(content =>
+                  Promise.resolve(
+                    type === 'NFe' ? extractNfeDataFromXml(content, uploadSource) : extractCteDataFromXml(content, uploadSource)
+                  )
+                );
+                return Promise.all(parsingPromises);
+              }).then(allXmlData => {
+                  for (const xmlData of allXmlData) {
+                    if (!xmlData) continue;
+                    if (xmlData.isEvent) {
+                          if (xmlData.eventType === 'Cancelamento') {
+                              canceledKeys.add(xmlData.key);
+                          } else if (xmlData.eventType) {
+                              const eventSet = exceptionKeys[xmlData.eventType as keyof typeof exceptionKeys];
+                              if (eventSet) eventSet.add(xmlData.key);
+                          }
+                          continue;
+                      }
+                    
+                    const monthYear = getMonthYear(xmlData.nota?.['Data de Emissão']);
+                    if (!monthYear || !selectedMonths.has(monthYear)) continue;
+
+                    if (xmlData.nota && xmlData.nota['Status']?.includes('Cancelada')) {
+                          canceledKeys.add(xmlData.nota['Chave de acesso']);
                     }
-                   
-                   const monthYear = getMonthYear(xmlData.nota?.['Data de Emissão']);
-                   if (!monthYear || !selectedMonths.has(monthYear)) continue;
 
-                   if (xmlData.nota && xmlData.nota['Status']?.includes('Cancelada')) {
-                        canceledKeys.add(xmlData.nota['Chave de acesso']);
-                   }
+                    if (type === 'NFe') allNfe.push(xmlData); else allCte.push(xmlData);
 
-                   if (type === 'NFe') allNfe.push(xmlData); else allCte.push(xmlData);
+                    if(xmlData.itens){
+                        if(uploadSource === 'entrada') allNfeItensEntrada.push(...xmlData.itens);
+                        else allNfeItensSaida.push(...xmlData.itens);
+                    }
+                  }
+              });
+            });
 
-                   if(xmlData.itens){
-                       if(uploadSource === 'entrada') allNfeItensEntrada.push(...xmlData.itens);
-                       else allNfeItensSaida.push(...xmlData.itens);
-                   }
-                }
-            };
-            
-            for (const category of Object.keys(files)) {
-                const fileList = files[category];
-                if (fileList && fileList.length > 0) {
-                     if(category.includes('XML')) {
-                        await processXmlFiles(fileList, category);
-                     }
-                }
-            }
+            await Promise.all(processXmlPromises);
 
 
             const initialFrames = {
@@ -538,7 +535,7 @@ export default function Home() {
             }
             
             toast({ title: "Validação SPED Concluída", description: `A verificação das chaves para ${spedFiles.length} arquivo(s) foi finalizada.` });
-            setActiveTab('compare-cfop');
+            setActiveTab('advanced');
         } catch (err: any) {
              setError(err.message || "Ocorreu um erro desconhecido na validação.");
              setKeyCheckResult(null);
@@ -549,8 +546,9 @@ export default function Home() {
     };
     
     const handleCompareCfop = async () => {
+        const cfopFile = taxFiles["Planilha ICMS"];
         if (!cfopFile) {
-            toast({ variant: "destructive", title: "Planilha Ausente", description: "Por favor, carregue a planilha de comparação CFOP." });
+            toast({ variant: "destructive", title: "Planilha Ausente", description: "Por favor, carregue a planilha de ICMS na aba 'Impostos'." });
             return;
         }
         if (!results || !(results['Itens de Entrada'] || results['Itens de Saída'])) {
@@ -761,7 +759,7 @@ export default function Home() {
                         <TabsList className="grid w-full grid-cols-3">
                             <TabsTrigger value="process">1. Processamento XML</TabsTrigger>
                             <TabsTrigger value="validate" disabled={!results}>2. Validação SPED</TabsTrigger>
-                            <TabsTrigger value="compare-cfop" disabled={!results}>3. Comparação CFOP</TabsTrigger>
+                            <TabsTrigger value="advanced" disabled={!results}>3. Análises Avançadas</TabsTrigger>
                         </TabsList>
                         <TabsContent value="process" className="mt-6 space-y-6">
                             <Card className="shadow-lg">
@@ -845,27 +843,59 @@ export default function Home() {
                                 </CardContent>
                             </Card>
                         </TabsContent>
-                        <TabsContent value="compare-cfop" className="mt-6">
-                             <Card className="shadow-lg">
+                        <TabsContent value="advanced" className="mt-6">
+                            <Card>
                                 <CardHeader>
-                                    <div className="flex items-center gap-3">
-                                        <GitCompare className="h-8 w-8 text-primary" />
+                                     <div className="flex items-center gap-3">
+                                        <BrainCircuit className="h-8 w-8 text-primary" />
                                         <div>
-                                            <CardTitle className="font-headline text-2xl">Comparar Itens e CFOP</CardTitle>
-                                            <CardDescription>Carregue a planilha de referência para comparar os itens extraídos dos XMLs.</CardDescription>
+                                            <CardTitle className="font-headline text-2xl">Análises Avançadas</CardTitle>
+                                            <CardDescription>Carregue planilhas de impostos e realize comparações detalhadas.</CardDescription>
                                         </div>
                                     </div>
                                 </CardHeader>
-                                <CardContent className="space-y-6">
-                                   <FileUploadForm
-                                        requiredFiles={["Planilha de Comparação CFOP"]}
-                                        files={{ "Planilha de Comparação CFOP": cfopFile ? [cfopFile] : null }}
-                                        onFileChange={handleFileChange}
-                                        onClearFile={handleClearFile}
-                                    />
-                                    <Button onClick={handleCompareCfop} disabled={comparing || !cfopFile} className="w-full">
-                                        {comparing ? "Comparando..." : "Comparar Itens"}
-                                    </Button>
+                                <CardContent>
+                                     <Tabs defaultValue="impostos">
+                                        <TabsList className="grid w-full grid-cols-2">
+                                            <TabsTrigger value="impostos">Impostos</TabsTrigger>
+                                            <TabsTrigger value="compare-cfop">Comparação CFOP</TabsTrigger>
+                                        </TabsList>
+                                        <TabsContent value="impostos" className="mt-4">
+                                             <Card>
+                                                <CardHeader>
+                                                    <CardTitle>Planilhas de Impostos</CardTitle>
+                                                    <CardDescription>Carregue aqui as planilhas para cada tipo de imposto que deseja analisar.</CardDescription>
+                                                </CardHeader>
+                                                <CardContent>
+                                                    <FileUploadForm
+                                                        requiredFiles={taxSheetFiles}
+                                                        files={taxFiles}
+                                                        onFileChange={handleFileChange}
+                                                        onClearFile={handleClearFile}
+                                                    />
+                                                </CardContent>
+                                             </Card>
+                                        </TabsContent>
+                                        <TabsContent value="compare-cfop" className="mt-4">
+                                             <Card>
+                                                <CardHeader>
+                                                     <div className="flex items-center gap-3">
+                                                        <GitCompare className="h-8 w-8 text-primary" />
+                                                        <div>
+                                                            <CardTitle className="font-headline text-xl">Comparar Itens e CFOP</CardTitle>
+                                                            <CardDescription>A planilha carregada na aba 'Impostos' como "Planilha ICMS" será usada para esta comparação.</CardDescription>
+                                                        </div>
+                                                    </div>
+                                                </CardHeader>
+                                                <CardContent className="space-y-6">
+                                                   <Button onClick={handleCompareCfop} disabled={comparing || !taxFiles["Planilha ICMS"]} className="w-full">
+                                                        {comparing ? "Comparando..." : "Comparar Itens"}
+                                                    </Button>
+                                                    {cfopComparisonResult && <CfopResultsDisplay result={cfopComparisonResult} />}
+                                                </CardContent>
+                                            </Card>
+                                        </TabsContent>
+                                     </Tabs>
                                 </CardContent>
                             </Card>
                         </TabsContent>
@@ -885,7 +915,7 @@ export default function Home() {
                         <Card className="shadow-lg mt-8">
                             <CardHeader>
                                 <div className="flex items-center gap-3">
-                                    <BrainCircuit className="h-8 w-8 text-primary animate-pulse" />
+                                    <Cpu className="h-8 w-8 text-primary animate-pulse" />
                                     <div>
                                         <CardTitle className="font-headline text-2xl">Processando Arquivos...</CardTitle>
                                         <CardDescription>Aguarde enquanto os dados primários são analisados.</CardDescription>
@@ -940,30 +970,6 @@ export default function Home() {
                                     </div>
                                  ) : keyCheckResults && spedInfo && (
                                      <KeyResultsDisplay results={keyCheckResults} cnpj={spedInfo.cnpj} />
-                                 )}
-                            </CardContent>
-                        </Card>
-                    }
-                    
-                    {activeTab === 'compare-cfop' && (comparing || cfopComparisonResult) &&
-                        <Card className="shadow-lg mt-8">
-                            <CardHeader>
-                                <div className="flex items-center gap-3 p-4 bg-secondary rounded-lg">
-                                    <GitCompare className="h-8 w-8 text-blue-600" />
-                                    <div>
-                                        <h3 className="font-headline text-xl">Resultados da Comparação CFOP</h3>
-                                        <p className="text-muted-foreground">Comparação entre os itens dos XMLs e a planilha de referência.</p>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                 {comparing ? (
-                                    <div className="space-y-4">
-                                       <Skeleton className="h-8 w-full" />
-                                       <Skeleton className="h-32 w-full" />
-                                    </div>
-                                 ) : cfopComparisonResult && (
-                                     <CfopResultsDisplay result={cfopComparisonResult} />
                                  )}
                             </CardContent>
                         </Card>

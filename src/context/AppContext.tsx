@@ -7,13 +7,21 @@ import { FileList } from '@/components/app/file-upload-form';
 
 type DataFrames = { [key: string]: any[] };
 
+export type TaxFileList = {
+    "Planilha ICMS": File | null;
+    "Planilha ICMS ST": File | null;
+    "Planilha PIS": File | null;
+    "Planilha COFINS": File | null;
+    "Planilha IPI": File | null;
+}
+
 interface AppContextType {
     files: FileList;
     setFiles: React.Dispatch<React.SetStateAction<FileList>>;
     spedFiles: File[] | null;
     setSpedFiles: React.Dispatch<React.SetStateAction<File[] | null>>;
-    cfopFile: File | null;
-    setCfopFile: React.Dispatch<React.SetStateAction<File | null>>;
+    taxFiles: TaxFileList;
+    setTaxFiles: React.Dispatch<React.SetStateAction<TaxFileList>>;
     results: DataFrames | null;
     setResults: React.Dispatch<React.SetStateAction<DataFrames | null>>;
     keyCheckResults: KeyCheckResult | null;
@@ -40,13 +48,21 @@ const initialFilesState: FileList = {
     "XMLs de Desacordo (CTe)": null,
 };
 
+const initialTaxFilesState: TaxFileList = {
+    "Planilha ICMS": null,
+    "Planilha ICMS ST": null,
+    "Planilha PIS": null,
+    "Planilha COFINS": null,
+    "Planilha IPI": null,
+}
+
 export const AppContext = createContext<AppContextType>({
     files: initialFilesState,
     setFiles: () => {},
     spedFiles: null,
     setSpedFiles: () => {},
-    cfopFile: null,
-    setCfopFile: () => {},
+    taxFiles: initialTaxFilesState,
+    setTaxFiles: () => {},
     results: null,
     setResults: () => {},
     keyCheckResults: null,
@@ -67,7 +83,7 @@ export const AppContext = createContext<AppContextType>({
 export const AppProvider = ({ children }: { children: ReactNode }) => {
     const [files, setFiles] = useState<FileList>(initialFilesState);
     const [spedFiles, setSpedFiles] = useState<File[] | null>(null);
-    const [cfopFile, setCfopFile] = useState<File | null>(null);
+    const [taxFiles, setTaxFiles] = useState<TaxFileList>(initialTaxFilesState);
     const [results, setResults] = useState<DataFrames | null>(null);
     const [keyCheckResults, setKeyCheckResult] = useState<KeyCheckResult | null>(null);
     const [spedInfo, setSpedInfo] = useState<SpedInfo | null>(null);
@@ -79,7 +95,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const clearAllData = () => {
         setFiles(initialFilesState);
         setSpedFiles(null);
-        setCfopFile(null);
+        setTaxFiles(initialTaxFilesState);
         setResults(null);
         setKeyCheckResult(null);
         setSpedInfo(null);
@@ -96,7 +112,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         <AppContext.Provider value={{ 
             files, setFiles, 
             spedFiles, setSpedFiles, 
-            cfopFile, setCfopFile,
+            taxFiles, setTaxFiles,
             results, setResults, 
             keyCheckResults, setKeyCheckResult,
             spedInfo, setSpedInfo,
