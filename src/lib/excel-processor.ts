@@ -52,9 +52,12 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
             if (exceptionKeySet.has(cleanKey)) return;
             
             const isOwnEmissionByCnpj = nota['Emitente CPF/CNPJ'] === companyCnpj;
-            const isOwnEmissionDevolution = nota.uploadSource === 'entrada' && (String(nota.CFOP).startsWith('1') || String(nota.CFOP).startsWith('2'));
+            // Use o CFOP do primeiro item se disponível, caso contrário, use o CFOP da nota.
+             const cfop = nota.CFOP || (nota.itens && nota.itens.length > 0 ? nota.itens[0].CFOP : '');
+             const isDevolution = nota.uploadSource === 'entrada' && (String(cfop).startsWith('1') || String(cfop).startsWith('2'));
 
-            if (isOwnEmissionByCnpj || isOwnEmissionDevolution) {
+
+            if (isOwnEmissionByCnpj || isDevolution) {
                 ownEmissionNotes.push(nota);
                 ownEmissionKeys.add(cleanKey);
             }
@@ -104,7 +107,7 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
             processedDfs[sheetName] = df.map(row => {
                 if (!row || !("CFOP" in row)) return row;
                 
-                const cfopCode = parseInt(normalizeKey(row["CFOP"]), 10);
+                const cfopCode = parseInt(String(row["CFOP"]), 10);
                 const description = cfopDescriptions[cfopCode] || 'Descrição não encontrada';
                 
                 const newRow: { [key: string]: any } = {};
