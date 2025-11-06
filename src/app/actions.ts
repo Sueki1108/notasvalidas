@@ -109,28 +109,24 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
     if (parts.length < 2) return null;
 
     const recordType = parts[1];
-    const directionValue = parts[2]; // IND_OPER (0: Entrada, 1: Saída)
+    const directionValue = parts[2];
 
     let key = '';
 
-    // NFe validation (C100)
     if (recordType === 'C100') {
-        const docModel = parts[4]; // COD_MOD - 55 for NFe
+        const docModel = parts[4]; 
         if (docModel !== '55') return null;
 
-        key = parts[9]; // CHV_NFE
+        const docStatus = parts[5];
+        if (['02', '03', '04', '05'].includes(docStatus)) return null;
+        
+        key = parts[9]; 
         
         if (!key || key.length !== 44) return null;
         
-        const docStatus = parts[5]; // 00: Regular, 02: Cancelado etc.
         const direction = directionValue === '0' ? 'Entrada' : 'Saída';
-
-        if (['02', '03', '04', '05'].includes(docStatus)) {
-            return { key, comment: 'Documento Cancelado/Denegado no SPED', docType: 'NFe', direction };
-        }
-        
-        const value = parseFloat(parts[12] ? parts[12].replace(',', '.') : '0'); // Campo VL_DOC
-        const emissionDate = parts[10]; // DDMMYYYY
+        const value = parseFloat(parts[12] ? parts[12].replace(',', '.') : '0');
+        const emissionDate = parts[10]; 
         const partnerCode = parts[3];
         const partnerName = participants.get(partnerCode) || '';
 
@@ -143,20 +139,18 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
             direction
         };
     }
-    // CTe validation (D100)
     else if (recordType === 'D100') {
-        const docModel = parts[4]; // COD_MOD - 57 for CTe
+        const docModel = parts[4]; 
         if (docModel !== '57') return null;
 
-        key = parts[10]; // CHV_CTE
+        key = parts[10]; 
         
         if (!key || key.length !== 44) return null;
         
-        const value = parseFloat(parts[16] ? parts[16].replace(',', '.') : '0'); // vTPrest
-        const emissionDate = parts[9]; // DDMMYYYY
+        const value = parseFloat(parts[16] ? parts[16].replace(',', '.') : '0'); 
+        const emissionDate = parts[9];
         const partnerCode = parts[3];
         const partnerName = participants.get(partnerCode) || '';
-        // Invertido pro CTe
         const direction = directionValue === '0' ? 'Saída' : 'Entrada';
 
         return {
@@ -1119,6 +1113,39 @@ export async function findSumCombinations(numbers: number[], target: number) {
 
 // --- Logic for CFOP Comparison ---
 
+const TAX_RELEVANT_COLUMNS = {
+    'Planilha ICMS': {
+        sheet: ['CFOP', 'CST', 'Base', 'Alíquota', 'Valor', 'CFOP Replicado'],
+        xml: ['ICMS CST', 'ICMS Base de Cálculo', 'ICMS Alíquota', 'ICMS Valor'],
+    },
+    'Planilha ICMS ST': {
+        sheet: ['CFOP', 'CST', 'Base', 'Alíquota', 'Valor', 'CFOP Replicado'],
+        xml: ['ICMS CST', 'ICMS vBCSTRet', 'ICMS pST', 'ICMS vICMSSTRet'],
+    },
+    'Planilha PIS': {
+        sheet: ['CFOP', 'CST', 'Base', 'Alíquota', 'Valor', 'CFOP Replicado'],
+        xml: ['PIS CST', 'PIS Base de Cálculo', 'PIS Alíquota', 'PIS Valor'],
+    },
+    'Planilha COFINS': {
+        sheet: ['CFOP', 'CST', 'Base', 'Alíquota', 'Valor', 'CFOP Replicado'],
+        xml: ['COFINS CST', 'COFINS Base de Cálculo', 'COFINS Alíquota', 'COFINS Valor'],
+    },
+    'Planilha IPI': {
+        sheet: ['CFOP', 'CST', 'Base', 'Alíquota', 'Valor', 'CFOP Replicado'],
+        xml: ['IPI CST', 'IPI Base de Cálculo', 'IPI Alíquota', 'IPI Valor'],
+    },
+};
+
+
+const pick = (obj: any, keys: string[]) => {
+    const result: { [key: string]: any } = {};
+    for (const key of keys) {
+        result[key] = obj[key] !== undefined ? obj[key] : null;
+    }
+    return result;
+};
+
+
 export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData: { [key: string]: string } }): Promise<{ results: CfopComparisonResult, error?: string }> {
     const { xmlItemsData, taxSheetsData } = data;
     const finalResults: CfopComparisonResult = {};
@@ -1128,15 +1155,15 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
     ];
 
     try {
-        const createXmlComparisonKey = (item: any) => {
+         const createXmlComparisonKey = (item: any) => {
             const nf = item['Número da NF'];
-            const value = item['Valor Total do Produto']; // Use o valor total do produto do XML
+            const value = item['Valor Total do Produto'];
             return `${nf}_${(Math.round(parseFloat(String(value).replace(',', '.')) * 100) / 100).toFixed(2)}`;
         };
-
+        
         const createSheetComparisonKey = (row: any) => {
             const nf = row['Número da NF'];
-            const value = row['Valor do Item']; // Use o valor do item da planilha
+            const value = row['Valor do Item']; 
             return `${nf}_${(Math.round(parseFloat(String(value).replace(',', '.')) * 100) / 100).toFixed(2)}`;
         };
         
@@ -1145,6 +1172,8 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
         for (const taxName in taxSheetsData) {
             const sheetData = taxSheetsData[taxName];
             if (!sheetData) continue;
+
+            const relevantCols = TAX_RELEVANT_COLUMNS[taxName as keyof typeof TAX_RELEVANT_COLUMNS] || { sheet: [], xml: [] };
 
             const workbook = XLSX.read(sheetData, { type: 'binary' });
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -1161,7 +1190,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
             let lastNfNumber: any = null;
             dataAsObjects.forEach(row => {
                 if (!row['Itens da Nota'] || String(row['Itens da Nota']).trim() === '') {
-                    lastNfNumber = row['Desconto']; // 'Desconto' column holds the NF number in header rows
+                    lastNfNumber = row['Desconto']; 
                 }
                 row['Número da NF'] = lastNfNumber;
             });
@@ -1177,22 +1206,38 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
                 item
             ]));
             
-            const localXmlItemsMap = new Map(xmlItemsMap); // Create a fresh copy for each sheet
+            const localXmlItemsMap = new Map(xmlItemsMap);
             
             const foundInBoth: any[] = [];
             const onlyInXml: any[] = [];
 
+            const baseXmlCols = ['Número da NF', 'NCM', 'CFOP', 'Valor Total do Produto'];
+
             localXmlItemsMap.forEach((xmlItem, key) => {
-                if (sheetItemsMap.has(key)) {
-                    const sheetItem = sheetItemsMap.get(key);
-                    foundInBoth.push({ ...xmlItem, 'CFOP Planilha': sheetItem?.['CFOP'] });
+                const sheetItem = sheetItemsMap.get(key);
+                const selectedXmlData = pick(xmlItem, [...baseXmlCols, ...relevantCols.xml]);
+                 selectedXmlData['CST XML'] = selectedXmlData[relevantCols.xml[0]]; // Rename CST for clarity
+                delete selectedXmlData[relevantCols.xml[0]];
+
+                if (sheetItem) {
+                    const selectedSheetData = pick(sheetItem, relevantCols.sheet);
+                    foundInBoth.push({ ...selectedXmlData, ...selectedSheetData });
                     sheetItemsMap.delete(key);
                 } else {
-                    onlyInXml.push(xmlItem);
+                    onlyInXml.push(selectedXmlData);
                 }
             });
 
-            const onlyInSheet = Array.from(sheetItemsMap.values());
+             const onlyInSheet = Array.from(sheetItemsMap.values()).map(sheetItem => {
+                const baseData = {
+                    'Número da NF': sheetItem['Número da NF'],
+                    'NCM': 'N/A',
+                    'CFOP': 'N/A',
+                    'Valor Total do Produto': sheetItem['Valor do Item'],
+                };
+                const selectedSheetData = pick(sheetItem, relevantCols.sheet);
+                return { ...baseData, ...selectedSheetData };
+            });
             
             finalResults[taxName] = { foundInBoth, onlyInXml, onlyInSheet };
         }
@@ -1210,6 +1255,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
       
 
     
+
 
 
 
