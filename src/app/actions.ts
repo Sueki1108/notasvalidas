@@ -48,6 +48,15 @@ export type CfopComparisonResult = {
     }
 };
 
+export type CfopAccountingComparisonResult = {
+    numeroNF: string;
+    cfopXml: string;
+    descricaoCfopXml: string;
+    cfopSage: string;
+    descricaoCfopSage: string;
+    contabilizacao: string;
+}[];
+
 
 const findDuplicates = (arr: string[]): string[] => {
     const seen = new Set<string>();
@@ -1310,9 +1319,83 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
         };
     }
 }
+
+export async function compareCfopAndAccounting(data: {
+    cfopComparison: CfopComparisonResult;
+    accountingFileContent: string;
+}): Promise<{ results: CfopAccountingComparisonResult; error?: string }> {
+    const { cfopComparison, accountingFileContent } = data;
+
+    try {
+        const accountingMap = new Map<string, string>();
+        const lines = accountingFileContent.split('\n');
+        
+        const headerIndex = lines.findIndex(line => line.includes('Est.	Número	Data	Conta	Descrição	Histórico'));
+        if (headerIndex === -1) {
+            throw new Error("Cabeçalho da planilha de contabilização não encontrado.");
+        }
+
+        const dataLines = lines.slice(headerIndex + 1);
+
+        for (const line of dataLines) {
+            const parts = line.split('\t');
+             if (parts.length < 5) continue; // Ensure there are enough parts
+
+            const nfMatch = parts[5]?.match(/Nota (\d+)/);
+            const nfNumber = nfMatch ? nfMatch[1].trim() : null;
+            const account = parts[3]?.trim();
+
+            if (nfNumber && account) {
+                // We only store the first account found for a given NF number
+                if (!accountingMap.has(nfNumber)) {
+                    accountingMap.set(nfNumber, account);
+                }
+            }
+        }
+        
+        const finalResults: CfopAccountingComparisonResult = [];
+        
+        // We only care about items found in both XML and Sage for this comparison
+        const icmsResults = cfopComparison['Planilha ICMS']?.foundInBoth || [];
+
+        const processedNFs = new Set<string>();
+
+        for (const item of icmsResults) {
+            const numeroNF = String(item['Número da NF']);
+
+            // Process each NF only once
+            if (processedNFs.has(numeroNF)) {
+                continue;
+            }
+
+            const contabilizacao = accountingMap.get(numeroNF) || 'Não encontrado';
+            
+            finalResults.push({
+                numeroNF: numeroNF,
+                cfopXml: item['CFOP XML'] || 'N/A',
+                descricaoCfopXml: item['CFOP XML Descrição'] || 'N/A',
+                cfopSage: item['CFOP Sage'] || 'N/A',
+                descricaoCfopSage: item['CFOP Sage Descrição'] || 'N/A',
+                contabilizacao: contabilizacao,
+            });
+
+            processedNFs.add(numeroNF);
+        }
+
+        return { results: finalResults };
+
+    } catch (error: any) {
+        console.error("Erro ao comparar CFOP com Contabilização:", error);
+        return { 
+            results: [],
+            error: error.message || "Ocorreu um erro na comparação de CFOP e Contabilização.",
+        };
+    }
+}
       
 
     
+
 
 
 

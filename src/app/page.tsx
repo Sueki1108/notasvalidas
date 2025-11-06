@@ -3,7 +3,7 @@
 
 import { useContext, useState } from "react";
 import * as XLSX from "xlsx";
-import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon, FolderSync, Search, Replace, Download as DownloadIcon, Layers, Wand2, GitCompare, FileWarning, LandPlot } from "lucide-react";
+import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon, FolderSync, Search, Replace, Download as DownloadIcon, Layers, Wand2, GitCompare, FileWarning, LandPlot, BookCheck } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,7 +26,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { ResultsDisplay } from "@/components/app/results-display";
 import { KeyResultsDisplay } from "@/components/app/key-results-display";
-import { validateWithSped, compareCfopData, type KeyCheckResult, type SpedInfo, type CfopComparisonResult } from "@/app/actions";
+import { validateWithSped, compareCfopData, compareCfopAndAccounting, type KeyCheckResult, type SpedInfo, type CfopComparisonResult, type CfopAccountingComparisonResult } from "@/app/actions";
 import { processDataFrames } from "@/lib/excel-processor";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,10 +35,12 @@ import Link from "next/link";
 import { format, parseISO } from "date-fns";
 import { formatCnpj } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AppContext, TaxFileList } from "@/context/AppContext";
+import { AppContext } from "@/context/AppContext";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { CfopResultsDisplay } from "@/components/app/cfop-results-display";
+import { DataTable } from "@/components/app/data-table";
+import { getColumns } from "@/lib/columns-helper";
 
 
 type DataFrames = { [key: string]: any[] };
@@ -248,6 +250,8 @@ export default function Home() {
       setSpedFiles,
       taxFiles,
       setTaxFiles,
+      accountingFile,
+      setAccountingFile,
       results,
       setResults,
       keyCheckResults,
@@ -256,6 +260,8 @@ export default function Home() {
       setSpedInfo,
       cfopComparisonResult,
       setCfopComparisonResult,
+      cfopAccountingResult,
+      setCfopAccountingResult,
       activeTab,
       setActiveTab,
       clearAllData,
@@ -267,6 +273,7 @@ export default function Home() {
     const [processing, setProcessing] = useState(false);
     const [validating, setValidating] = useState(false);
     const [comparing, setComparing] = useState(false);
+    const [comparingCfopAccounting, setComparingCfopAccounting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isMonthModalOpen, setIsMonthModalOpen] = useState(false);
     const [tempSelectedMonths, setTempSelectedMonths] = useState<Set<string>>(new Set());
@@ -285,7 +292,10 @@ export default function Home() {
                 setSpedFiles(prev => [...(prev || []), ...Array.from(selectedFiles)]);
             } else if (taxSheetFiles.includes(fileName)) {
                  setTaxFiles(prev => ({ ...prev, [fileName]: selectedFiles[0] }));
-            } else {
+            } else if (fileName === 'Lote de Contabilização') {
+                setAccountingFile(selectedFiles[0]);
+            }
+            else {
                  setFiles(prev => ({
                     ...prev,
                     [fileName]: [...(prev[fileName] || []), ...Array.from(selectedFiles)]
@@ -302,6 +312,10 @@ export default function Home() {
         } else if (taxSheetFiles.includes(fileName)) {
             setTaxFiles(prev => ({...prev, [fileName]: null}));
             const input = document.querySelector(`input[name="${fileName}"]`) as HTMLInputElement;
+            if (input) input.value = "";
+        } else if (fileName === 'Lote de Contabilização') {
+            setAccountingFile(null);
+            const input = document.querySelector(`input[name="Lote de Contabilização"]`) as HTMLInputElement;
             if (input) input.value = "";
         } else {
             setFiles(prev => ({...prev, [fileName]: null}));
@@ -596,6 +610,39 @@ export default function Home() {
         }
     };
 
+    const handleCompareCfopAccounting = async () => {
+        if (!cfopComparisonResult) {
+            toast({ variant: "destructive", title: "Dados Incompletos", description: "Execute a 'Comparação XML X Sage' primeiro." });
+            return;
+        }
+        if (!accountingFile) {
+            toast({ variant: "destructive", title: "Arquivo Ausente", description: "Carregue o arquivo 'Lote de Contabilização'." });
+            return;
+        }
+
+        setComparingCfopAccounting(true);
+        setError(null);
+        setCfopAccountingResult(null);
+
+        try {
+            const fileContent = await accountingFile.text();
+            const result = await compareCfopAndAccounting({
+                cfopComparison: cfopComparisonResult,
+                accountingFileContent: fileContent,
+            });
+
+            if (result.error) throw new Error(result.error);
+
+            setCfopAccountingResult(result.results);
+            toast({ title: "Comparação Concluída", description: "CFOPs e Contabilização foram cruzados com sucesso." });
+        } catch(err: any) {
+             setError(err.message || "Ocorreu um erro desconhecido na comparação contábil.");
+            toast({ variant: "destructive", title: "Erro na Comparação Contábil", description: err.message });
+        } finally {
+            setComparingCfopAccounting(false);
+        }
+    };
+
 
     const handleDownload = () => {
         if (!results) return;
@@ -857,9 +904,10 @@ export default function Home() {
                                 </CardHeader>
                                 <CardContent>
                                      <Tabs defaultValue="impostos">
-                                        <TabsList className="grid w-full grid-cols-2">
+                                        <TabsList className="grid w-full grid-cols-3">
                                             <TabsTrigger value="impostos">Impostos</TabsTrigger>
-                                            <TabsTrigger value="compare-cfop">Comparação XML X Sage</TabsTrigger>
+                                            <TabsTrigger value="compare-xml-sage">Comparação XML X Sage</TabsTrigger>
+                                            <TabsTrigger value="compare-cfop-accounting">CFOP x Contabilização</TabsTrigger>
                                         </TabsList>
                                         <TabsContent value="impostos" className="mt-4">
                                              <Card>
@@ -877,13 +925,13 @@ export default function Home() {
                                                 </CardContent>
                                              </Card>
                                         </TabsContent>
-                                        <TabsContent value="compare-cfop" className="mt-4">
+                                        <TabsContent value="compare-xml-sage" className="mt-4">
                                              <Card>
                                                 <CardHeader>
                                                      <div className="flex items-center gap-3">
                                                         <GitCompare className="h-8 w-8 text-primary" />
                                                         <div>
-                                                            <CardTitle className="font-headline text-xl">Comparar Itens e CFOP</CardTitle>
+                                                            <CardTitle className="font-headline text-xl">Comparar Itens (XML vs. Sage)</CardTitle>
                                                             <CardDescription>As planilhas carregadas na aba 'Impostos' serão usadas para esta comparação.</CardDescription>
                                                         </div>
                                                     </div>
@@ -893,6 +941,33 @@ export default function Home() {
                                                         {comparing ? "Comparando..." : "Comparar Itens"}
                                                     </Button>
                                                     {cfopComparisonResult && <CfopResultsDisplay results={cfopComparisonResult} />}
+                                                </CardContent>
+                                            </Card>
+                                        </TabsContent>
+                                        <TabsContent value="compare-cfop-accounting" className="mt-4">
+                                            <Card>
+                                                <CardHeader>
+                                                     <div className="flex items-center gap-3">
+                                                        <BookCheck className="h-8 w-8 text-primary" />
+                                                        <div>
+                                                            <CardTitle className="font-headline text-xl">Comparar CFOP e Contabilização</CardTitle>
+                                                            <CardDescription>Carregue o Lote de Contabilização para cruzar com os dados de CFOP.</CardDescription>
+                                                        </div>
+                                                    </div>
+                                                </CardHeader>
+                                                 <CardContent className="space-y-6">
+                                                    <FileUploadForm
+                                                        requiredFiles={["Lote de Contabilização"]}
+                                                        files={{ "Lote de Contabilização": accountingFile }}
+                                                        onFileChange={handleFileChange}
+                                                        onClearFile={handleClearFile}
+                                                    />
+                                                    <Button onClick={handleCompareCfopAccounting} disabled={comparingCfopAccounting || !accountingFile || !cfopComparisonResult} className="w-full">
+                                                        {comparingCfopAccounting ? "Comparando..." : "Gerar Relatório CFOP x Contabilização"}
+                                                    </Button>
+                                                    {cfopAccountingResult && cfopAccountingResult.length > 0 && (
+                                                        <DataTable columns={getColumns(cfopAccountingResult)} data={cfopAccountingResult} />
+                                                    )}
                                                 </CardContent>
                                             </Card>
                                         </TabsContent>

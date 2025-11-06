@@ -2,7 +2,7 @@
 "use client";
 
 import React, { createContext, useState, ReactNode } from 'react';
-import type { KeyCheckResult, SpedInfo, CfopComparisonResult } from "@/app/actions";
+import type { KeyCheckResult, SpedInfo, CfopComparisonResult, CfopAccountingComparisonResult } from "@/app/actions";
 import { FileList } from '@/components/app/file-upload-form';
 
 type DataFrames = { [key: string]: any[] };
@@ -22,6 +22,8 @@ interface AppContextType {
     setSpedFiles: React.Dispatch<React.SetStateAction<File[] | null>>;
     taxFiles: TaxFileList;
     setTaxFiles: React.Dispatch<React.SetStateAction<TaxFileList>>;
+    accountingFile: File | null;
+    setAccountingFile: React.Dispatch<React.SetStateAction<File | null>>;
     results: DataFrames | null;
     setResults: React.Dispatch<React.SetStateAction<DataFrames | null>>;
     keyCheckResults: KeyCheckResult | null;
@@ -30,6 +32,8 @@ interface AppContextType {
     setSpedInfo: React.Dispatch<React.SetStateAction<SpedInfo | null>>;
     cfopComparisonResult: CfopComparisonResult | null;
     setCfopComparisonResult: React.Dispatch<React.SetStateAction<CfopComparisonResult | null>>;
+    cfopAccountingResult: CfopAccountingComparisonResult | null;
+    setCfopAccountingResult: React.Dispatch<React.SetStateAction<CfopAccountingComparisonResult | null>>;
     activeTab: string;
     setActiveTab: React.Dispatch<React.SetStateAction<string>>;
     clearAllData: () => void;
@@ -63,6 +67,8 @@ export const AppContext = createContext<AppContextType>({
     setSpedFiles: () => {},
     taxFiles: initialTaxFilesState,
     setTaxFiles: () => {},
+    accountingFile: null,
+    setAccountingFile: () => {},
     results: null,
     setResults: () => {},
     keyCheckResults: null,
@@ -71,6 +77,8 @@ export const AppContext = createContext<AppContextType>({
     setSpedInfo: () => {},
     cfopComparisonResult: null,
     setCfopComparisonResult: () => {},
+    cfopAccountingResult: null,
+    setCfopAccountingResult: () => {},
     activeTab: 'process',
     setActiveTab: () => {},
     clearAllData: () => {},
@@ -84,10 +92,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const [files, setFiles] = useState<FileList>(initialFilesState);
     const [spedFiles, setSpedFiles] = useState<File[] | null>(null);
     const [taxFiles, setTaxFiles] = useState<TaxFileList>(initialTaxFilesState);
+    const [accountingFile, setAccountingFile] = useState<File | null>(null);
     const [results, setResults] = useState<DataFrames | null>(null);
     const [keyCheckResults, setKeyCheckResult] = useState<KeyCheckResult | null>(null);
     const [spedInfo, setSpedInfo] = useState<SpedInfo | null>(null);
     const [cfopComparisonResult, setCfopComparisonResult] = useState<CfopComparisonResult | null>(null);
+    const [cfopAccountingResult, setCfopAccountingResult] = useState<CfopAccountingComparisonResult | null>(null);
     const [activeTab, setActiveTab] = useState('process');
     const [detectedMonths, setDetectedMonths] = useState<string[]>([]);
     const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
@@ -96,10 +106,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setFiles(initialFilesState);
         setSpedFiles(null);
         setTaxFiles(initialTaxFilesState);
+        setAccountingFile(null);
         setResults(null);
         setKeyCheckResult(null);
         setSpedInfo(null);
         setCfopComparisonResult(null);
+        setCfopAccountingResult(null);
         setActiveTab("process");
         setDetectedMonths([]);
         setSelectedMonths(new Set());
@@ -113,10 +125,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             files, setFiles, 
             spedFiles, setSpedFiles, 
             taxFiles, setTaxFiles,
+            accountingFile, setAccountingFile,
             results, setResults, 
             keyCheckResults, setKeyCheckResult,
             spedInfo, setSpedInfo,
             cfopComparisonResult, setCfopComparisonResult,
+            cfopAccountingResult, setCfopAccountingResult,
             activeTab, setActiveTab,
             clearAllData,
             detectedMonths, setDetectedMonths,

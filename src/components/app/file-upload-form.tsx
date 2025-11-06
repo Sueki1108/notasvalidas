@@ -3,7 +3,6 @@
 import type { ChangeEvent } from "react";
 import { Upload, FileCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { TaxFileList } from "@/context/AppContext";
 
 export type FileList = Record<string, File[] | null>;
 export type FullFileList = FileList | Record<string, File | null>
@@ -18,8 +17,8 @@ interface FileUploadFormProps {
 
 export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile, disabled = false }: FileUploadFormProps) {
     const getFileAcceptType = (fileName: string) => {
-        if (fileName.toLowerCase().includes('txt')) {
-            return '.txt';
+        if (fileName.toLowerCase().includes('txt') || fileName.toLowerCase().includes('lote')) {
+            return '.txt, text/plain';
         }
         if (fileName.toLowerCase().includes('xml')) {
             return '.xml, text/xml';
@@ -28,7 +27,7 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
     }
     
     const isMultiple = (fileName: string) => {
-        if (fileName.toLowerCase().includes('planilha')) {
+        if (fileName.toLowerCase().includes('planilha') || fileName.toLowerCase().includes('lote')) {
             return false;
         }
          return true; // Always allow multiple files
