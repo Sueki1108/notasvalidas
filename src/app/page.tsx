@@ -859,7 +859,7 @@ export default function Home() {
                                      <Tabs defaultValue="impostos">
                                         <TabsList className="grid w-full grid-cols-2">
                                             <TabsTrigger value="impostos">Impostos</TabsTrigger>
-                                            <TabsTrigger value="compare-cfop">Comparação CFOP</TabsTrigger>
+                                            <TabsTrigger value="compare-cfop">Comparação XML X Sage</TabsTrigger>
                                         </TabsList>
                                         <TabsContent value="impostos" className="mt-4">
                                              <Card>
@@ -930,7 +930,7 @@ export default function Home() {
                         </Card>
                     )}
                     
-                     {results && activeTab === 'process' && (
+                     {activeTab === 'process' && results && (
                         <Card className="shadow-lg mt-8">
                             <CardHeader>
                                 <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
