@@ -160,7 +160,7 @@ export default function UnifyFoldersPage() {
                             <div className="flex items-center gap-3">
                                 <FolderSync className="h-8 w-8 text-primary" />
                                 <div>
-                                    <CardTitle className="font-headline text-2xl">Unificador de Pastas</CardTitle>
+                                    <CardTitle className="font-headline text-2xl">Unificador de Pastas (ZIP)</CardTitle>
                                     <CardDescription>Carregue múltiplos arquivos .zip para extrair e unificar seu conteúdo em um único download.</CardDescription>
                                 </div>
                             </div>
@@ -231,5 +231,6 @@ export default function UnifyFoldersPage() {
 }
 
     
+
 
 
