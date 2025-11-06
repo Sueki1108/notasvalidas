@@ -7,7 +7,6 @@ type ExceptionKeys = {
     OperacaoNaoRealizada: Set<string>;
     Desconhecimento: Set<string>;
     Desacordo: Set<string>;
-    Estorno: Set<string>;
 }
 
 const normalizeKey = (value: any): string => {
@@ -35,14 +34,12 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
     processedDfs["NF-Stock NFE Operação Não Realizada"] = allNotes.filter(row => row && exceptionKeys.OperacaoNaoRealizada.has(normalizeKey(row['Chave de acesso'])));
     processedDfs["NF-Stock NFE Operação Desconhecida"] = allNotes.filter(row => row && exceptionKeys.Desconhecimento.has(normalizeKey(row['Chave de acesso'])));
     processedDfs["NF-Stock CTE Desacordo de Serviço"] = allNotes.filter(row => row && exceptionKeys.Desacordo.has(normalizeKey(row['Chave de acesso'])));
-    processedDfs["Estornos"] = allNotes.filter(row => row && exceptionKeys.Estorno.has(normalizeKey(row['Chave de acesso'])));
 
 
     const exceptionKeySet = new Set([
         ...Array.from(exceptionKeys.OperacaoNaoRealizada),
         ...Array.from(exceptionKeys.Desconhecimento),
         ...Array.from(exceptionKeys.Desacordo),
-        ...Array.from(exceptionKeys.Estorno),
     ]);
     
     const ownEmissionNotes: any[] = [];
@@ -55,7 +52,7 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
             if (exceptionKeySet.has(cleanKey)) return;
             
             const isOwnEmissionByCnpj = nota['Emitente CPF/CNPJ'] === companyCnpj;
-            const isOwnEmissionDevolution = nota.uploadSource === 'entrada' && (String(nota.CFOP).startsWith('1') || String(nota.CFOP).startsWith('2'));
+             const isOwnEmissionDevolution = nota.uploadSource === 'entrada' && (String(nota.CFOP).startsWith('1') || String(nota.CFOP).startsWith('2'));
 
             if (isOwnEmissionByCnpj || isOwnEmissionDevolution) {
                 ownEmissionNotes.push(nota);

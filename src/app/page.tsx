@@ -3,7 +3,7 @@
 
 import { useContext, useState } from "react";
 import * as XLSX from "xlsx";
-import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon, FolderSync, Search, Replace, Download as DownloadIcon, Layers, Wand2, GitCompare } from "lucide-react";
+import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon, FolderSync, Search, Replace, Download as DownloadIcon, Layers, Wand2, GitCompare, FileWarning } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,7 +52,6 @@ type ExceptionKeys = {
     OperacaoNaoRealizada: Set<string>;
     Desconhecimento: Set<string>;
     Desacordo: Set<string>;
-    Estorno: Set<string>;
 };
 
 const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
@@ -95,14 +94,6 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
     
     const firstItemCfop = infNFe.getElementsByTagName('det')[0]?.getElementsByTagName('prod')[0]?.getElementsByTagName('CFOP')[0]?.textContent || '';
     
-    if (ide) {
-        const natOp = getValue('natOp', ide);
-        if (natOp.toLowerCase().includes('estorno')) {
-             const chNFeEstorno = normalizeKey(infNFe.getAttribute('Id')) || '';
-             return { isEvent: true, eventType: 'Estorno', key: chNFeEstorno, uploadSource };
-        }
-    }
-
     const emit = infNFe.getElementsByTagName('emit')[0];
     const dest = infNFe.getElementsByTagName('dest')[0];
     const total = infNFe.getElementsByTagName('ICMSTot')[0];
@@ -280,15 +271,8 @@ export default function Home() {
     const { toast } = useToast();
     
 
-     const requiredFilesForStep1 = [
-        "XMLs de Entrada (NFe)",
-        "XMLs de Entrada (CTe)",
-        "XMLs de Saída",
-        "XMLs de Operação Não Realizada",
-        "XMLs de Desconhecimento do Destinatário",
-        "XMLs de Desacordo (CTe)",
-        "XMLs de Estorno",
-    ];
+    const primaryXmlFiles = ["XMLs de Entrada (NFe)", "XMLs de Entrada (CTe)", "XMLs de Saída"];
+    const manifestationXmlFiles = ["XMLs de Operação Não Realizada", "XMLs de Desconhecimento do Destinatário", "XMLs de Desacordo (CTe)"];
     
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFiles = e.target.files;
@@ -334,7 +318,6 @@ export default function Home() {
                 OperacaoNaoRealizada: new Set<string>(),
                 Desconhecimento: new Set<string>(),
                 Desacordo: new Set<string>(),
-                Estorno: new Set<string>(),
             }
             const canceledKeys = new Set<string>();
 
@@ -636,7 +619,7 @@ export default function Home() {
             };
             const orderedSheetNames = [
                 "Notas Válidas", "Itens de Entrada", "Emissão Própria", "Itens de Saída", "Chaves Válidas", "Imobilizados", "Notas Canceladas",
-                "Estornos", "NF-Stock NFE Operação Não Realizada", "NF-Stock NFE Operação Desconhecida", "NF-Stock CTE Desacordo de Serviço"
+                 "NF-Stock NFE Operação Não Realizada", "NF-Stock NFE Operação Desconhecida", "NF-Stock CTE Desacordo de Serviço"
             ].filter(name => results[name] && results[name].length > 0);
 
             orderedSheetNames.forEach(sheetName => {
@@ -780,42 +763,63 @@ export default function Home() {
                             <TabsTrigger value="validate" disabled={!results}>2. Validação SPED</TabsTrigger>
                             <TabsTrigger value="compare-cfop" disabled={!results}>3. Comparação CFOP</TabsTrigger>
                         </TabsList>
-                        <TabsContent value="process" className="mt-6">
+                        <TabsContent value="process" className="mt-6 space-y-6">
                             <Card className="shadow-lg">
                                 <CardHeader>
                                     <div className="flex items-center gap-3">
                                         <UploadCloud className="h-8 w-8 text-primary" />
                                         <div>
-                                            <CardTitle className="font-headline text-2xl">Carregar Arquivos XML</CardTitle>
-                                            <CardDescription>Faça o upload dos arquivos XML de entrada, saída e exceções.</CardDescription>
+                                            <CardTitle className="font-headline text-2xl">Carregar Arquivos XML Principais</CardTitle>
+                                            <CardDescription>Faça o upload dos arquivos XML de entrada e saída.</CardDescription>
                                         </div>
                                     </div>
                                 </CardHeader>
-                                <CardContent className="space-y-6">
+                                <CardContent>
                                     <FileUploadForm
-                                        requiredFiles={requiredFilesForStep1}
+                                        requiredFiles={primaryXmlFiles}
                                         files={files}
                                         onFileChange={handleFileChange}
                                         onClearFile={handleClearFile}
                                         disabled={!!results}
                                     />
-                                    {!results && (
-                                        <Button onClick={handleProcessPrimaryFiles} disabled={processing} className="w-full">
-                                            {processing ? "Processando..." : "Processar Arquivos"}
-                                        </Button>
-                                    )}
-                                     {results && (
-                                         <div className="flex flex-col gap-2 sm:flex-row">
-                                            <Button onClick={handleDownload} className="w-full">
-                                                <DownloadIcon className="mr-2"/> Baixar Planilha Processada
-                                            </Button>
-                                            <Button onClick={() => setActiveTab('validate')} className="w-full">
-                                                Ir para Validação SPED
-                                            </Button>
-                                         </div>
-                                    )}
                                 </CardContent>
                             </Card>
+                             <Card className="shadow-lg">
+                                <CardHeader>
+                                    <div className="flex items-center gap-3">
+                                        <FileWarning className="h-8 w-8 text-amber-500" />
+                                        <div>
+                                            <CardTitle className="font-headline text-2xl">Carregar XMLs de Manifestação (Opcional)</CardTitle>
+                                            <CardDescription>Faça o upload de arquivos de eventos como operação não realizada, desconhecimento e desacordo.</CardDescription>
+                                        </div>
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <FileUploadForm
+                                        requiredFiles={manifestationXmlFiles}
+                                        files={files}
+                                        onFileChange={handleFileChange}
+                                        onClearFile={handleClearFile}
+                                        disabled={!!results}
+                                    />
+                                </CardContent>
+                            </Card>
+
+                            {!results && (
+                                <Button onClick={handleProcessPrimaryFiles} disabled={processing} className="w-full text-lg py-6">
+                                    {processing ? "Processando..." : "Processar Arquivos XML"}
+                                </Button>
+                            )}
+                             {results && (
+                                 <div className="flex flex-col gap-2 sm:flex-row">
+                                    <Button onClick={handleDownload} className="w-full">
+                                        <DownloadIcon className="mr-2"/> Baixar Planilha Processada
+                                    </Button>
+                                    <Button onClick={() => setActiveTab('validate')} className="w-full">
+                                        Ir para Validação SPED
+                                    </Button>
+                                 </div>
+                            )}
                         </TabsContent>
                         <TabsContent value="validate" className="mt-6">
                              <Card className="shadow-lg">

@@ -38,7 +38,6 @@ const initialFilesState: FileList = {
     "XMLs de Operação Não Realizada": null,
     "XMLs de Desconhecimento do Destinatário": null,
     "XMLs de Desacordo (CTe)": null,
-    "XMLs de Estorno": null,
 };
 
 export const AppContext = createContext<AppContextType>({
