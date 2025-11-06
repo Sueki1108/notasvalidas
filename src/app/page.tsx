@@ -617,8 +617,8 @@ export default function Home() {
                 "Chaves Válidas": "Chaves Validas",
             };
             const orderedSheetNames = [
-                "Notas Válidas", "Itens de Entrada", "Emissão Própria", "Itens de Saída", "Chaves Válidas", "Imobilizados", "Notas Canceladas",
-                 "NF-Stock NFE Operação Não Realizada", "NF-Stock NFE Operação Desconhecida", "NF-Stock CTE Desacordo de Serviço"
+                "Notas Válidas", "Itens de Entrada", "Emissão Própria", "Itens de Saída", "Chaves Válidas", "Imobilizados",
+                 "Notas Canceladas", "NF-Stock NFE Operação Não Realizada", "NF-Stock NFE Operação Desconhecida", "NF-Stock CTE Desacordo de Serviço"
             ].filter(name => results[name] && results[name].length > 0);
 
             orderedSheetNames.forEach(sheetName => {
@@ -686,7 +686,6 @@ export default function Home() {
                                 <DropdownMenuItem asChild><Link href="/merger" className="flex items-center gap-2 w-full"><Group />Agrupador de Planilhas</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/juntar-abas" className="flex items-center gap-2 w-full"><Layers />Juntar Abas</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/solver" className="flex items-center gap-2 w-full"><Wand2 />Solver</Link></DropdownMenuItem>
-                                <DropdownMenuItem asChild><Link href="/sage-itens-nf" className="flex items-center gap-2 w-full"><FileTextIcon />Sage - Itens da NF</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/unify-folders" className="flex items-center gap-2 w-full"><FolderSync />Unificar Pastas</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/extract-nfe" className="flex items-center gap-2 w-full"><Search />Extrair NF-e</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/extract-cte" className="flex items-center gap-2 w-full"><Search />Extrair CT-e</Link></DropdownMenuItem>
