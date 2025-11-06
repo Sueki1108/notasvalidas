@@ -39,10 +39,12 @@ export type KeyCheckResult = {
 };
 
 export type CfopComparisonResult = {
-    foundInBoth: any[];
-    onlyInXml: any[];
-    onlyInSheet: any[];
-}
+    [key: string]: {
+        foundInBoth: any[];
+        onlyInXml: any[];
+        onlyInSheet: any[];
+    }
+};
 
 
 const findDuplicates = (arr: string[]): string[] => {
@@ -117,7 +119,6 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
         const directionValue = parts[2]; // 0: Entrada, 1: Saída
 
         let key = '';
-        // For C100, the key is always at index 9, regardless of direction.
         if (parts.length > 9) {
             key = parts[9];
         }
@@ -1123,85 +1124,94 @@ export async function findSumCombinations(numbers: number[], target: number) {
 
 // --- Logic for CFOP Comparison ---
 
-export async function compareCfopData(data: { xmlItemsData: any[], cfopSheetData: string }): Promise<CfopComparisonResult> {
-    const { xmlItemsData, cfopSheetData } = data;
+export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData: { [key: string]: string } }): Promise<{ results: CfopComparisonResult, error?: string }> {
+    const { xmlItemsData, taxSheetsData } = data;
+    const finalResults: CfopComparisonResult = {};
     const newHeaders = [
         'Itens da Nota', 'Valor do Item', 'Desconto', 'Frete/Seg/Desp',
         'CFOP', 'CST', 'Base', 'Alíquota', 'Valor', 'Aux 1', 'Aux 2', 'CFOP Replicado'
     ];
 
     try {
-        const workbook = XLSX.read(cfopSheetData, { type: 'binary' });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const df: any[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-
-        let dataAsObjects = df.map(row => {
-            const obj: {[key: string]: any} = {};
-            newHeaders.forEach((header, index) => {
-                obj[header] = row[index];
-            });
-            return obj;
-        });
-
-        let lastNfNumber: any = null;
-        let lastCfop: any = null;
-        dataAsObjects.forEach(row => {
-            if (!row['Itens da Nota'] || String(row['Itens da Nota']).trim() === '') {
-                lastNfNumber = row['Desconto'];
-                lastCfop = row['CFOP'];
-            }
-            row['Número da NF'] = lastNfNumber;
-            row['CFOP Replicado'] = lastCfop;
-        });
-
-        let sheetItems = dataAsObjects.filter(row => 
-            row['Itens da Nota'] && 
-            String(row['Itens da Nota']).toUpperCase() !== 'ITENS DA NOTA' &&
-            String(row['Itens da Nota']).toUpperCase() !== 'TOTAL'
-        );
-        
-        const createComparisonKey = (nf: any, value: any) => `${nf}_${(Math.round(parseFloat(String(value).replace(',', '.')) * 100) / 100).toFixed(2)}`;
-
-        const sheetItemsMap = new Map(sheetItems.map(item => [
-            createComparisonKey(item['Número da NF'], item['Valor do Item']),
-            item
-        ]));
-        
         const xmlItemsMap = new Map(xmlItemsData.map(item => [
-             createComparisonKey(item['Número da NF'], item['Valor Total do Produto']),
+            `${item['Número da NF']}_${(Math.round(parseFloat(String(item['Valor Total do Produto']).replace(',', '.')) * 100) / 100).toFixed(2)}`,
             item
         ]));
 
-        const foundInBoth: any[] = [];
-        const onlyInXml: any[] = [];
-        
-        xmlItemsMap.forEach((xmlItem, key) => {
-            if (sheetItemsMap.has(key)) {
-                const sheetItem = sheetItemsMap.get(key);
-                foundInBoth.push({ ...xmlItem, 'CFOP Planilha': sheetItem?.['CFOP Replicado'] });
-                sheetItemsMap.delete(key); // Remove from map to find what's left
-            } else {
-                onlyInXml.push(xmlItem);
-            }
-        });
+        for (const taxName in taxSheetsData) {
+            const sheetData = taxSheetsData[taxName];
+            if (!sheetData) continue;
 
-        const onlyInSheet = Array.from(sheetItemsMap.values());
+            const workbook = XLSX.read(sheetData, { type: 'binary' });
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const df: any[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+            let dataAsObjects = df.map(row => {
+                const obj: { [key: string]: any } = {};
+                newHeaders.forEach((header, index) => {
+                    obj[header] = row[index];
+                });
+                return obj;
+            });
+
+            let lastNfNumber: any = null;
+            let lastCfop: any = null;
+            dataAsObjects.forEach(row => {
+                if (!row['Itens da Nota'] || String(row['Itens da Nota']).trim() === '') {
+                    lastNfNumber = row['Desconto'];
+                    lastCfop = row['CFOP'];
+                }
+                row['Número da NF'] = lastNfNumber;
+                row['CFOP Replicado'] = lastCfop;
+            });
+
+            let sheetItems = dataAsObjects.filter(row =>
+                row['Itens da Nota'] &&
+                String(row['Itens da Nota']).toUpperCase() !== 'ITENS DA NOTA' &&
+                String(row['Itens da Nota']).toUpperCase() !== 'TOTAL'
+            );
+
+            const createComparisonKey = (nf: any, value: any) => `${nf}_${(Math.round(parseFloat(String(value).replace(',', '.')) * 100) / 100).toFixed(2)}`;
+
+            const sheetItemsMap = new Map(sheetItems.map(item => [
+                createComparisonKey(item['Número da NF'], item['Valor do Item']),
+                item
+            ]));
+            
+            const localXmlItemsMap = new Map(xmlItemsMap); // Create a fresh copy for each sheet
+            
+            const foundInBoth: any[] = [];
+            const onlyInXml: any[] = [];
+
+            localXmlItemsMap.forEach((xmlItem, key) => {
+                if (sheetItemsMap.has(key)) {
+                    const sheetItem = sheetItemsMap.get(key);
+                    foundInBoth.push({ ...xmlItem, 'CFOP Planilha': sheetItem?.['CFOP Replicado'] });
+                    sheetItemsMap.delete(key);
+                } else {
+                    onlyInXml.push(xmlItem);
+                }
+            });
+
+            const onlyInSheet = Array.from(sheetItemsMap.values());
+            
+            finalResults[taxName] = { foundInBoth, onlyInXml, onlyInSheet };
+        }
         
-        return { foundInBoth, onlyInXml, onlyInSheet };
+        return { results: finalResults };
 
     } catch (error: any) {
-        console.error("Erro ao comparar dados de CFOP:", error);
+        console.error("Erro ao comparar dados de impostos:", error);
         return { 
-            error: error.message || "Ocorreu um erro na comparação de CFOPs.",
-            foundInBoth: [],
-            onlyInXml: [],
-            onlyInSheet: []
-        } as any;
+            results: {},
+            error: error.message || "Ocorreu um erro na comparação de impostos.",
+        };
     }
 }
       
 
     
+
 
 
 

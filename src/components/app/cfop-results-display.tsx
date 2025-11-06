@@ -9,6 +9,9 @@ import { useToast } from "@/hooks/use-toast";
 import type { CfopComparisonResult } from "@/app/actions";
 import { DataTable } from "./data-table";
 import { getColumns } from "@/lib/columns-helper";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useState, useEffect } from "react";
+
 
 interface CfopResultTableProps {
     title: string;
@@ -33,8 +36,12 @@ const CfopResultTable = ({ title, description, data, filename }: CfopResultTable
         const worksheet = XLSX.utils.json_to_sheet(data);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Dados");
-        XLSX.writeFile(workbook, filename);
-        toast({ title: "Download Iniciado", description: `O arquivo ${filename} está sendo baixado.` });
+
+        // Use 'ods' format for better compatibility with open-source tools
+        const output_filename = filename.endsWith('.ods') ? filename : `${filename}.ods`;
+        XLSX.writeFile(workbook, output_filename, { bookType: "ods" });
+
+        toast({ title: "Download Iniciado", description: `O arquivo ${output_filename} está sendo baixado.` });
     };
 
     return (
@@ -47,7 +54,7 @@ const CfopResultTable = ({ title, description, data, filename }: CfopResultTable
                     </div>
                     <Button onClick={handleDownload} disabled={data.length === 0}>
                         <Download className="mr-2 h-4 w-4" />
-                        Baixar
+                        Baixar (.ods)
                     </Button>
                 </div>
             </CardHeader>
@@ -63,30 +70,56 @@ const CfopResultTable = ({ title, description, data, filename }: CfopResultTable
 };
 
 interface CfopResultsDisplayProps {
-    result: CfopComparisonResult;
+    results: CfopComparisonResult;
 }
 
-export function CfopResultsDisplay({ result }: CfopResultsDisplayProps) {
+export function CfopResultsDisplay({ results }: CfopResultsDisplayProps) {
+    const taxTypes = Object.keys(results);
+    const [activeTab, setActiveTab] = useState(taxTypes[0] || '');
+
+    useEffect(() => {
+        if (taxTypes.length > 0 && !taxTypes.includes(activeTab)) {
+            setActiveTab(taxTypes[0]);
+        }
+    }, [taxTypes, activeTab]);
+
+    if(taxTypes.length === 0) {
+        return <p>Nenhum resultado de comparação para exibir.</p>
+    }
+
     return (
-        <div className="space-y-8">
-            <CfopResultTable
-                title="Itens Conciliados"
-                description="Itens encontrados tanto nos XMLs quanto na planilha de referência."
-                data={result.foundInBoth || []}
-                filename="cfop_conciliados.ods"
-            />
-            <CfopResultTable
-                title="Itens Apenas nos XMLs"
-                description="Itens que existem nos arquivos XML mas não foram encontrados na planilha de referência."
-                data={result.onlyInXml || []}
-                filename="cfop_apenas_xml.ods"
-            />
-            <CfopResultTable
-                title="Itens Apenas na Planilha"
-                description="Itens que existem na planilha de referência mas não foram encontrados nos arquivos XML."
-                data={result.onlyInSheet || []}
-                filename="cfop_apenas_planilha.ods"
-            />
-        </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList>
+                {taxTypes.map(taxName => (
+                    <TabsTrigger key={taxName} value={taxName}>{taxName.replace('Planilha ', '')}</TabsTrigger>
+                ))}
+            </TabsList>
+
+            {taxTypes.map(taxName => {
+                const result = results[taxName];
+                return (
+                    <TabsContent key={taxName} value={taxName} className="mt-4 space-y-8">
+                         <CfopResultTable
+                            title="Itens Conciliados"
+                            description="Itens encontrados tanto nos XMLs quanto na planilha de referência."
+                            data={result?.foundInBoth || []}
+                            filename={`conciliados_${taxName.replace(' ', '_')}.ods`}
+                        />
+                        <CfopResultTable
+                            title="Itens Apenas nos XMLs"
+                            description="Itens que existem nos arquivos XML mas não foram encontrados na planilha de referência."
+                            data={result?.onlyInXml || []}
+                            filename={`apenas_xml_${taxName.replace(' ', '_')}.ods`}
+                        />
+                        <CfopResultTable
+                            title="Itens Apenas na Planilha"
+                            description="Itens que existem na planilha de referência mas não foram encontrados nos arquivos XML."
+                            data={result?.onlyInSheet || []}
+                            filename={`apenas_planilha_${taxName.replace(' ', '_')}.ods`}
+                        />
+                    </TabsContent>
+                )
+            })}
+        </Tabs>
     );
 }

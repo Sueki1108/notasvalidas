@@ -35,7 +35,7 @@ import Link from "next/link";
 import { format, parseISO } from "date-fns";
 import { formatCnpj } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AppContext } from "@/context/AppContext";
+import { AppContext, TaxFileList } from "@/context/AppContext";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { CfopResultsDisplay } from "@/components/app/cfop-results-display";
@@ -327,53 +327,45 @@ export default function Home() {
                 try { return format(parseISO(dateStr), "MM/yyyy"); } catch { return null; }
             };
 
-            const processXmlPromises = Object.keys(files).map(category => {
-              const fileList = files[category];
-              if (!fileList || fileList.length === 0) return Promise.resolve();
-
-              const type = category.includes('CTe') ? 'CTe' : 'NFe';
-              const uploadSource = category.includes('Saída') ? 'saida' : (category.includes('Entrada') ? 'entrada' : 'exception');
-
-              const fileReadPromises = fileList.map(file => file.text());
-
-              return Promise.all(fileReadPromises).then(fileContents => {
-                const parsingPromises = fileContents.map(content =>
-                  Promise.resolve(
-                    type === 'NFe' ? extractNfeDataFromXml(content, uploadSource) : extractCteDataFromXml(content, uploadSource)
-                  )
-                );
-                return Promise.all(parsingPromises);
-              }).then(allXmlData => {
-                  for (const xmlData of allXmlData) {
-                    if (!xmlData) continue;
-                    if (xmlData.isEvent) {
-                          if (xmlData.eventType === 'Cancelamento') {
-                              canceledKeys.add(xmlData.key);
-                          } else if (xmlData.eventType) {
-                              const eventSet = exceptionKeys[xmlData.eventType as keyof typeof exceptionKeys];
-                              if (eventSet) eventSet.add(xmlData.key);
-                          }
-                          continue;
-                      }
-                    
-                    const monthYear = getMonthYear(xmlData.nota?.['Data de Emissão']);
-                    if (!monthYear || !selectedMonths.has(monthYear)) continue;
-
-                    if (xmlData.nota && xmlData.nota['Status']?.includes('Cancelada')) {
-                          canceledKeys.add(xmlData.nota['Chave de acesso']);
-                    }
-
-                    if (type === 'NFe') allNfe.push(xmlData); else allCte.push(xmlData);
-
-                    if(xmlData.itens){
-                        if(uploadSource === 'entrada') allNfeItensEntrada.push(...xmlData.itens);
-                        else allNfeItensSaida.push(...xmlData.itens);
-                    }
-                  }
-              });
+            const fileReadPromises = Object.entries(files).flatMap(([category, fileList]) => {
+                if (!fileList) return [];
+                return fileList.map(file => ({ file, category }));
+            }).map(async ({ file, category }) => {
+                const content = await file.text();
+                const type = category.includes('CTe') ? 'CTe' : 'NFe';
+                const uploadSource = category.includes('Saída') ? 'saida' : (category.includes('Entrada') ? 'entrada' : 'exception');
+                return type === 'NFe' ? extractNfeDataFromXml(content, uploadSource) : extractCteDataFromXml(content, uploadSource);
             });
+            
+            const allXmlData = await Promise.all(fileReadPromises);
 
-            await Promise.all(processXmlPromises);
+            for (const xmlData of allXmlData) {
+                if (!xmlData) continue;
+                if (xmlData.isEvent) {
+                      if (xmlData.eventType === 'Cancelamento') {
+                          canceledKeys.add(xmlData.key);
+                      } else if (xmlData.eventType) {
+                          const eventSet = exceptionKeys[xmlData.eventType as keyof typeof exceptionKeys];
+                          if (eventSet) eventSet.add(xmlData.key);
+                      }
+                      continue;
+                  }
+                
+                const monthYear = getMonthYear(xmlData.nota?.['Data de Emissão']);
+                if (!monthYear || !selectedMonths.has(monthYear)) continue;
+
+                if (xmlData.nota && xmlData.nota['Status']?.includes('Cancelada')) {
+                      canceledKeys.add(xmlData.nota['Chave de acesso']);
+                }
+
+                if (xmlData.nota?.docType === 'NFe') allNfe.push(xmlData); else if (xmlData.nota?.docType === 'CTe') allCte.push(xmlData);
+
+                if(xmlData.itens){
+                    const uploadSource = xmlData.nota.uploadSource;
+                    if(uploadSource === 'entrada') allNfeItensEntrada.push(...xmlData.itens);
+                    else if (uploadSource === 'saida') allNfeItensSaida.push(...xmlData.itens);
+                }
+            }
 
 
             const initialFrames = {
@@ -546,13 +538,15 @@ export default function Home() {
     };
     
     const handleCompareCfop = async () => {
-        const cfopFile = taxFiles["Planilha ICMS"];
-        if (!cfopFile) {
-            toast({ variant: "destructive", title: "Planilha Ausente", description: "Por favor, carregue a planilha de ICMS na aba 'Impostos'." });
+        const activeTaxFiles = Object.entries(taxFiles).filter(([_, file]) => file !== null);
+
+        if (activeTaxFiles.length === 0) {
+            toast({ variant: "destructive", title: "Nenhuma Planilha Carregada", description: "Por favor, carregue pelo menos uma planilha de imposto na aba 'Impostos'." });
             return;
         }
+
         if (!results || !(results['Itens de Entrada'] || results['Itens de Saída'])) {
-             toast({ variant: "destructive", title: "Dados não processados", description: "Processe os arquivos XML na Etapa 1 primeiro." });
+            toast({ variant: "destructive", title: "Dados XML não processados", description: "Processe os arquivos XML na Etapa 1 primeiro." });
             return;
         }
 
@@ -561,34 +555,33 @@ export default function Home() {
         setCfopComparisonResult(null);
 
         try {
-            const fileContent = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    if (event.target?.result) {
-                        resolve(event.target.result as string);
-                    } else {
-                        reject(new Error("Falha ao ler a planilha."));
-                    }
-                };
-                reader.onerror = () => reject(new Error("Erro ao ler a planilha."));
-                reader.readAsBinaryString(cfopFile);
-            });
+            const sheetsData: { [key: string]: string } = {};
+            for (const [taxName, file] of activeTaxFiles) {
+                if (file) {
+                    sheetsData[taxName] = await new Promise<string>((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = (event) => event.target?.result ? resolve(event.target.result as string) : reject(new Error(`Falha ao ler ${file.name}`));
+                        reader.onerror = () => reject(new Error(`Erro ao ler ${file.name}`));
+                        reader.readAsBinaryString(file);
+                    });
+                }
+            }
             
             const xmlItems = [...(results['Itens de Entrada'] || []), ...(results['Itens de Saída'] || [])];
 
             const result = await compareCfopData({
                 xmlItemsData: xmlItems,
-                cfopSheetData: fileContent,
+                taxSheetsData: sheetsData,
             });
             
             if (result.error) throw new Error(result.error);
             
-            setCfopComparisonResult(result);
+            setCfopComparisonResult(result.results as any);
 
-            toast({ title: "Comparação CFOP Concluída", description: "A verificação dos itens foi finalizada." });
+            toast({ title: "Comparação de Impostos Concluída", description: "A verificação dos itens foi finalizada." });
 
         } catch (err: any) {
-            setError(err.message || "Ocorreu um erro na comparação de CFOPs.");
+            setError(err.message || "Ocorreu um erro na comparação de impostos.");
             setCfopComparisonResult(null);
             toast({ variant: "destructive", title: "Erro na Comparação", description: err.message });
         } finally {
@@ -883,15 +876,15 @@ export default function Home() {
                                                         <GitCompare className="h-8 w-8 text-primary" />
                                                         <div>
                                                             <CardTitle className="font-headline text-xl">Comparar Itens e CFOP</CardTitle>
-                                                            <CardDescription>A planilha carregada na aba 'Impostos' como "Planilha ICMS" será usada para esta comparação.</CardDescription>
+                                                            <CardDescription>As planilhas carregadas na aba 'Impostos' serão usadas para esta comparação.</CardDescription>
                                                         </div>
                                                     </div>
                                                 </CardHeader>
                                                 <CardContent className="space-y-6">
-                                                   <Button onClick={handleCompareCfop} disabled={comparing || !taxFiles["Planilha ICMS"]} className="w-full">
+                                                   <Button onClick={handleCompareCfop} disabled={comparing || !Object.values(taxFiles).some(f => f)} className="w-full">
                                                         {comparing ? "Comparando..." : "Comparar Itens"}
                                                     </Button>
-                                                    {cfopComparisonResult && <CfopResultsDisplay result={cfopComparisonResult} />}
+                                                    {cfopComparisonResult && <CfopResultsDisplay results={cfopComparisonResult} />}
                                                 </CardContent>
                                             </Card>
                                         </TabsContent>
