@@ -284,6 +284,10 @@ export default function Home() {
         "XMLs de Entrada (NFe)",
         "XMLs de Entrada (CTe)",
         "XMLs de Saída",
+        "XMLs de Operação Não Realizada",
+        "XMLs de Desconhecimento do Destinatário",
+        "XMLs de Desacordo (CTe)",
+        "XMLs de Estorno",
     ];
     
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -341,7 +345,7 @@ export default function Home() {
 
             const processXmlFiles = async (fileList: File[], category: string) => {
                 const type = category.includes('CTe') ? 'CTe' : 'NFe';
-                const uploadSource = category.includes('Saída') ? 'saida' : 'entrada';
+                const uploadSource = category.includes('Saída') ? 'saida' : (category.includes('Entrada') ? 'entrada' : 'exception');
                 
                 const fileReadPromises = fileList.map(file => file.text());
                 const fileContents = await Promise.all(fileReadPromises);
