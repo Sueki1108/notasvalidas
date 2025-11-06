@@ -109,22 +109,20 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
     if (parts.length < 2) return null;
 
     const recordType = parts[1];
+    const directionValue = parts[2]; // IND_OPER (0: Entrada, 1: Saída)
+
+    let key = '';
 
     // NFe validation (C100)
     if (recordType === 'C100') {
         const docModel = parts[4]; // COD_MOD - 55 for NFe
         if (docModel !== '55') return null;
 
-        const docStatus = parts[5]; // 00: Regular, 02: Cancelado
-        const directionValue = parts[2]; // 0: Entrada, 1: Saída
-
-        let key = '';
-        if (parts.length > 9) {
-            key = parts[9];
-        }
+        key = parts[9]; // CHV_NFE
         
         if (!key || key.length !== 44) return null;
         
+        const docStatus = parts[5]; // 00: Regular, 02: Cancelado etc.
         const direction = directionValue === '0' ? 'Entrada' : 'Saída';
 
         if (['02', '03', '04', '05'].includes(docStatus)) {
@@ -150,18 +148,15 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
         const docModel = parts[4]; // COD_MOD - 57 for CTe
         if (docModel !== '57') return null;
 
-        let key = '';
-        if(parts.length > 10) {
-            key = parts[10];
-        }
+        key = parts[10]; // CHV_CTE
         
         if (!key || key.length !== 44) return null;
-
+        
         const value = parseFloat(parts[16] ? parts[16].replace(',', '.') : '0'); // vTPrest
         const emissionDate = parts[9]; // DDMMYYYY
         const partnerCode = parts[3];
         const partnerName = participants.get(partnerCode) || '';
-        const directionValue = parts[2]; // 0: Saída (emissao propria), 1: Entrada (tomador) - Invertido pro CTe
+        // Invertido pro CTe
         const direction = directionValue === '0' ? 'Saída' : 'Entrada';
 
         return {
@@ -1133,10 +1128,19 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
     ];
 
     try {
-        const xmlItemsMap = new Map(xmlItemsData.map(item => [
-            `${item['Número da NF']}_${(Math.round(parseFloat(String(item['Valor Total do Produto']).replace(',', '.')) * 100) / 100).toFixed(2)}`,
-            item
-        ]));
+        const createXmlComparisonKey = (item: any) => {
+            const nf = item['Número da NF'];
+            const value = item['Valor Total do Produto']; // Use o valor total do produto do XML
+            return `${nf}_${(Math.round(parseFloat(String(value).replace(',', '.')) * 100) / 100).toFixed(2)}`;
+        };
+
+        const createSheetComparisonKey = (row: any) => {
+            const nf = row['Número da NF'];
+            const value = row['Valor do Item']; // Use o valor do item da planilha
+            return `${nf}_${(Math.round(parseFloat(String(value).replace(',', '.')) * 100) / 100).toFixed(2)}`;
+        };
+        
+        const xmlItemsMap = new Map(xmlItemsData.map(item => [createXmlComparisonKey(item), item]));
 
         for (const taxName in taxSheetsData) {
             const sheetData = taxSheetsData[taxName];
@@ -1155,14 +1159,11 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
             });
 
             let lastNfNumber: any = null;
-            let lastCfop: any = null;
             dataAsObjects.forEach(row => {
                 if (!row['Itens da Nota'] || String(row['Itens da Nota']).trim() === '') {
-                    lastNfNumber = row['Desconto'];
-                    lastCfop = row['CFOP'];
+                    lastNfNumber = row['Desconto']; // 'Desconto' column holds the NF number in header rows
                 }
                 row['Número da NF'] = lastNfNumber;
-                row['CFOP Replicado'] = lastCfop;
             });
 
             let sheetItems = dataAsObjects.filter(row =>
@@ -1171,10 +1172,8 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
                 String(row['Itens da Nota']).toUpperCase() !== 'TOTAL'
             );
 
-            const createComparisonKey = (nf: any, value: any) => `${nf}_${(Math.round(parseFloat(String(value).replace(',', '.')) * 100) / 100).toFixed(2)}`;
-
             const sheetItemsMap = new Map(sheetItems.map(item => [
-                createComparisonKey(item['Número da NF'], item['Valor do Item']),
+                createSheetComparisonKey(item),
                 item
             ]));
             
@@ -1186,7 +1185,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
             localXmlItemsMap.forEach((xmlItem, key) => {
                 if (sheetItemsMap.has(key)) {
                     const sheetItem = sheetItemsMap.get(key);
-                    foundInBoth.push({ ...xmlItem, 'CFOP Planilha': sheetItem?.['CFOP Replicado'] });
+                    foundInBoth.push({ ...xmlItem, 'CFOP Planilha': sheetItem?.['CFOP'] });
                     sheetItemsMap.delete(key);
                 } else {
                     onlyInXml.push(xmlItem);
@@ -1211,6 +1210,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
       
 
     
+
 
 
 
