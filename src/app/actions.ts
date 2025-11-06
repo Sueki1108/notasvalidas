@@ -6,6 +6,7 @@ import { collection, doc, getDoc, getDocs, setDoc, serverTimestamp, updateDoc, q
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
+import { cfopDescriptions } from '@/lib/cfop';
 
 
 // Type for the file data structure expected by the processor
@@ -120,6 +121,7 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
         const docStatus = parts[5];
         if (['02', '03', '04', '05'].includes(docStatus)) return null;
         
+        // For both Entrada (0) and Saída (1), the key is at index 9
         key = parts[9]; 
         
         if (!key || key.length !== 44) return null;
@@ -787,7 +789,7 @@ export async function extractCteData(files: { name: string, content: string }[])
         const buffer = XLSX.write(wb, { bookType: 'ods', type: 'array' });
 
         let binary = '';
-        const bytes = new Uint8Array(buffer);
+        const bytes = new Uint8Array(outputBuffer);
         for (let i = 0; i < bytes.byteLength; i++) {
             binary += String.fromCharCode(bytes[i]);
         }
@@ -1113,7 +1115,7 @@ export async function findSumCombinations(numbers: number[], target: number) {
 
 // --- Logic for CFOP Comparison ---
 
-const TAX_RELEVANT_COLUMNS = {
+const TAX_RELEVANT_COLUMNS: { [key: string]: { sheet: string[]; xml: string[] } } = {
     'Planilha ICMS': {
         sheet: ['CFOP', 'CST', 'Base', 'Alíquota', 'Valor', 'CFOP Replicado'],
         xml: ['ICMS CST', 'ICMS Base de Cálculo', 'ICMS Alíquota', 'ICMS Valor'],
@@ -1136,13 +1138,40 @@ const TAX_RELEVANT_COLUMNS = {
     },
 };
 
+const getCfopDescription = (cfop: string) => {
+    const code = parseInt(cfop, 10);
+    return cfopDescriptions[code] || 'Descrição não encontrada';
+};
 
-const pick = (obj: any, keys: string[]) => {
-    const result: { [key: string]: any } = {};
-    for (const key of keys) {
-        result[key] = obj[key] !== undefined ? obj[key] : null;
+const transformRow = (item: any, type: 'xml' | 'sheet', taxCols: { sheet: string[], xml: string[] }) => {
+    const base = {
+        'Número da NF': item['Número da NF'],
+        'NCM XML': type === 'xml' ? item['NCM'] : 'N/A',
+        'Valor Total do Produto XML': type === 'xml' ? item['Valor Total do Produto'] : 'N/A',
+        'Valor do Item Sage': type === 'sheet' ? item['Valor do Item'] : 'N/A',
+    };
+
+    const xmlData: { [key: string]: any } = {};
+    if (type === 'xml') {
+        const cfop = item['CFOP'];
+        xmlData['CFOP XML'] = cfop;
+        xmlData['CFOP XML Descrição'] = getCfopDescription(cfop);
+        taxCols.xml.forEach(col => {
+            xmlData[`${col} XML`] = item[col];
+        });
     }
-    return result;
+
+    const sheetData: { [key: string]: any } = {};
+    if (type === 'sheet') {
+        const cfop = item['CFOP'];
+        sheetData['CFOP Sage'] = cfop;
+        sheetData['CFOP Sage Descrição'] = getCfopDescription(cfop);
+        taxCols.sheet.forEach(col => {
+            sheetData[`${col} Sage`] = item[col];
+        });
+    }
+
+    return { ...base, ...xmlData, ...sheetData };
 };
 
 
@@ -1155,9 +1184,9 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
     ];
 
     try {
-         const createXmlComparisonKey = (item: any) => {
+        const createXmlComparisonKey = (item: any) => {
             const nf = item['Número da NF'];
-            const value = item['Valor Total do Produto'];
+            const value = item['Valor Total do Produto']; // Use the correct field name
             return `${nf}_${(Math.round(parseFloat(String(value).replace(',', '.')) * 100) / 100).toFixed(2)}`;
         };
         
@@ -1210,34 +1239,22 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
             
             const foundInBoth: any[] = [];
             const onlyInXml: any[] = [];
-
-            const baseXmlCols = ['Número da NF', 'NCM', 'CFOP', 'Valor Total do Produto'];
-
+            
             localXmlItemsMap.forEach((xmlItem, key) => {
                 const sheetItem = sheetItemsMap.get(key);
-                const selectedXmlData = pick(xmlItem, [...baseXmlCols, ...relevantCols.xml]);
-                 selectedXmlData['CST XML'] = selectedXmlData[relevantCols.xml[0]]; // Rename CST for clarity
-                delete selectedXmlData[relevantCols.xml[0]];
-
                 if (sheetItem) {
-                    const selectedSheetData = pick(sheetItem, relevantCols.sheet);
-                    foundInBoth.push({ ...selectedXmlData, ...selectedSheetData });
+                    const transformedXml = transformRow(xmlItem, 'xml', relevantCols);
+                    const transformedSheet = transformRow(sheetItem, 'sheet', relevantCols);
+                    foundInBoth.push({ ...transformedXml, ...transformedSheet });
                     sheetItemsMap.delete(key);
                 } else {
-                    onlyInXml.push(selectedXmlData);
+                    onlyInXml.push(transformRow(xmlItem, 'xml', relevantCols));
                 }
             });
 
-             const onlyInSheet = Array.from(sheetItemsMap.values()).map(sheetItem => {
-                const baseData = {
-                    'Número da NF': sheetItem['Número da NF'],
-                    'NCM': 'N/A',
-                    'CFOP': 'N/A',
-                    'Valor Total do Produto': sheetItem['Valor do Item'],
-                };
-                const selectedSheetData = pick(sheetItem, relevantCols.sheet);
-                return { ...baseData, ...selectedSheetData };
-            });
+            const onlyInSheet = Array.from(sheetItemsMap.values()).map(sheetItem => 
+                transformRow(sheetItem, 'sheet', relevantCols)
+            );
             
             finalResults[taxName] = { foundInBoth, onlyInXml, onlyInSheet };
         }
@@ -1255,6 +1272,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
       
 
     
+
 
 
 
