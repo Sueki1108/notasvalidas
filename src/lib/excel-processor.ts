@@ -46,48 +46,49 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
     ]);
     
     const ownEmissionNotes: any[] = [];
-    const ownEmissionValidKeys = new Set<string>();
-
-    const allNfeNotes = allNotes.filter(n => n.docType === 'NFe');
+    const ownEmissionKeys = new Set<string>();
 
     if (companyCnpj) {
         allNotes.forEach(nota => {
+            if (!nota) return;
             const cleanKey = normalizeKey(nota['Chave de acesso']);
-            const isOwnEmission = nota && nota['Emitente CPF/CNPJ'] === companyCnpj;
+            if (exceptionKeySet.has(cleanKey)) return;
 
-            if (nota && (isOwnEmission || nota.isOwnEmissionDevolution) && !exceptionKeySet.has(cleanKey)) {
+            const isOwnEmission = nota['Emitente CPF/CNPJ'] === companyCnpj;
+            const isDevolution = nota.uploadSource === 'entrada' && (String(nota.CFOP).startsWith('1') || String(nota.CFOP).startsWith('2'));
+
+            if (isOwnEmission || isDevolution) {
                 ownEmissionNotes.push(nota);
-                ownEmissionValidKeys.add(cleanKey);
+                ownEmissionKeys.add(cleanKey);
             }
         });
     }
-
+    
     processedDfs["Emissão Própria"] = ownEmissionNotes;
 
-    const notasValidas = allNotes.filter(row =>
-        row &&
-        !exceptionKeySet.has(normalizeKey(row['Chave de acesso'])) &&
-        !ownEmissionValidKeys.has(normalizeKey(row['Chave de acesso']))
-    );
+    const notasValidas = allNotes.filter(row => {
+       if (!row) return false;
+       const cleanKey = normalizeKey(row['Chave de acesso']);
+       return !exceptionKeySet.has(cleanKey) && !ownEmissionKeys.has(cleanKey);
+    });
     
     processedDfs["Notas Válidas"] = notasValidas;
 
     const chavesValidasEntrada = new Set(
         notasValidas
             .map(row => row && normalizeKey(row["Chave de acesso"]))
-            .filter(key => key && !exceptionKeySet.has(key))
+            .filter(key => key)
     );
-    const combinedChavesValidas = new Set([...chavesValidasEntrada, ...ownEmissionValidKeys]);
+    const combinedChavesValidas = new Set([...chavesValidasEntrada, ...ownEmissionKeys]);
     processedDfs["Chaves Válidas"] = Array.from(combinedChavesValidas).map(key => ({ "Chave de acesso": key }));
     
     processedDfs["Itens de Entrada"] = (dfs["Itens de Entrada"] || []).filter(row => 
         row && chavesValidasEntrada.has(normalizeKey(row["Chave de acesso"]))
     );
      processedDfs["Itens de Saída"] = (dfs["Itens de Saída"] || []).filter(row => 
-        row && ownEmissionValidKeys.has(normalizeKey(row["Chave de acesso"]))
+        row && ownEmissionKeys.has(normalizeKey(row["Chave de acesso"]))
     );
 
-    // This sheet is deprecated and will be removed, but we clear it for safety
     processedDfs["NF-Stock Emitidas"] = [];
     
     if (processedDfs["Itens de Entrada"] && processedDfs["Itens de Entrada"].length > 0) {

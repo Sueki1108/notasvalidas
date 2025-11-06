@@ -55,7 +55,7 @@ type ExceptionKeys = {
 };
 
 const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
-    if (typeof window === 'undefined') return null; // Guard clause for SSR
+    if (typeof window === 'undefined') return null;
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlContent, "application/xml");
     const errorNode = xmlDoc.querySelector("parsererror");
@@ -84,7 +84,7 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
                  return { isEvent: true, eventType, key: chNFe, uploadSource };
             }
         }
-        return null; // Not a relevant event
+        return null; 
     }
 
     const infNFe = xmlDoc.getElementsByTagName('infNFe')[0];
@@ -92,7 +92,8 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
 
     const ide = infNFe.getElementsByTagName('ide')[0];
     
-    // Check for Estorno based on natOp
+    const firstItemCfop = infNFe.getElementsByTagName('det')[0]?.getElementsByTagName('prod')[0]?.getElementsByTagName('CFOP')[0]?.textContent || '';
+    
     if (ide) {
         const natOp = getValue('natOp', ide);
         if (natOp.toLowerCase().includes('estorno')) {
@@ -105,7 +106,6 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
     const dest = infNFe.getElementsByTagName('dest')[0];
     const total = infNFe.getElementsByTagName('ICMSTot')[0];
     
-    // Correct way to get the official access key
     const protNFe = xmlDoc.getElementsByTagName('protNFe')[0];
     const infProt = protNFe ? protNFe.getElementsByTagName('infProt')[0] : null;
     const chNFe = normalizeKey(infProt ? getValue('chNFe', infProt) : (infNFe.getAttribute('Id') || '').replace('NFe',''));
@@ -116,12 +116,10 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
 
     const numeroNF = getValue('nNF', ide);
     const isSaida = getValue('tpNF', ide) === '1';
-    
-    const firstItemCfop = infNFe.getElementsByTagName('det')[0]?.getElementsByTagName('prod')[0]?.getElementsByTagName('CFOP')[0]?.textContent || '';
-    const isOwnEmissionDevolution = (uploadSource === 'entrada' && (firstItemCfop.startsWith('1') || firstItemCfop.startsWith('2')));
 
     const nota = {
         'Chave de acesso': chNFe,
+        'CFOP': firstItemCfop,
         'Número': numeroNF,
         'Data de Emissão': getValue('dhEmi', ide),
         'Valor': getValue('vNF', total),
@@ -132,7 +130,6 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
         'Destinatário': dest ? getValue('xNome', dest) : '',
         'Fornecedor/Cliente': isSaida ? (dest ? getValue('xNome', dest): '') : (getValue('xNome', emit)),
         'uploadSource': uploadSource,
-        'isOwnEmissionDevolution': isOwnEmissionDevolution
     };
 
     const itens: any[] = [];
@@ -143,7 +140,7 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
         const imposto = det.getElementsByTagName('imposto')[0];
         if (!prod || !imposto) continue;
 
-        const icms = imposto.getElementsByTagName('ICMS')[0]?.firstElementChild; // gets ICMS00, ICMS60, etc.
+        const icms = imposto.getElementsByTagName('ICMS')[0]?.firstElementChild;
         const ipi = imposto.getElementsByTagName('IPI')[0]?.getElementsByTagName('IPITrib')[0];
         const pis = imposto.getElementsByTagName('PIS')[0]?.firstElementChild;
         const cofins = imposto.getElementsByTagName('COFINS')[0]?.firstElementChild;
@@ -164,11 +161,6 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
             'EAN': getValue('cEAN', prod),
             'CEST': getValue('CEST', prod),
             'Pedido Compra': getValue('xPed', prod),
-            
-            // Impostos
-            'Valor Total Tributos': parseFloat(getValue('vTotTrib', imposto) || '0'),
-            
-            // ICMS
             'ICMS Origem': icms ? getValue('orig', icms) : '',
             'ICMS CST': icms ? getValue('CST', icms) : '',
             'ICMS Modalidade BC': icms ? getValue('modBC', icms) : '',
@@ -178,20 +170,14 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
             'ICMS vBCSTRet': icms ? parseFloat(getValue('vBCSTRet', icms) || '0') : 0,
             'ICMS pST': icms ? parseFloat(getValue('pST', icms) || '0') : 0,
             'ICMS vICMSSTRet': icms ? parseFloat(getValue('vICMSSTRet', icms) || '0') : 0,
-            
-            // IPI
             'IPI CST': ipi ? getValue('CST', ipi) : '',
             'IPI Base de Cálculo': ipi ? parseFloat(getValue('vBC', ipi) || '0') : 0,
             'IPI Alíquota': ipi ? parseFloat(getValue('pIPI', ipi) || '0') : 0,
             'IPI Valor': ipi ? parseFloat(getValue('vIPI', ipi) || '0') : 0,
-
-            // PIS
             'PIS CST': pis ? getValue('CST', pis) : '',
             'PIS Base de Cálculo': pis ? parseFloat(getValue('vBC', pis) || '0') : 0,
             'PIS Alíquota': pis ? parseFloat(getValue('pPIS', pis) || '0') : 0,
             'PIS Valor': pis ? parseFloat(getValue('vPIS', pis) || '0') : 0,
-            
-            // COFINS
             'COFINS CST': cofins ? getValue('CST', cofins) : '',
             'COFINS Base de Cálculo': cofins ? parseFloat(getValue('vBC', cofins) || '0') : 0,
             'COFINS Alíquota': cofins ? parseFloat(getValue('pCOFINS', cofins) || '0') : 0,
@@ -204,7 +190,7 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
 }
 
 const extractCteDataFromXml = (xmlContent: string, uploadSource: string) => {
-    if (typeof window === 'undefined') return null; // Guard clause for SSR
+    if (typeof window === 'undefined') return null;
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlContent, "application/xml");
     const errorNode = xmlDoc.querySelector("parsererror");
@@ -215,7 +201,6 @@ const extractCteDataFromXml = (xmlContent: string, uploadSource: string) => {
 
     const getValue = (tag: string, context: Element | null) => context?.getElementsByTagName(tag)[0]?.textContent || '';
     
-    // Check for CTe Event
     const eventoCTe = xmlDoc.getElementsByTagName('eventoCTe')[0];
     if (eventoCTe) {
         const infEvento = eventoCTe.getElementsByTagName('infEvento')[0];
@@ -223,12 +208,11 @@ const extractCteDataFromXml = (xmlContent: string, uploadSource: string) => {
             const chCTe = normalizeKey(getValue('chCTe', infEvento));
             const tpEvento = getValue('tpEvento', infEvento);
 
-            // Prestação de Serviço em Desacordo
             if (tpEvento === '610110') {
                  return { isEvent: true, eventType: 'Desacordo', key: chCTe, uploadSource };
             }
         }
-        return null; // Ignore other CTe events
+        return null;
     }
     
     const infCte = xmlDoc.getElementsByTagName('infCte')[0];
@@ -294,9 +278,6 @@ export default function Home() {
         "XMLs de Entrada (NFe)",
         "XMLs de Entrada (CTe)",
         "XMLs de Saída",
-        "NF-Stock NFE Operação Não Realizada",
-        "NF-Stock NFE Operação Desconhecida",
-        "NF-Stock CTE Desacordo de Serviço",
     ];
     
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -359,6 +340,7 @@ export default function Home() {
                 const allXmlData = (await Promise.all(filePromises)).filter(Boolean);
 
                 for (const xmlData of allXmlData) {
+                   if (!xmlData) continue;
                    if (xmlData.isEvent) {
                         if (xmlData.eventType === 'Cancelamento') {
                             canceledKeys.add(xmlData.key);
@@ -444,28 +426,35 @@ export default function Home() {
         };
 
         const checkFileDates = async (fileList: File[], category: string) => {
-             const type = category.includes('CTe') ? 'CTe' : 'NFe';
+            const type = category.includes('CTe') ? 'CTe' : 'NFe';
+            
+            const fileReadPromises = fileList.map(file => file.text());
+            const fileContents = await Promise.all(fileReadPromises);
 
-             const filePromises = fileList.map(file => file.text().then(fileContent => {
-                return type === 'NFe' ? extractNfeDataFromXml(fileContent, 'check') : extractCteDataFromXml(fileContent, 'check');
-             }));
-
-             const allXmlData = (await Promise.all(filePromises)).filter(Boolean);
-             
-             for (const xmlData of allXmlData) {
+            const parsingPromises = fileContents.map(content => {
+                return Promise.resolve(
+                    type === 'NFe' ? extractNfeDataFromXml(content, 'check') : extractCteDataFromXml(content, 'check')
+                );
+            });
+            const allXmlData = (await Promise.all(parsingPromises)).filter(Boolean);
+            
+            for (const xmlData of allXmlData) {
                 if (xmlData?.nota) {
                     const monthYear = getMonthYear(xmlData.nota['Data de Emissão']);
                     if (monthYear) months.add(monthYear);
                 }
             }
         };
-        
-        for(const category of Object.keys(files)) {
+
+        const fileProcessingPromises = Object.keys(files).map(category => {
             const fileList = files[category];
             if(fileList && fileList.length > 0 && category.includes('XML')) {
-                await checkFileDates(fileList, category);
+                return checkFileDates(fileList, category);
             }
-        }
+            return Promise.resolve();
+        });
+
+        await Promise.all(fileProcessingPromises);
         
         const sortedMonths = Array.from(months).sort((a, b) => {
             const [aMonth, aYear] = a.split('/');
@@ -521,7 +510,7 @@ export default function Home() {
                 const info = parseSpedInfo(spedFileContent.split('\n')[0]?.trim() || "");
                 if (!info || !info.cnpj) {
                     toast({ variant: "destructive", title: "Erro no SPED", description: `Não foi possível extrair o CNPJ do arquivo ${spedFile.name}.` });
-                    continue; // Pula para o próximo arquivo
+                    continue;
                 }
                 
                 const validationResult = await validateWithSped(results, spedFileContent);
