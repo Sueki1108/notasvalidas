@@ -809,7 +809,7 @@ export default function Home() {
                                     {processing ? "Processando..." : "Processar Arquivos XML"}
                                 </Button>
                             )}
-                             {results && (
+                             {results && activeTab === 'process' && (
                                  <div className="flex flex-col gap-2 sm:flex-row">
                                     <Button onClick={handleDownload} className="w-full">
                                         <DownloadIcon className="mr-2"/> Baixar Planilha Processada
@@ -930,7 +930,7 @@ export default function Home() {
                         </Card>
                     )}
                     
-                     {activeTab === 'process' && results && (
+                     {results && activeTab === 'process' && (
                         <Card className="shadow-lg mt-8">
                             <CardHeader>
                                 <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">

@@ -1257,7 +1257,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
                 if (sheetItemsMap.has(key)) {
                     const sheetItem = sheetItemsMap.get(key)!;
                     
-                    const combinedRow = {
+                    const combinedRow: any = {
                         'Número da NF': xmlItem['Número da NF'],
                         'NCM XML': xmlItem['NCM'] || 'N/A',
                         'Valor Total do Produto XML': xmlItem['Valor Total do Produto'] || 0,
@@ -1270,7 +1270,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
                         'CFOP XML Descrição': getCfopDescription(xmlCfop),
                     });
                     relevantCols.xml.forEach(col => {
-                        (combinedRow as any)[`${col} XML`] = xmlItem[col] || 'N/A';
+                        combinedRow[`${col} XML`] = xmlItem[col] || 'N/A';
                     });
 
                     const sheetCfop = sheetItem['CFOP'];
@@ -1279,7 +1279,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
                         'CFOP Sage Descrição': getCfopDescription(sheetCfop),
                     });
                     relevantCols.sheet.forEach(col => {
-                        (combinedRow as any)[`${col} Sage`] = sheetItem[col] || 'N/A';
+                        combinedRow[`${col} Sage`] = sheetItem[col] || 'N/A';
                     });
 
 
@@ -1313,6 +1313,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
       
 
     
+
 
 
 
