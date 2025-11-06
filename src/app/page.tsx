@@ -3,7 +3,7 @@
 
 import { useContext, useState } from "react";
 import * as XLSX from "xlsx";
-import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon, FolderSync, Search, Replace, Download as DownloadIcon, Layers, Wand2, GitCompare, FileWarning, LandPlot, BookCheck } from "lucide-react";
+import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon, FolderSync, Search, Replace, Download as DownloadIcon, Layers, Wand2, GitCompare, FileWarning, LandPlot, BookCheck, Truck } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,7 +26,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { ResultsDisplay } from "@/components/app/results-display";
 import { KeyResultsDisplay } from "@/components/app/key-results-display";
-import { validateWithSped, compareCfopData, compareCfopAndAccounting, type KeyCheckResult, type SpedInfo, type CfopComparisonResult, type CfopAccountingComparisonResult } from "@/app/actions";
+import { validateWithSped, compareCfopData, compareCfopAndAccounting, analyzeCteData, type KeyCheckResult, type SpedInfo, type CfopComparisonResult, type CfopAccountingComparisonResult } from "@/app/actions";
 import { processDataFrames } from "@/lib/excel-processor";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -262,6 +262,8 @@ export default function Home() {
       setCfopComparisonResult,
       cfopAccountingResult,
       setCfopAccountingResult,
+      cteAnalysisResult,
+      setCteAnalysisResult,
       activeTab,
       setActiveTab,
       clearAllData,
@@ -274,6 +276,7 @@ export default function Home() {
     const [validating, setValidating] = useState(false);
     const [comparing, setComparing] = useState(false);
     const [comparingCfopAccounting, setComparingCfopAccounting] = useState(false);
+    const [analyzingCte, setAnalyzingCte] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isMonthModalOpen, setIsMonthModalOpen] = useState(false);
     const [tempSelectedMonths, setTempSelectedMonths] = useState<Set<string>>(new Set());
@@ -643,6 +646,54 @@ export default function Home() {
         }
     };
 
+     const handleAnalyzeCte = async () => {
+        const cteFiles = files['XMLs de Entrada (CTe)'];
+        const nfeSaidaFiles = files['XMLs de Saída'];
+        
+        if (!cteFiles || cteFiles.length === 0) {
+            toast({ variant: "destructive", title: "Arquivos Ausentes", description: "Carregue os 'XMLs de Entrada (CTe)' na Etapa 1." });
+            return;
+        }
+        if (!nfeSaidaFiles || nfeSaidaFiles.length === 0) {
+            toast({ variant: "destructive", title: "Arquivos Ausentes", description: "Carregue os 'XMLs de Saída' na Etapa 1." });
+            return;
+        }
+         if (!spedInfo || !spedInfo.cnpj) {
+            toast({ variant: "destructive", title: "CNPJ da Empresa Ausente", description: "Processe um arquivo SPED na Etapa 2 para identificar o CNPJ da empresa." });
+            return;
+        }
+
+
+        setAnalyzingCte(true);
+        setError(null);
+        setCteAnalysisResult(null);
+
+        try {
+            const fileContents = async (fileList: File[]) => {
+                return Promise.all(
+                    fileList.map(file => file.text().then(content => ({ name: file.name, content })))
+                );
+            };
+            
+            const result = await analyzeCteData({
+                cteFiles: await fileContents(cteFiles),
+                nfeSaidaFiles: await fileContents(nfeSaidaFiles),
+                companyCnpj: spedInfo.cnpj,
+            });
+
+            if (result.error) throw new Error(result.error);
+
+            setCteAnalysisResult(result);
+            toast({ title: "Análise de CT-e Concluída", description: "CT-es foram classificados e cruzados com as NF-es de origem." });
+
+        } catch (err: any) {
+            setError(err.message || "Ocorreu um erro na análise de CT-e.");
+            toast({ variant: "destructive", title: "Erro na Análise de CT-e", description: err.message });
+        } finally {
+            setAnalyzingCte(false);
+        }
+    };
+
 
     const handleDownload = () => {
         if (!results) return;
@@ -856,7 +907,7 @@ export default function Home() {
                                     {processing ? "Processando..." : "Processar Arquivos XML"}
                                 </Button>
                             )}
-                             {results && activeTab === 'process' && (
+                             {activeTab === 'process' && results && (
                                  <div className="flex flex-col gap-2 sm:flex-row">
                                     <Button onClick={handleDownload} className="w-full">
                                         <DownloadIcon className="mr-2"/> Baixar Planilha Processada
@@ -904,10 +955,11 @@ export default function Home() {
                                 </CardHeader>
                                 <CardContent>
                                      <Tabs defaultValue="impostos">
-                                        <TabsList className="grid w-full grid-cols-3">
+                                        <TabsList className="grid w-full grid-cols-4">
                                             <TabsTrigger value="impostos">Impostos</TabsTrigger>
                                             <TabsTrigger value="compare-xml-sage">Comparação XML X Sage</TabsTrigger>
                                             <TabsTrigger value="compare-cfop-accounting">CFOP x Contabilização</TabsTrigger>
+                                            <TabsTrigger value="cte-analysis">Análise de CT-e</TabsTrigger>
                                         </TabsList>
                                         <TabsContent value="impostos" className="mt-4">
                                              <Card>
@@ -967,6 +1019,40 @@ export default function Home() {
                                                     </Button>
                                                     {cfopAccountingResult && cfopAccountingResult.length > 0 && (
                                                         <DataTable columns={getColumns(cfopAccountingResult)} data={cfopAccountingResult} />
+                                                    )}
+                                                </CardContent>
+                                            </Card>
+                                        </TabsContent>
+                                         <TabsContent value="cte-analysis" className="mt-4">
+                                            <Card>
+                                                <CardHeader>
+                                                     <div className="flex items-center gap-3">
+                                                        <Truck className="h-8 w-8 text-primary" />
+                                                        <div>
+                                                            <CardTitle className="font-headline text-xl">Análise de CT-e</CardTitle>
+                                                            <CardDescription>Cruze os dados de CT-e com as NF-es de saída para encontrar o CFOP de origem. Requer o SPED carregado (Etapa 2) para identificar o CNPJ.</CardDescription>
+                                                        </div>
+                                                    </div>
+                                                </CardHeader>
+                                                 <CardContent className="space-y-6">
+                                                    <Button onClick={handleAnalyzeCte} disabled={analyzingCte || !(files['XMLs de Entrada (CTe)'] && files['XMLs de Saída'])} className="w-full">
+                                                        {analyzingCte ? "Analisando..." : "Analisar CT-es"}
+                                                    </Button>
+                                                    {cteAnalysisResult && (
+                                                        <div className="space-y-4">
+                                                             <Card>
+                                                                <CardHeader><CardTitle>CT-e como Remetente ({cteAnalysisResult.cteRemetente.length})</CardTitle></CardHeader>
+                                                                <CardContent>
+                                                                     {cteAnalysisResult.cteRemetente.length > 0 ? <DataTable columns={getColumns(cteAnalysisResult.cteRemetente)} data={cteAnalysisResult.cteRemetente} /> : <p>Nenhum CT-e encontrado.</p>}
+                                                                </CardContent>
+                                                            </Card>
+                                                             <Card>
+                                                                <CardHeader><CardTitle>CT-e como Destinatário ({cteAnalysisResult.cteDestinatario.length})</CardTitle></CardHeader>
+                                                                <CardContent>
+                                                                     {cteAnalysisResult.cteDestinatario.length > 0 ? <DataTable columns={getColumns(cteAnalysisResult.cteDestinatario)} data={cteAnalysisResult.cteDestinatario} /> : <p>Nenhum CT-e encontrado.</p>}
+                                                                </CardContent>
+                                                            </Card>
+                                                        </div>
                                                     )}
                                                 </CardContent>
                                             </Card>

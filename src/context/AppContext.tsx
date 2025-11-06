@@ -15,6 +15,12 @@ export type TaxFileList = {
     "Planilha IPI": File | null;
 }
 
+export type CteAnalysisResult = {
+    cteRemetente: any[];
+    cteDestinatario: any[];
+} | null;
+
+
 interface AppContextType {
     files: FileList;
     setFiles: React.Dispatch<React.SetStateAction<FileList>>;
@@ -34,6 +40,8 @@ interface AppContextType {
     setCfopComparisonResult: React.Dispatch<React.SetStateAction<CfopComparisonResult | null>>;
     cfopAccountingResult: CfopAccountingComparisonResult | null;
     setCfopAccountingResult: React.Dispatch<React.SetStateAction<CfopAccountingComparisonResult | null>>;
+    cteAnalysisResult: CteAnalysisResult;
+    setCteAnalysisResult: React.Dispatch<React.SetStateAction<CteAnalysisResult>>;
     activeTab: string;
     setActiveTab: React.Dispatch<React.SetStateAction<string>>;
     clearAllData: () => void;
@@ -79,6 +87,8 @@ export const AppContext = createContext<AppContextType>({
     setCfopComparisonResult: () => {},
     cfopAccountingResult: null,
     setCfopAccountingResult: () => {},
+    cteAnalysisResult: null,
+    setCteAnalysisResult: () => {},
     activeTab: 'process',
     setActiveTab: () => {},
     clearAllData: () => {},
@@ -98,6 +108,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const [spedInfo, setSpedInfo] = useState<SpedInfo | null>(null);
     const [cfopComparisonResult, setCfopComparisonResult] = useState<CfopComparisonResult | null>(null);
     const [cfopAccountingResult, setCfopAccountingResult] = useState<CfopAccountingComparisonResult | null>(null);
+    const [cteAnalysisResult, setCteAnalysisResult] = useState<CteAnalysisResult>(null);
     const [activeTab, setActiveTab] = useState('process');
     const [detectedMonths, setDetectedMonths] = useState<string[]>([]);
     const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
@@ -112,6 +123,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setSpedInfo(null);
         setCfopComparisonResult(null);
         setCfopAccountingResult(null);
+        setCteAnalysisResult(null);
         setActiveTab("process");
         setDetectedMonths([]);
         setSelectedMonths(new Set());
@@ -131,6 +143,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             spedInfo, setSpedInfo,
             cfopComparisonResult, setCfopComparisonResult,
             cfopAccountingResult, setCfopAccountingResult,
+            cteAnalysisResult, setCteAnalysisResult,
             activeTab, setActiveTab,
             clearAllData,
             detectedMonths, setDetectedMonths,
