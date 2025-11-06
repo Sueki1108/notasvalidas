@@ -941,7 +941,7 @@ export async function extractReturnData(files: { name: string; content: string }
 // --- Logic for 'Alterar XML' Tool ---
 
 // Helper function to recursively get all paths from a JSON object
-const getPaths = (obj: any, parentPath = ''): string[] => {
+const getPaths = (obj: any, parentKey = ''): string[] => {
     let paths: string[] = [];
     if (obj === null || typeof obj !== 'object') {
         return paths;
@@ -1141,23 +1141,23 @@ export async function findSumCombinations(numbers: number[], target: number) {
 
 const TAX_RELEVANT_COLUMNS: { [key: string]: { sheet: string[]; xml: string[] } } = {
     'Planilha ICMS': {
-        sheet: ['CFOP', 'CST', 'Base', 'Alíquota', 'Valor'],
+        sheet: ['CFOP', 'CST', 'Base', 'Alíquota', 'Valor', 'CFOP Replicado'],
         xml: ['ICMS CST', 'ICMS Base de Cálculo', 'ICMS Alíquota', 'ICMS Valor'],
     },
     'Planilha ICMS ST': {
-        sheet: ['CFOP', 'CST', 'Base', 'Alíquota', 'Valor'],
+        sheet: ['CFOP', 'CST', 'Base', 'Alíquota', 'Valor', 'CFOP Replicado'],
         xml: ['ICMS CST', 'ICMS vBCSTRet', 'ICMS pST', 'ICMS vICMSSTRet'],
     },
     'Planilha PIS': {
-        sheet: ['CFOP', 'CST', 'Base', 'Alíquota', 'Valor'],
+        sheet: ['CFOP', 'CST', 'Base', 'Alíquota', 'Valor', 'CFOP Replicado'],
         xml: ['PIS CST', 'PIS Base de Cálculo', 'PIS Alíquota', 'PIS Valor'],
     },
     'Planilha COFINS': {
-        sheet: ['CFOP', 'CST', 'Base', 'Alíquota', 'Valor'],
+        sheet: ['CFOP', 'CST', 'Base', 'Alíquota', 'Valor', 'CFOP Replicado'],
         xml: ['COFINS CST', 'COFINS Base de Cálculo', 'COFINS Alíquota', 'COFINS Valor'],
     },
     'Planilha IPI': {
-        sheet: ['CFOP', 'CST', 'Base', 'Alíquota', 'Valor'],
+        sheet: ['CFOP', 'CST', 'Base', 'Alíquota', 'Valor', 'CFOP Replicado'],
         xml: ['IPI CST', 'IPI Base de Cálculo', 'IPI Alíquota', 'IPI Valor'],
     },
 };
@@ -1167,36 +1167,6 @@ const getCfopDescription = (cfop: string) => {
     const code = parseInt(cfop, 10);
     return cfopDescriptions[code] || 'Descrição não encontrada';
 };
-
-const transformRow = (item: any, type: 'xml' | 'sheet', taxCols: { sheet: string[], xml: string[] }) => {
-    const base: any = {
-        'Número da NF': item['Número da NF'] || 'N/A',
-    };
-
-    if (type === 'xml') {
-        base['NCM XML'] = item['NCM'] || 'N/A';
-        base['Valor Total do Produto XML'] = item['Valor Total do Produto'] || 0;
-        const cfop = item['CFOP'];
-        base['CFOP XML'] = cfop;
-        base['CFOP XML Descrição'] = getCfopDescription(cfop);
-        taxCols.xml.forEach(col => {
-            base[`${col} XML`] = item[col] || 'N/A';
-        });
-    }
-
-    if (type === 'sheet') {
-        base['Valor do Item Sage'] = item['Valor do Item'] || 0;
-        const cfop = item['CFOP'];
-        base['CFOP Sage'] = cfop;
-        base['CFOP Sage Descrição'] = getCfopDescription(cfop);
-        taxCols.sheet.forEach(col => {
-            base[`${col} Sage`] = item[col] || 'N/A';
-        });
-    }
-
-    return base;
-};
-
 
 export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData: { [key: string]: string } }): Promise<{ results: CfopComparisonResult, error?: string }> {
     const { xmlItemsData, taxSheetsData } = data;
@@ -1258,7 +1228,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
                 item
             ]));
             
-            const localXmlItemsMap = new Map(xmlItemsMap);
+            const localXmlItemsMap = new Map(xmlItems);
             
             const foundInBoth: any[] = [];
             
@@ -1294,17 +1264,40 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
 
                     foundInBoth.push(combinedRow);
                     sheetItemsMap.delete(key);
-                    localXmlItemsMap.delete(key); // Remove from local map to generate onlyInXml correctly
+                    localXmlItemsMap.delete(key); 
                 }
             });
-
-            const onlyInXml = Array.from(localXmlItemsMap.values()).map(xmlItem => 
-                transformRow(xmlItem, 'xml', relevantCols)
-            );
             
-            const onlyInSheet = Array.from(sheetItemsMap.values()).map(sheetItem => 
-                transformRow(sheetItem, 'sheet', relevantCols)
-            );
+            const transformRow = (item: any, type: 'xml' | 'sheet') => {
+                 const base: any = {
+                    'Número da NF': item['Número da NF'] || 'N/A',
+                };
+
+                if (type === 'xml') {
+                    base['NCM XML'] = item['NCM'] || 'N/A';
+                    base['Valor Total do Produto XML'] = item['Valor Total do Produto'] || 0;
+                    const cfop = item['CFOP'];
+                    base['CFOP XML'] = cfop;
+                    base['CFOP XML Descrição'] = getCfopDescription(cfop);
+                    relevantCols.xml.forEach(col => {
+                        base[`${col} XML`] = item[col] || 'N/A';
+                    });
+                }
+
+                if (type === 'sheet') {
+                    base['Valor do Item Sage'] = item['Valor do Item'] || 0;
+                    const cfop = item['CFOP'];
+                    base['CFOP Sage'] = cfop;
+                    base['CFOP Sage Descrição'] = getCfopDescription(cfop);
+                    relevantCols.sheet.forEach(col => {
+                        base[`${col} Sage`] = item[col] || 'N/A';
+                    });
+                }
+                return base;
+            };
+
+            const onlyInXml = Array.from(localXmlItemsMap.values()).map(xmlItem => transformRow(xmlItem, 'xml'));
+            const onlyInSheet = Array.from(sheetItemsMap.values()).map(sheetItem => transformRow(sheetItem, 'sheet'));
             
             finalResults[taxName] = { foundInBoth, onlyInXml, onlyInSheet };
         }
@@ -1338,24 +1331,22 @@ export async function compareCfopAndAccounting(data: {
         const dataLines = lines.slice(headerIndex + 1);
 
         for (const line of dataLines) {
-            const parts = line.split('\t');
-             if (parts.length < 5) continue; // Ensure there are enough parts
+            const parts = line.split('	');
+             if (parts.length < 5) continue; 
 
             const nfMatch = parts[5]?.match(/Nota (\d+)/);
             const nfNumber = nfMatch ? nfMatch[1].trim() : null;
-            const account = parts[3]?.trim();
+            const accountDescription = parts[4]?.trim(); 
 
-            if (nfNumber && account) {
-                // We only store the first account found for a given NF number
+            if (nfNumber && accountDescription) {
                 if (!accountingMap.has(nfNumber)) {
-                    accountingMap.set(nfNumber, account);
+                    accountingMap.set(nfNumber, accountDescription);
                 }
             }
         }
         
         const finalResults: CfopAccountingComparisonResult = [];
         
-        // We only care about items found in both XML and Sage for this comparison
         const icmsResults = cfopComparison['Planilha ICMS']?.foundInBoth || [];
 
         const processedNFs = new Set<string>();
@@ -1363,7 +1354,6 @@ export async function compareCfopAndAccounting(data: {
         for (const item of icmsResults) {
             const numeroNF = String(item['Número da NF']);
 
-            // Process each NF only once
             if (processedNFs.has(numeroNF)) {
                 continue;
             }
@@ -1395,6 +1385,7 @@ export async function compareCfopAndAccounting(data: {
       
 
     
+
 
 
 
