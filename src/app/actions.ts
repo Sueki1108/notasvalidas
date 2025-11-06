@@ -117,10 +117,9 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
         const directionValue = parts[2]; // 0: Entrada, 1: Saída
 
         let key = '';
-        if (directionValue === '0') { // Entrada
+        // For C100, the key is always at index 9, regardless of direction.
+        if (parts.length > 9) {
             key = parts[9];
-        } else if (directionValue === '1') { // Saída
-            key = parts[9]; 
         }
         
         if (!key || key.length !== 44) return null;
@@ -131,7 +130,7 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
             return { key, comment: 'Documento Cancelado/Denegado no SPED', docType: 'NFe', direction };
         }
         
-        const value = parseFloat(parts[23] ? parts[23].replace(',', '.') : '0');
+        const value = parseFloat(parts[12] ? parts[12].replace(',', '.') : '0'); // Campo VL_DOC
         const emissionDate = parts[10]; // DDMMYYYY
         const partnerCode = parts[3];
         const partnerName = participants.get(partnerCode) || '';
@@ -150,7 +149,11 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
         const docModel = parts[4]; // COD_MOD - 57 for CTe
         if (docModel !== '57') return null;
 
-        const key = parts[10];
+        let key = '';
+        if(parts.length > 10) {
+            key = parts[10];
+        }
+        
         if (!key || key.length !== 44) return null;
 
         const value = parseFloat(parts[16] ? parts[16].replace(',', '.') : '0'); // vTPrest
@@ -1199,6 +1202,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], cfopSheetData
       
 
     
+
 
 
 
