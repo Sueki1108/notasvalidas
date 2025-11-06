@@ -30,7 +30,7 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
         if (fileName.toLowerCase().includes('planilha') || fileName.toLowerCase().includes('lote')) {
             return false;
         }
-         return true; // Always allow multiple files
+         return true;
     }
     
     const getFileCount = (file: File | File[] | null) => {
@@ -48,7 +48,7 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
                     {fileCount > 0 ? (
                         <>
                             <div className="absolute right-1 top-1 flex gap-1">
-                                {!disabled && !isMultiple(name) && (
+                                {!disabled && (
                                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onClearFile(name)} disabled={disabled}>
                                         <Trash2 className="h-4 w-4" />
                                         <span className="sr-only">Limpar</span>
@@ -60,10 +60,6 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
                                             <Upload className="h-4 w-4" />
                                             <span className="sr-only">Adicionar mais arquivos</span>
                                         </label>
-                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onClearFile(name)} disabled={disabled}>
-                                            <Trash2 className="h-4 w-4" />
-                                            <span className="sr-only">Limpar</span>
-                                        </Button>
                                     </>
                                 )}
                             </div>

@@ -1415,11 +1415,11 @@ export async function compareCfopAndAccounting(data: {
 
         for (const line of dataLines) {
             const parts = line.split('	');
-             if (parts.length < 5) continue; 
+             if (parts.length < 6) continue; // Ensure there are enough parts
 
-            const nfMatch = parts[5]?.match(/Nota (\d+)/);
+            const nfMatch = parts[5]?.match(/Nota (\d+)/); // Histórico is at index 5
             const nfNumber = nfMatch ? nfMatch[1].trim() : null;
-            const accountDescription = parts[4]?.trim(); // Correctly get the 'Descrição' column
+            const accountDescription = parts[4]?.trim(); // Descrição (da conta) is at index 4
 
             if (nfNumber && accountDescription) {
                 if (!accountingMap.has(nfNumber)) {
@@ -1468,6 +1468,7 @@ export async function compareCfopAndAccounting(data: {
       
 
     
+
 
 
 
