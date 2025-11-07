@@ -1256,21 +1256,11 @@ const getCfopDescription = (cfop: string) => {
 export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData: { [key: string]: string } }): Promise<{ results: CfopComparisonResult, error?: string }> {
     const { xmlItemsData, taxSheetsData } = data;
     const finalResults: CfopComparisonResult = {};
-    const newHeaders = [
-        'Itens da Nota', 'Valor do Item', 'Desconto', 'Frete/Seg/Desp',
-        'CFOP', 'CST', 'Base', 'Alíquota', 'Valor', 'Aux 1', 'Aux 2', 'CFOP Replicado'
-    ];
 
     try {
         const createXmlComparisonKey = (item: any) => {
             const nf = item['Número da NF'];
             const value = item['Valor Total do Produto']; 
-            return `${nf}_${(Math.round(parseFloat(String(value).replace(',', '.')) * 100) / 100).toFixed(2)}`;
-        };
-        
-        const createSheetComparisonKey = (row: any) => {
-            const nf = row['Número da NF'];
-            const value = row['Valor do Item'];
             return `${nf}_${(Math.round(parseFloat(String(value).replace(',', '.')) * 100) / 100).toFixed(2)}`;
         };
         
@@ -1284,37 +1274,32 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
 
             const workbook = XLSX.read(sheetData, { type: 'binary' });
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            const df: any[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+            const df: any[] = XLSX.utils.sheet_to_json(firstSheet);
+            
+            let nfColumnName: string | undefined;
 
-            let dataAsObjects = df.map(row => {
-                const obj: { [key: string]: any } = {};
-                newHeaders.forEach((header, index) => {
-                    obj[header] = row[index];
-                });
-                return obj;
-            });
+            if (df.length > 0) {
+                 const headers = Object.keys(df[0]);
+                 nfColumnName = headers.find(h => h.toUpperCase().includes('NF'));
+            }
 
-            let lastNfNumber: any = null;
-            dataAsObjects.forEach(row => {
-                if (!row['Itens da Nota'] || String(row['Itens da Nota']).trim() === '') {
-                    lastNfNumber = row['Desconto']; 
-                }
-                row['Número da NF'] = lastNfNumber;
-            });
+            if (!nfColumnName) {
+                console.warn(`Could not find a 'NF' column in sheet ${taxName}. Skipping.`);
+                continue;
+            }
 
-            let sheetItems = dataAsObjects.filter(row =>
-                row['Itens da Nota'] &&
-                String(row['Itens da Nota']).toUpperCase() !== 'ITENS DA NOTA' &&
-                String(row['Itens da Nota']).toUpperCase() !== 'TOTAL'
-            );
-
-            const sheetItemsMap = new Map(sheetItems.map(item => [
+            const createSheetComparisonKey = (row: any) => {
+                const nf = row[nfColumnName!];
+                const value = row['Valor do Item'];
+                return `${nf}_${(Math.round(parseFloat(String(value).replace(',', '.')) * 100) / 100).toFixed(2)}`;
+            };
+            
+            const sheetItemsMap = new Map(df.map(item => [
                 createSheetComparisonKey(item),
                 item
             ]));
             
             const localXmlItemsMap = new Map(xmlItemsMap);
-            
             const foundInBoth: any[] = [];
             
             localXmlItemsMap.forEach((xmlItem, key) => {
@@ -1324,7 +1309,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
                     const combinedRow: any = {
                         'numeroNF': xmlItem['Número da NF'],
                         'descricaoProdutoXml': xmlItem['Descrição do Produto'] || 'N/A',
-                        'descricaoProdutoSage': sheetItem['Itens da Nota'] || 'N/A',
+                        'descricaoProdutoSage': sheetItem['Itens da Nota'] || sheetItem['Descrição do Item'] || 'N/A',
                         'NCM XML': xmlItem['NCM'] || 'N/A',
                         'Valor Total do Produto XML': xmlItem['Valor Total do Produto'] || 0,
                         'Valor do Item Sage': sheetItem['Valor do Item'] || 0,
@@ -1357,7 +1342,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
             
             const transformRow = (item: any, type: 'xml' | 'sheet') => {
                  const base: any = {
-                    'numeroNF': item['Número da NF'] || 'N/A',
+                    'numeroNF': item['Número da NF'] || (nfColumnName ? item[nfColumnName] : 'N/A'),
                 };
 
                 if (type === 'xml') {
@@ -1373,7 +1358,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
                 }
 
                 if (type === 'sheet') {
-                    base['descricaoProdutoSage'] = item['Itens da Nota'] || 'N/A';
+                    base['descricaoProdutoSage'] = item['Itens da Nota'] || item['Descrição do Item'] || 'N/A';
                     base['Valor do Item Sage'] = item['Valor do Item'] || 0;
                     const cfop = item['CFOP'];
                     base['cfopSage'] = cfop;
@@ -1411,16 +1396,45 @@ export async function compareCfopAndAccounting(data: {
     try {
         const accountingMap = new Map<string, string[]>();
         const lines = accountingFileContent.split('\n');
+        
+        let nfIndex: number | null = null;
+        let accountIndex: number | null = null;
+        let historyIndex: number | null = null; // For the old format
+
+        // Simple format detection
+        const firstLine = lines[0] || "";
+        if (firstLine.includes('Número') && firstLine.includes('Conta')) {
+             // New format detected, but we'll rely on fixed positions
+             nfIndex = 1; // Column B
+             accountIndex = 7; // Column H
+        } else if (firstLine.includes('Histórico')) {
+            // Old format
+            historyIndex = 6; // Column G
+            accountIndex = 4; // Column E
+        } else {
+             // Assume new format if no headers match, as per user's last request
+             nfIndex = 1;
+             accountIndex = 7;
+        }
+
 
         lines.forEach(line => {
             const parts = line.split('\t');
             let nfNumber: string | null = null;
             let accountDescription: string | null = null;
             
-            // Simplified logic: Assume new format (NF in column B, Account in column H)
-            if (parts.length >= 8) { // Check if there are at least 8 columns
-                nfNumber = parts[1]?.trim() || null;
-                accountDescription = parts[7]?.trim() || null;
+            if (parts.length > Math.max(nfIndex || 0, accountIndex || 0, historyIndex || 0)) {
+                 if (historyIndex !== null && accountIndex !== null) { // Old format logic
+                    const historyText = parts[historyIndex] || '';
+                    const match = historyText.match(/Nota\s+(\d+)/);
+                    if (match && match[1]) {
+                        nfNumber = match[1].trim();
+                        accountDescription = parts[accountIndex]?.trim() || null;
+                    }
+                } else if (nfIndex !== null && accountIndex !== null) { // New format logic
+                    nfNumber = parts[nfIndex]?.trim() || null;
+                    accountDescription = parts[accountIndex]?.trim() || null;
+                }
             }
             
             if (nfNumber && accountDescription) {
@@ -1435,7 +1449,7 @@ export async function compareCfopAndAccounting(data: {
         });
         
         if (accountingMap.size === 0) {
-            throw new Error("Não foi possível extrair dados de contabilização do arquivo de lote. Verifique se o formato do arquivo é suportado (coluna B para NF e H para conta).");
+            throw new Error("Não foi possível extrair dados de contabilização do arquivo de lote. Verifique se o formato do arquivo é suportado (coluna B para NF e H para conta, ou coluna G para histórico e E para conta).");
         }
 
         const finalResults: CfopAccountingComparisonResult = [];
@@ -1482,6 +1496,7 @@ export async function compareCfopAndAccounting(data: {
     
 
     
+
 
 
 
