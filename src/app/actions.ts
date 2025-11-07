@@ -1411,30 +1411,44 @@ export async function compareCfopAndAccounting(data: {
     try {
         const accountingMap = new Map<string, string[]>();
         const lines = accountingFileContent.split('\n');
-        
-        // This regex is designed to be flexible for both file formats.
-        // It looks for a sequence of digits that likely represent the NF number.
-        const nfRegex = /(?:Nota\s*)?(\d+)/;
+
+        let format: 'new' | 'old' | 'unknown' = 'unknown';
+
+        // Detect format based on header or first few data lines
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (trimmedLine.includes('Est.\tNúmero\tData\tConta')) {
+                format = 'old';
+                break;
+            }
+            const parts = trimmedLine.split('\t');
+            if (parts.length >= 8 && /^\d+$/.test(parts[1]?.trim())) {
+                 format = 'new';
+                 break;
+            }
+        }
+
 
         lines.forEach(line => {
             const parts = line.split('\t');
             let nfNumber: string | null = null;
             let accountDescription: string | null = null;
 
-            // Handle new format (NF in column B, Account in column H)
-            if (parts.length >= 8) {
-                nfNumber = parts[1] ? parts[1].trim() : null;
-                accountDescription = parts[7] ? parts[7].trim() : null;
-            } 
-            // Handle old format (NF in column G, Account in column E)
-            else if (parts.length >= 7) {
-                 const historyField = parts[6] ? parts[6].trim() : null;
-                 const nfMatch = historyField ? historyField.match(nfRegex) : null;
-                 nfNumber = nfMatch ? nfMatch[1] : null;
-                 accountDescription = parts[4] ? parts[4].trim() : null;
+            if (format === 'new') {
+                if (parts.length >= 8 && /^\d+$/.test(parts[1]?.trim())) {
+                    nfNumber = parts[1]?.trim() || null;
+                    accountDescription = parts[7]?.trim() || null;
+                }
+            } else if (format === 'old') {
+                 if (parts.length >= 7) {
+                    const historyField = parts[6] ? parts[6].trim() : null;
+                    const nfMatch = historyField ? historyField.match(/Nota\s*(\d+)/) : null;
+                    nfNumber = nfMatch ? nfMatch[1] : null;
+                    accountDescription = parts[4] ? parts[4].trim() : null;
+                 }
             }
-
-            if (nfNumber && accountDescription && /^\d+$/.test(nfNumber) && accountDescription) {
+            
+            if (nfNumber && accountDescription) {
                 if (!accountingMap.has(nfNumber)) {
                     accountingMap.set(nfNumber, []);
                 }
@@ -1493,6 +1507,7 @@ export async function compareCfopAndAccounting(data: {
     
 
     
+
 
 
 
