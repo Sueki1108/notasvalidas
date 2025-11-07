@@ -1412,40 +1412,15 @@ export async function compareCfopAndAccounting(data: {
         const accountingMap = new Map<string, string[]>();
         const lines = accountingFileContent.split('\n');
 
-        let format: 'new' | 'old' | 'unknown' = 'unknown';
-
-        // Detect format based on header or first few data lines
-        for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (trimmedLine.includes('Est.\tNúmero\tData\tConta')) {
-                format = 'old';
-                break;
-            }
-            const parts = trimmedLine.split('\t');
-            if (parts.length >= 8 && /^\d+$/.test(parts[1]?.trim())) {
-                 format = 'new';
-                 break;
-            }
-        }
-
-
         lines.forEach(line => {
             const parts = line.split('\t');
             let nfNumber: string | null = null;
             let accountDescription: string | null = null;
-
-            if (format === 'new') {
-                if (parts.length >= 8 && /^\d+$/.test(parts[1]?.trim())) {
-                    nfNumber = parts[1]?.trim() || null;
-                    accountDescription = parts[7]?.trim() || null;
-                }
-            } else if (format === 'old') {
-                 if (parts.length >= 7) {
-                    const historyField = parts[6] ? parts[6].trim() : null;
-                    const nfMatch = historyField ? historyField.match(/Nota\s*(\d+)/) : null;
-                    nfNumber = nfMatch ? nfMatch[1] : null;
-                    accountDescription = parts[4] ? parts[4].trim() : null;
-                 }
+            
+            // Simplified logic: Assume new format (NF in column B, Account in column H)
+            if (parts.length >= 8) { // Check if there are at least 8 columns
+                nfNumber = parts[1]?.trim() || null;
+                accountDescription = parts[7]?.trim() || null;
             }
             
             if (nfNumber && accountDescription) {
@@ -1460,7 +1435,7 @@ export async function compareCfopAndAccounting(data: {
         });
         
         if (accountingMap.size === 0) {
-            throw new Error("Não foi possível extrair dados de contabilização do arquivo de lote. Verifique se o formato do arquivo é suportado (coluna B para NF e H para conta, ou coluna G para histórico e E para conta).");
+            throw new Error("Não foi possível extrair dados de contabilização do arquivo de lote. Verifique se o formato do arquivo é suportado (coluna B para NF e H para conta).");
         }
 
         const finalResults: CfopAccountingComparisonResult = [];
@@ -1507,6 +1482,7 @@ export async function compareCfopAndAccounting(data: {
     
 
     
+
 
 
 

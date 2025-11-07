@@ -25,7 +25,7 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
             return '.xml, text/xml';
         }
         if (fileName.toLowerCase().includes('lote de contabilização')) {
-             return ".txt, text/plain, .csv, application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, .ods, application/vnd.oasis.opendocument.spreadsheet";
+             return ".txt, text/plain, .csv, application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, .ods, application/vnd.oasis.opendocument.spreadsheet, .slk";
         }
         return ".xlsx,.xls,.csv,.ods,.slk,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/vnd.oasis.opendocument.spreadsheet,text/x-slk";
     }
