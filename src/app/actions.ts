@@ -56,7 +56,7 @@ export type CfopAccountingComparisonResult = {
     descricaoCfopXml: string;
     cfopSage: string;
     descricaoCfopSage: string;
-axContabilizacao: string;
+    contabilizacao: string;
 }[];
 
 
@@ -620,7 +620,7 @@ export async function extractNfeData(files: { name: string, content: string }[])
                 const specificData: { [key: string]: string } = { 'Arquivo': file.name };
                 for (const colName in SPECIFIC_TAGS_MAP) {
                     let value = getValueByPath(jsonObj, SPECIFIC_TAGS_MAP[colName]);
-                    if (COLUMNS_to_FORMAT_DECIMAL.includes(colName) && value && value !== 'N/A') {
+                    if (COLUMNS_TO_FORMAT_DECIMAL.includes(colName) && value && value !== 'N/A') {
                         value = parseFloat(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
                     specificData[colName] = value;
@@ -762,7 +762,7 @@ export async function extractCteData(files: { name: string, content: string }[])
                         }
                     }
 
-                    if (COLUMNS_to_FORMAT_DECIMAL.includes(colName) && value && value !== 'N/A' && typeof value === 'string') {
+                    if (COLUMNS_TO_FORMAT_DECIMAL.includes(colName) && value && value !== 'N/A' && typeof value === 'string') {
                          value = parseFloat(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
                     specificData[colName] = value;
@@ -1261,49 +1261,56 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
     const finalResults: CfopComparisonResult = {};
 
     try {
-        const xmlItemsMap = new Map(xmlItemsData.map(item => [item['Número da NF'], [...(xmlItemsMap.get(item['Número da NF']) || []), item]]));
+        const xmlItemsByNf = new Map<string, any[]>();
+        xmlItemsData.forEach(item => {
+            const nf = item['Número da NF'];
+            if (!xmlItemsByNf.has(nf)) {
+                xmlItemsByNf.set(nf, []);
+            }
+            xmlItemsByNf.get(nf)!.push(item);
+        });
 
         for (const taxName in taxSheetsData) {
             const sheetData = taxSheetsData[taxName];
             if (!sheetData) continue;
-            
+
             const workbook = XLSX.read(sheetData, { type: 'binary' });
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
             const df: any[] = XLSX.utils.sheet_to_json(firstSheet);
-            
+
             let nfColumnName: string | undefined;
             if (df.length > 0) {
-                 const headers = Object.keys(df[0]);
-                 nfColumnName = headers.find(h => h.toUpperCase().includes('NF'));
+                const headers = Object.keys(df[0]);
+                nfColumnName = headers.find(h => h.toUpperCase().includes('NF'));
             }
             if (!nfColumnName) continue;
 
-            const sheetItemsMap = new Map<string, any[]>();
+            const sheetItemsByNf = new Map<string, any[]>();
             df.forEach(item => {
                 const nf = item[nfColumnName!];
-                if (!sheetItemsMap.has(nf)) {
-                    sheetItemsMap.set(nf, []);
+                if (!sheetItemsByNf.has(nf)) {
+                    sheetItemsByNf.set(nf, []);
                 }
-                sheetItemsMap.get(nf)!.push(item);
+                sheetItemsByNf.get(nf)!.push(item);
             });
-
 
             const foundInBoth: any[] = [];
             const onlyInXml: any[] = [];
             const processedSheetItems = new Set();
-            
-            xmlItemsMap.forEach((xmlItems, nf) => {
-                const sheetItems = sheetItemsMap.get(nf);
+
+            xmlItemsByNf.forEach((xmlItems, nf) => {
+                const sheetItems = sheetItemsByNf.get(String(nf)); // Ensure nf is string for map key
                 if (sheetItems) {
                     xmlItems.forEach(xmlItem => {
                         const productCode = String(xmlItem['Código do Produto']);
                         const matchingSheetItem = sheetItems.find(sheetItem => {
                             const itemDescription = String(sheetItem['Itens da Nota'] || sheetItem['Descrição do Item'] || '');
-                            return itemDescription.startsWith(productCode);
+                            // Match based on product code at the beginning of the description
+                            return itemDescription.trim().startsWith(productCode);
                         });
 
                         if (matchingSheetItem) {
-                             const combinedRow: any = {
+                            const combinedRow: any = {
                                 'numeroNF': nf,
                                 'descricaoProdutoXml': xmlItem['Descrição do Produto'] || 'N/A',
                                 'descricaoProdutoSage': matchingSheetItem['Itens da Nota'] || matchingSheetItem['Descrição do Item'] || 'N/A',
@@ -1311,7 +1318,8 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
                                 'Valor Total do Produto XML': xmlItem['Valor Total do Produto'] || 0,
                                 'Valor do Item Sage': matchingSheetItem['Valor do Item'] || 0,
                             };
-                             const xmlCfop = xmlItem['CFOP'];
+                            
+                            const xmlCfop = xmlItem['CFOP'];
                             Object.assign(combinedRow, { 'cfopXml': xmlCfop, 'descricaoCfopXml': getCfopDescription(xmlCfop) });
                             
                             const relevantXmlCols = TAX_RELEVANT_COLUMNS[taxName as keyof typeof TAX_RELEVANT_COLUMNS]?.xml || [];
@@ -1324,13 +1332,13 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
                             relevantSheetCols.forEach(col => { combinedRow[`${col} Sage`] = matchingSheetItem[col] || 'N/A'; });
 
                             foundInBoth.push(combinedRow);
-                            processedSheetItems.add(matchingSheetItem);
+                            processedSheetItems.add(matchingSheetItem); // Mark as processed
                         } else {
-                            onlyInXml.push(transformRow(xmlItem, 'xml', taxName, nfColumnName));
+                            onlyInXml.push(transformRow(xmlItem, 'xml', taxName, String(nf)));
                         }
                     });
                 } else {
-                     onlyInXml.push(...xmlItems.map(item => transformRow(item, 'xml', taxName, nfColumnName)));
+                    onlyInXml.push(...xmlItems.map(item => transformRow(item, 'xml', taxName, String(nf))));
                 }
             });
 
@@ -1350,6 +1358,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
         };
     }
 }
+
 
 function transformRow(item: any, type: 'xml' | 'sheet', taxName: string, nfColumnName?: string) {
     const relevantCols = TAX_RELEVANT_COLUMNS[taxName as keyof typeof TAX_RELEVANT_COLUMNS] || { sheet: [], xml: [] };
@@ -1393,17 +1402,17 @@ export async function compareCfopAndAccounting(data: {
         let nfIndex: number | null = null;
         let accountIndex: number | null = null;
         
-        const firstLine = lines[0] || "";
-        const partsFirstLine = firstLine.split('\t');
+        // Flexible format detection
+        const headerLine = lines[0] || "";
+        const headerParts = headerLine.split('\t');
 
-        // Detect format based on headers or fallback to positions
-        if (partsFirstLine.length > 7 && partsFirstLine[1].includes("Número") && partsFirstLine[7].includes("Conta")) {
+        if (headerParts.length > 7 && headerParts[1].toLowerCase().includes("número") && headerParts[7].toLowerCase().includes("conta")) {
             nfIndex = 1; // Coluna B
             accountIndex = 7; // Coluna H
         } else {
-             // Fallback for format without headers
-            nfIndex = 1; // Coluna B
-            accountIndex = 7; // Coluna H
+             // Fallback for format without headers or different structure
+            nfIndex = 1; // Assume Coluna B for NF
+            accountIndex = 7; // Assume Coluna H for Account
         }
 
 
@@ -1413,7 +1422,7 @@ export async function compareCfopAndAccounting(data: {
             let accountDescription: string | null = null;
             
             if (parts.length > Math.max(nfIndex!, accountIndex!)) {
-                nfNumber = parts[nfIndex!].trim();
+                nfNumber = parts[nfIndex!]?.trim().match(/\d+/g)?.join('') || null; // Extract all digits
                 accountDescription = parts[accountIndex!]?.trim() || null;
             }
             
@@ -1429,7 +1438,7 @@ export async function compareCfopAndAccounting(data: {
         });
         
         if (accountingMap.size === 0) {
-            throw new Error("Não foi possível extrair dados de contabilização do arquivo de lote. Verifique se o formato do arquivo é suportado (coluna B para NF e H para conta).");
+            throw new Error("Não foi possível extrair dados de contabilização do arquivo de lote. Verifique se o formato do arquivo é suportado (coluna B para NF e H para conta, ou coluna G para histórico e E para conta).");
         }
 
         const finalResults: CfopAccountingComparisonResult = [];
@@ -1448,7 +1457,7 @@ export async function compareCfopAndAccounting(data: {
                 descricaoCfopXml: item['descricaoCfopXml'] || 'N/A',
                 cfopSage: item['cfopSage'] || 'N/A',
                 descricaoCfopSage: item['descricaoCfopSage'] || 'N/A',
-                axContabilizacao: contabilizacao,
+                contabilizacao: contabilizacao,
             });
         }
 
@@ -1476,3 +1485,4 @@ export async function compareCfopAndAccounting(data: {
     
 
     
+
