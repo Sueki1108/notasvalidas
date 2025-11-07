@@ -131,10 +131,10 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
     let partnerName = '';
 
     if (recordType === 'C100') {
-        const docModel = parts[4]; 
+        const docModel = parts[5];
         if (docModel !== '55') return null;
 
-        const docStatus = parts[5];
+        const docStatus = parts[6];
         if (['02', '03', '04', '05'].includes(docStatus)) return null;
         
         key = parts[9]; 
@@ -146,7 +146,7 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
         docType = 'NFe';
         value = parseFloat(parts[12] ? parts[12].replace(',', '.') : '0');
         emissionDate = parts[10]; 
-        const partnerCode = parts[3];
+        const partnerCode = parts[4];
         partnerName = participants.get(partnerCode) || '';
 
         return {
@@ -159,10 +159,10 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
         };
     }
     else if (recordType === 'D100') {
-        const docModel = parts[4]; 
+        const docModel = parts[5];
         if (docModel !== '57') return null;
 
-        key = parts[10]; 
+        key = parts[10];
         
         if (!key || key.length !== 44) return null;
         
@@ -1416,18 +1416,20 @@ export async function compareCfopAndAccounting(data: {
             const parts = line.split('\t');
             if (parts.length < 7) continue;
 
-            const historyField = parts[6]; // Column G (index 6)
-            const accountDescription = parts[4]; // Column E (index 4)
+            const historyField = parts[6]; // Column G (index 6) is history
+            const accountDescription = parts[4]; // Column E (index 4) is account description
 
             if (historyField && accountDescription) {
-                const nfMatch = historyField.match(/Nota\s+(\d+)/);
-                const nfNumber = nfMatch ? nfMatch[1].trim() : null;
-
-                if (nfNumber) {
+                const nfMatch = historyField.match(/\d+/g); // Find all numbers
+                if (nfMatch && nfMatch.length > 0) {
+                    const nfNumber = nfMatch[0]; // Assume first number is the NF number
                     if (!accountingMap.has(nfNumber)) {
                         accountingMap.set(nfNumber, []);
                     }
-                    accountingMap.get(nfNumber)!.push(accountDescription.trim());
+                    // Prevent duplicate accounts for the same NF
+                    if (!accountingMap.get(nfNumber)!.includes(accountDescription.trim())) {
+                        accountingMap.get(nfNumber)!.push(accountDescription.trim());
+                    }
                 }
             }
         }
@@ -1438,8 +1440,7 @@ export async function compareCfopAndAccounting(data: {
         for (const item of icmsResults) {
             const numeroNF = String(item['Número da NF']);
             const accounts = accountingMap.get(numeroNF) || [];
-            const uniqueAccounts = [...new Set(accounts)];
-            const contabilizacao = uniqueAccounts.length > 0 ? uniqueAccounts.join(', ') : 'Não encontrado';
+            const contabilizacao = accounts.length > 0 ? accounts.join(', ') : 'Não encontrado';
             
             finalResults.push({
                 numeroNF: numeroNF,
@@ -1477,4 +1478,5 @@ export async function compareCfopAndAccounting(data: {
     
 
     
+
 
