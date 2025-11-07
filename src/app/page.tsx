@@ -102,7 +102,10 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
     
     const protNFe = xmlDoc.getElementsByTagName('protNFe')[0];
     const infProt = protNFe ? protNFe.getElementsByTagName('infProt')[0] : null;
+    
+    // Logic corrected here: Try getting from infProt first, then fallback to infNFe Id
     const chNFe = normalizeKey(infProt ? getValue('chNFe', infProt) : (infNFe.getAttribute('Id') || '').replace('NFe',''));
+
 
     if (!ide || !emit || !total || !chNFe) return null;
     
