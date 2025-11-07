@@ -36,13 +36,22 @@ export function getColumns<TData>(data: TData[]): ColumnDef<TData>[] {
     },
     cell: ({ row }) => {
         const value = row.getValue(key as string);
+
         if (value === null || typeof value === 'undefined' || value === 'N/A') {
           return <span className="text-muted-foreground italic">N/A</span>;
         }
-        // Format number values to Brazilian currency format
+
+        // Specifically handle CFOP columns
+        if (String(key).toLowerCase().includes('cfop')) {
+            const cfopString = String(value).replace(/[^0-9]/g, '');
+            return <div>{cfopString}</div>;
+        }
+
+        // Format other number values to Brazilian currency format
         if (typeof value === 'number') {
              return <div>{value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>;
         }
+
         return <div>{String(value)}</div>;
     },
   }))
