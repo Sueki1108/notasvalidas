@@ -1249,7 +1249,7 @@ const TAX_RELEVANT_COLUMNS: { [key: string]: { sheet: string[]; xml: string[] } 
 
 const getCfopDescription = (cfop: string) => {
     if (!cfop) return 'N/A';
-    const code = parseInt(cfop, 10);
+    const code = parseInt(String(cfop).replace(/\D/g, ''), 10);
     return cfopDescriptions[code] || 'Descrição não encontrada';
 };
 
@@ -1416,11 +1416,11 @@ export async function compareCfopAndAccounting(data: {
             const parts = line.split('\t');
             if (parts.length < 7) continue;
 
-            const nfHistoryField = parts[5]; // Coluna Histórico
-            const accountDescription = parts[4]; // Coluna Descrição da Conta
+            const nfHistoryField = parts[5]; // Coluna "Histórico"
+            const accountDescription = parts[4]; // Coluna "Descrição" da conta
 
             if (nfHistoryField && accountDescription) {
-                const nfMatch = nfHistoryField.match(/Nota\s+(\d+)/);
+                const nfMatch = nfHistoryField.match(/(\d+)/);
                 const nfNumber = nfMatch ? nfMatch[1].trim() : null;
 
                 if (nfNumber) {
