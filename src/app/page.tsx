@@ -103,7 +103,6 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
     const protNFe = xmlDoc.getElementsByTagName('protNFe')[0];
     const infProt = protNFe ? protNFe.getElementsByTagName('infProt')[0] : null;
     
-    // Logic corrected here: Try getting from infProt first, then fallback to infNFe Id
     const chNFe = normalizeKey(infProt ? getValue('chNFe', infProt) : (infNFe.getAttribute('Id') || '').replace('NFe',''));
 
 
@@ -403,7 +402,8 @@ export default function Home() {
                 'NF-Stock CTE': allCte.filter(d => d.nota).map(d => d.nota),
                 'Itens de Entrada': allNfeItensEntrada,
                 'Itens de Saída': allNfeItensSaida,
-                'NF-Stock Emitidas': [] 
+                'NF-Stock Emitidas': [],
+                'Notas Canceladas': Array.from(canceledKeys).map(key => ({ 'Chave de acesso': key }))
             };
             
             const firstSpedFile = spedFiles && spedFiles.length > 0 ? spedFiles[0] : null;
@@ -411,7 +411,7 @@ export default function Home() {
             const tempSpedInfo = parseSpedInfo(firstSpedLine);
             const companyCnpj = tempSpedInfo ? tempSpedInfo.cnpj : null;
 
-            const processedData = processDataFrames(initialFrames, canceledKeys, exceptionKeys, companyCnpj);
+            const processedData = processDataFrames(initialFrames, exceptionKeys, companyCnpj);
             
             setResults(processedData);
             if (companyCnpj) {
@@ -625,7 +625,7 @@ export default function Home() {
                 const reader = new FileReader();
                 reader.onload = (event) => event.target?.result ? resolve(event.target.result as string) : reject(new Error("Falha ao ler o arquivo."));
                 reader.onerror = () => reject(new Error("Erro ao ler o arquivo."));
-                reader.readAsText(accountingFile);
+                reader.readAsText(accountingFile, 'utf-8');
             });
             
             const result = await compareCfopAndAccounting({

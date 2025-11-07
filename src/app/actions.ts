@@ -1323,8 +1323,8 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
                     
                     const combinedRow: any = {
                         'Número da NF': xmlItem['Número da NF'],
-                        'Descrição do Produto (XML)': xmlItem['Descrição do Produto'] || 'N/A',
-                        'Descrição do Item (Sage)': sheetItem['Itens da Nota'] || 'N/A',
+                        'descricaoProdutoXml': xmlItem['Descrição do Produto'] || 'N/A',
+                        'descricaoProdutoSage': sheetItem['Itens da Nota'] || 'N/A',
                         'NCM XML': xmlItem['NCM'] || 'N/A',
                         'Valor Total do Produto XML': xmlItem['Valor Total do Produto'] || 0,
                         'Valor do Item Sage': sheetItem['Valor do Item'] || 0,
@@ -1332,8 +1332,8 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
 
                     const xmlCfop = xmlItem['CFOP'];
                     Object.assign(combinedRow, {
-                        'CFOP XML': xmlCfop,
-                        'CFOP XML Descrição': getCfopDescription(xmlCfop),
+                        'cfopXml': xmlCfop,
+                        'descricaoCfopXml': getCfopDescription(xmlCfop),
                     });
                     relevantCols.xml.forEach(col => {
                         combinedRow[`${col} XML`] = xmlItem[col] || 'N/A';
@@ -1341,8 +1341,8 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
 
                     const sheetCfop = sheetItem['CFOP'];
                      Object.assign(combinedRow, {
-                        'CFOP Sage': sheetCfop,
-                        'CFOP Sage Descrição': getCfopDescription(sheetCfop),
+                        'cfopSage': sheetCfop,
+                        'descricaoCfopSage': getCfopDescription(sheetCfop),
                     });
                     relevantCols.sheet.forEach(col => {
                         combinedRow[`${col} Sage`] = sheetItem[col] || 'N/A';
@@ -1361,23 +1361,23 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
                 };
 
                 if (type === 'xml') {
-                    base['Descrição do Produto (XML)'] = item['Descrição do Produto'] || 'N/A';
+                    base['descricaoProdutoXml'] = item['Descrição do Produto'] || 'N/A';
                     base['NCM XML'] = item['NCM'] || 'N/A';
                     base['Valor Total do Produto XML'] = item['Valor Total do Produto'] || 0;
                     const cfop = item['CFOP'];
-                    base['CFOP XML'] = cfop;
-                    base['CFOP XML Descrição'] = getCfopDescription(cfop);
+                    base['cfopXml'] = cfop;
+                    base['descricaoCfopXml'] = getCfopDescription(cfop);
                     relevantCols.xml.forEach(col => {
                         base[`${col} XML`] = item[col] || 'N/A';
                     });
                 }
 
                 if (type === 'sheet') {
-                    base['Descrição do Item (Sage)'] = item['Itens da Nota'] || 'N/A';
+                    base['descricaoProdutoSage'] = item['Itens da Nota'] || 'N/A';
                     base['Valor do Item Sage'] = item['Valor do Item'] || 0;
                     const cfop = item['CFOP'];
-                    base['CFOP Sage'] = cfop;
-                    base['CFOP Sage Descrição'] = getCfopDescription(cfop);
+                    base['cfopSage'] = cfop;
+                    base['descricaoCfopSage'] = getCfopDescription(cfop);
                     relevantCols.sheet.forEach(col => {
                         base[`${col} Sage`] = item[col] || 'N/A';
                     });
@@ -1416,11 +1416,11 @@ export async function compareCfopAndAccounting(data: {
             const parts = line.split('\t');
             if (parts.length < 7) continue;
 
-            const nfHistoryField = parts[5]; // Coluna "Histórico"
-            const accountDescription = parts[4]; // Coluna "Descrição" da conta
+            const historyField = parts[5]; // Column F (index 5) = Histórico
+            const accountDescription = parts[4]; // Column E (index 4) = Descrição da Conta
 
-            if (nfHistoryField && accountDescription) {
-                const nfMatch = nfHistoryField.match(/(\d+)/);
+            if (historyField && accountDescription) {
+                const nfMatch = historyField.match(/Nota\s+(\d+)/);
                 const nfNumber = nfMatch ? nfMatch[1].trim() : null;
 
                 if (nfNumber) {
@@ -1437,18 +1437,18 @@ export async function compareCfopAndAccounting(data: {
 
         for (const item of icmsResults) {
             const numeroNF = String(item['Número da NF']);
-            const accounts = accountingMap.get(numeroNF);
-            const uniqueAccounts = accounts ? [...new Set(accounts)] : [];
+            const accounts = accountingMap.get(numeroNF) || [];
+            const uniqueAccounts = [...new Set(accounts)];
             const contabilizacao = uniqueAccounts.length > 0 ? uniqueAccounts.join(', ') : 'Não encontrado';
             
             finalResults.push({
                 numeroNF: numeroNF,
-                descricaoProdutoXml: item['Descrição do Produto (XML)'] || 'N/A',
-                descricaoProdutoSage: item['Descrição do Item (Sage)'] || 'N/A',
-                cfopXml: item['CFOP XML'] || 'N/A',
-                descricaoCfopXml: item['CFOP XML Descrição'] || 'N/A',
-                cfopSage: item['CFOP Sage'] || 'N/A',
-                descricaoCfopSage: item['CFOP Sage Descrição'] || 'N/A',
+                descricaoProdutoXml: item['descricaoProdutoXml'] || 'N/A',
+                descricaoProdutoSage: item['descricaoProdutoSage'] || 'N/A',
+                cfopXml: item['cfopXml'] || 'N/A',
+                descricaoCfopXml: item['descricaoCfopXml'] || 'N/A',
+                cfopSage: item['cfopSage'] || 'N/A',
+                descricaoCfopSage: item['descricaoCfopSage'] || 'N/A',
                 contabilizacao: contabilizacao,
             });
         }

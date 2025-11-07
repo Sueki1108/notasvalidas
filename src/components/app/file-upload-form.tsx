@@ -23,7 +23,9 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
         if (fileName.toLowerCase().includes('xml')) {
             return '.xml, text/xml';
         }
-        // Tratar "Lote de Contabilização" e outras planilhas da mesma forma.
+        if (fileName.toLowerCase().includes('lote de contabilização')) {
+             return ".txt, text/plain, .csv, application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, .ods, application/vnd.oasis.opendocument.spreadsheet";
+        }
         return ".xlsx,.xls,.csv,.ods,.slk,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/vnd.oasis.opendocument.spreadsheet,text/x-slk";
     }
     

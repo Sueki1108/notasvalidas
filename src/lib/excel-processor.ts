@@ -17,14 +17,16 @@ const normalizeKey = (value: any): string => {
 };
 
 
-export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, exceptionKeys: ExceptionKeys, companyCnpj: string | null): DataFrames {
+export function processDataFrames(dfs: DataFrames, exceptionKeys: ExceptionKeys, companyCnpj: string | null): DataFrames {
     const processedDfs: DataFrames = JSON.parse(JSON.stringify(dfs));
 
     const nfe = (processedDfs["NF-Stock NFE"] || []).map(d => ({ ...d, docType: 'NFe' }));
     const cte = (processedDfs["NF-Stock CTE"] || []).map(d => ({ ...d, docType: 'CTe' }));
     let allNotes = [...nfe, ...cte];
     
-    // 1. Isolate Canceled Notes First
+    const canceledKeys = new Set((processedDfs['Notas Canceladas'] || []).map(row => normalizeKey(row['Chave de acesso'])));
+    
+    // 1. Isolate Canceled Notes from the main pool if not already done
     processedDfs["Notas Canceladas"] = allNotes.filter(row => row && canceledKeys.has(normalizeKey(row['Chave de acesso'])));
     
     // 2. Remove canceled notes from the main pool to ensure they don't appear anywhere else.
@@ -52,9 +54,8 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
             if (exceptionKeySet.has(cleanKey)) return;
             
             const isOwnEmissionByCnpj = nota['Emitente CPF/CNPJ'] === companyCnpj;
-            // Use o CFOP do primeiro item se disponível, caso contrário, use o CFOP da nota.
-             const cfop = nota.CFOP || (nota.itens && nota.itens.length > 0 ? nota.itens[0].CFOP : '');
-             const isDevolution = nota.uploadSource === 'entrada' && (String(cfop).startsWith('1') || String(cfop).startsWith('2'));
+            const cfop = nota.CFOP || (nota.itens && nota.itens.length > 0 ? nota.itens[0].CFOP : '');
+            const isDevolution = nota.uploadSource === 'entrada' && (String(cfop).startsWith('1') || String(cfop).startsWith('2'));
 
 
             if (isOwnEmissionByCnpj || isDevolution) {
@@ -79,8 +80,14 @@ export function processDataFrames(dfs: DataFrames, canceledKeys: Set<string>, ex
             .map(row => row && normalizeKey(row["Chave de acesso"]))
             .filter(key => key)
     );
-    const combinedChavesValidas = new Set([...chavesValidasEntrada, ...ownEmissionKeys]);
-    processedDfs["Chaves Válidas"] = Array.from(combinedChavesValidas).map(key => ({ "Chave de acesso": key }));
+
+    const allValidSheetKeys = new Set([
+        ...chavesValidasEntrada, 
+        ...ownEmissionKeys, 
+        ...canceledKeys
+    ]);
+
+    processedDfs["Chaves Válidas"] = Array.from(allValidSheetKeys).map(key => ({ "Chave de acesso": key }));
     
     processedDfs["Itens de Entrada"] = (dfs["Itens de Entrada"] || []).filter(row => 
         row && chavesValidasEntrada.has(normalizeKey(row["Chave de acesso"]))
