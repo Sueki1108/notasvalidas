@@ -618,7 +618,13 @@ export default function Home() {
         setCfopAccountingResult(null);
 
         try {
-            const fileContent = await accountingFile.text();
+            const fileContent = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => event.target?.result ? resolve(event.target.result as string) : reject(new Error("Falha ao ler o arquivo."));
+                reader.onerror = () => reject(new Error("Erro ao ler o arquivo."));
+                reader.readAsText(accountingFile);
+            });
+            
             const result = await compareCfopAndAccounting({
                 cfopComparison: cfopComparisonResult,
                 accountingFileContent: fileContent,

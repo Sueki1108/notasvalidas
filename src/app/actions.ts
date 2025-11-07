@@ -35,7 +35,7 @@ export type KeyCheckResult = {
     allSpedKeys: KeyInfo[];
     keysFoundInBoth: KeyInfo[];
     keysNotFoundInTxt: KeyInfo[];
-    keysInTxtNotInSheet: KeyInfo[];
+    keysInTxtNotInSheet: string[];
     duplicateKeysInSheet: string[];
     duplicateKeysInTxt: string[];
 };
@@ -1415,7 +1415,7 @@ export async function compareCfopAndAccounting(data: {
 
         for (const line of dataLines) {
             const parts = line.split('	'); // Split by tab
-             if (parts.length < 6) continue;
+             if (parts.length < 7) continue; // Ensure there are enough columns
 
             const nfMatch = parts[5]?.match(/Nota (\d+)/); // Histórico is at index 5
             const nfNumber = nfMatch ? nfMatch[1].trim() : null;
@@ -1468,6 +1468,7 @@ export async function compareCfopAndAccounting(data: {
       
 
     
+
 
 
 
