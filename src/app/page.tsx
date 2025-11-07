@@ -642,6 +642,18 @@ export default function Home() {
         }
     };
 
+    const handleDownloadCfopAccounting = () => {
+        if (!cfopAccountingResult || cfopAccountingResult.length === 0) {
+            toast({ variant: "destructive", title: "Sem dados", description: "Não há dados para baixar." });
+            return;
+        }
+        const worksheet = XLSX.utils.json_to_sheet(cfopAccountingResult);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "CFOP_x_Contabilizacao");
+        XLSX.writeFile(workbook, "relatorio_cfop_contabilizacao.ods", { bookType: "ods" });
+        toast({ title: "Download Iniciado", description: "O relatório foi gerado." });
+    };
+
      const handleAnalyzeCte = async () => {
         const cteFiles = files['XMLs de Entrada (CTe)'];
         const nfeSaidaFiles = files['XMLs de Saída'];
@@ -1046,8 +1058,13 @@ export default function Home() {
                                                     <Button onClick={handleCompareCfopAccounting} disabled={comparingCfopAccounting || !accountingFile || !cfopComparisonResult} className="w-full">
                                                         {comparingCfopAccounting ? "Comparando..." : "Gerar Relatório CFOP x Contabilização"}
                                                     </Button>
-                                                    {cfopAccountingResult && cfopAccountingResult.length > 0 && (
-                                                        <DataTable columns={getColumns(cfopAccountingResult)} data={cfopAccountingResult} />
+                                                     {cfopAccountingResult && cfopAccountingResult.length > 0 && (
+                                                        <>
+                                                            <DataTable columns={getColumns(cfopAccountingResult)} data={cfopAccountingResult} />
+                                                            <Button onClick={handleDownloadCfopAccounting} className="w-full">
+                                                                <DownloadIcon className="mr-2" /> Baixar Relatório
+                                                            </Button>
+                                                        </>
                                                     )}
                                                 </CardContent>
                                             </Card>

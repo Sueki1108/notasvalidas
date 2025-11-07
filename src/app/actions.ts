@@ -50,6 +50,8 @@ export type CfopComparisonResult = {
 
 export type CfopAccountingComparisonResult = {
     numeroNF: string;
+    descricaoProdutoXml: string;
+    descricaoProdutoSage: string;
     cfopXml: string;
     descricaoCfopXml: string;
     cfopSage: string;
@@ -1321,6 +1323,8 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
                     
                     const combinedRow: any = {
                         'Número da NF': xmlItem['Número da NF'],
+                        'Descrição do Produto (XML)': xmlItem['Descrição do Produto'] || 'N/A',
+                        'Descrição do Item (Sage)': sheetItem['Itens da Nota'] || 'N/A',
                         'NCM XML': xmlItem['NCM'] || 'N/A',
                         'Valor Total do Produto XML': xmlItem['Valor Total do Produto'] || 0,
                         'Valor do Item Sage': sheetItem['Valor do Item'] || 0,
@@ -1357,6 +1361,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
                 };
 
                 if (type === 'xml') {
+                    base['Descrição do Produto (XML)'] = item['Descrição do Produto'] || 'N/A';
                     base['NCM XML'] = item['NCM'] || 'N/A';
                     base['Valor Total do Produto XML'] = item['Valor Total do Produto'] || 0;
                     const cfop = item['CFOP'];
@@ -1368,6 +1373,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
                 }
 
                 if (type === 'sheet') {
+                    base['Descrição do Item (Sage)'] = item['Itens da Nota'] || 'N/A';
                     base['Valor do Item Sage'] = item['Valor do Item'] || 0;
                     const cfop = item['CFOP'];
                     base['CFOP Sage'] = cfop;
@@ -1405,23 +1411,19 @@ export async function compareCfopAndAccounting(data: {
     try {
         const accountingMap = new Map<string, string>();
         const lines = accountingFileContent.split('\n');
-
-        // Iterate over all lines, no header check needed.
+        
         for (const line of lines) {
-            const parts = line.split('\t'); // Split by tab
-            
-            // Check if line has enough parts to be a data line.
+            const parts = line.split('\t');
             if (parts.length < 7) continue;
 
-            const nfHistoryField = parts[5]; // Column F (index 5) is "Histórico"
-            const accountDescription = parts[4]; // Column E (index 4) is "Descrição"
+            const nfHistoryField = parts[5]; 
+            const accountDescription = parts[4]; 
 
             if (nfHistoryField && accountDescription) {
-                const nfMatch = nfHistoryField.match(/Nota (\d+)/);
+                const nfMatch = nfHistoryField.match(/Nota\s+(\d+)/);
                 const nfNumber = nfMatch ? nfMatch[1].trim() : null;
 
                 if (nfNumber) {
-                     // Always take the first description found for a given NF number
                     if (!accountingMap.has(nfNumber)) {
                         accountingMap.set(nfNumber, accountDescription.trim());
                     }
@@ -1431,27 +1433,21 @@ export async function compareCfopAndAccounting(data: {
         
         const finalResults: CfopAccountingComparisonResult = [];
         const icmsResults = cfopComparison['Planilha ICMS']?.foundInBoth || [];
-        const processedNFs = new Set<string>();
 
         for (const item of icmsResults) {
             const numeroNF = String(item['Número da NF']);
-
-            if (processedNFs.has(numeroNF)) {
-                continue;
-            }
-
             const contabilizacao = accountingMap.get(numeroNF) || 'Não encontrado';
             
             finalResults.push({
                 numeroNF: numeroNF,
+                descricaoProdutoXml: item['Descrição do Produto (XML)'] || 'N/A',
+                descricaoProdutoSage: item['Descrição do Item (Sage)'] || 'N/A',
                 cfopXml: item['CFOP XML'] || 'N/A',
                 descricaoCfopXml: item['CFOP XML Descrição'] || 'N/A',
                 cfopSage: item['CFOP Sage'] || 'N/A',
                 descricaoCfopSage: item['CFOP Sage Descrição'] || 'N/A',
                 contabilizacao: contabilizacao,
             });
-
-            processedNFs.add(numeroNF);
         }
 
         if (finalResults.length === 0 && icmsResults.length > 0) {

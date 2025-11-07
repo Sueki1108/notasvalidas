@@ -11,8 +11,8 @@ export function getColumns<TData>(data: TData[]): ColumnDef<TData>[] {
 
   const firstRowKeys = Object.keys(data[0] as object) as (keyof TData)[]
   
-  // Custom order: 'Número da NF' should be second.
-  const customOrder = ['Número da NF'];
+  // Custom order: 'Número da NF' should be first if it exists.
+  const customOrder: string[] = ['numeroNF', 'Número da NF'];
   
   const orderedKeys = [
       ...customOrder,
