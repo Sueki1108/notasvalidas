@@ -1258,121 +1258,72 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
     const finalResults: CfopComparisonResult = {};
 
     try {
-        const createXmlComparisonKey = (item: any) => {
-            const nf = item['Número da NF'];
-            const value = item['Valor Total do Produto']; 
-            return `${nf}_${(Math.round(parseFloat(String(value).replace(',', '.')) * 100) / 100).toFixed(2)}`;
-        };
-        
-        const xmlItemsMap = new Map(xmlItemsData.map(item => [createXmlComparisonKey(item), item]));
+        const xmlItemsMap = new Map(xmlItemsData.map(item => [item['Número da NF'], [...(xmlItemsMap.get(item['Número da NF']) || []), item]]));
 
         for (const taxName in taxSheetsData) {
             const sheetData = taxSheetsData[taxName];
             if (!sheetData) continue;
-
+            
             const relevantCols = TAX_RELEVANT_COLUMNS[taxName as keyof typeof TAX_RELEVANT_COLUMNS] || { sheet: [], xml: [] };
-
+            
             const workbook = XLSX.read(sheetData, { type: 'binary' });
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
             const df: any[] = XLSX.utils.sheet_to_json(firstSheet);
             
             let nfColumnName: string | undefined;
-
             if (df.length > 0) {
                  const headers = Object.keys(df[0]);
                  nfColumnName = headers.find(h => h.toUpperCase().includes('NF'));
             }
+             if (!nfColumnName) continue;
 
-            if (!nfColumnName) {
-                console.warn(`Could not find a 'NF' column in sheet ${taxName}. Skipping.`);
-                continue;
-            }
+            const sheetItemsMap = new Map(df.map(item => [item[nfColumnName!], [...(sheetItemsMap.get(item[nfColumnName!]) || []), item]]));
 
-            const createSheetComparisonKey = (row: any) => {
-                const nf = row[nfColumnName!];
-                const value = row['Valor do Item'];
-                return `${nf}_${(Math.round(parseFloat(String(value).replace(',', '.')) * 100) / 100).toFixed(2)}`;
-            };
-            
-            const sheetItemsMap = new Map(df.map(item => [
-                createSheetComparisonKey(item),
-                item
-            ]));
-            
-            const localXmlItemsMap = new Map(xmlItemsMap);
             const foundInBoth: any[] = [];
+            const onlyInXml: any[] = [];
+            const processedSheetItems = new Set();
             
-            localXmlItemsMap.forEach((xmlItem, key) => {
-                if (sheetItemsMap.has(key)) {
-                    const sheetItem = sheetItemsMap.get(key)!;
-                    
-                    const combinedRow: any = {
-                        'numeroNF': xmlItem['Número da NF'],
-                        'descricaoProdutoXml': xmlItem['Descrição do Produto'] || 'N/A',
-                        'descricaoProdutoSage': sheetItem['Itens da Nota'] || sheetItem['Descrição do Item'] || 'N/A',
-                        'NCM XML': xmlItem['NCM'] || 'N/A',
-                        'Valor Total do Produto XML': xmlItem['Valor Total do Produto'] || 0,
-                        'Valor do Item Sage': sheetItem['Valor do Item'] || 0,
-                    };
+            xmlItemsMap.forEach((xmlItems, nf) => {
+                const sheetItems = sheetItemsMap.get(nf);
+                if (sheetItems) {
+                    xmlItems.forEach(xmlItem => {
+                        const productCode = String(xmlItem['Código do Produto']);
+                        const matchingSheetItem = sheetItems.find(sheetItem => {
+                            const itemDescription = String(sheetItem['Itens da Nota'] || sheetItem['Descrição do Item'] || '');
+                            return itemDescription.startsWith(productCode);
+                        });
 
-                    const xmlCfop = xmlItem['CFOP'];
-                    Object.assign(combinedRow, {
-                        'cfopXml': xmlCfop,
-                        'descricaoCfopXml': getCfopDescription(xmlCfop),
-                    });
-                    relevantCols.xml.forEach(col => {
-                        combinedRow[`${col} XML`] = xmlItem[col] || 'N/A';
-                    });
+                        if (matchingSheetItem) {
+                             const combinedRow: any = {
+                                'numeroNF': nf,
+                                'descricaoProdutoXml': xmlItem['Descrição do Produto'] || 'N/A',
+                                'descricaoProdutoSage': matchingSheetItem['Itens da Nota'] || matchingSheetItem['Descrição do Item'] || 'N/A',
+                                'NCM XML': xmlItem['NCM'] || 'N/A',
+                                'Valor Total do Produto XML': xmlItem['Valor Total do Produto'] || 0,
+                                'Valor do Item Sage': matchingSheetItem['Valor do Item'] || 0,
+                            };
+                             const xmlCfop = xmlItem['CFOP'];
+                            Object.assign(combinedRow, { 'cfopXml': xmlCfop, 'descricaoCfopXml': getCfopDescription(xmlCfop) });
+                            relevantCols.xml.forEach(col => { combinedRow[`${col} XML`] = xmlItem[col] || 'N/A'; });
 
-                    const sheetCfop = sheetItem['CFOP'];
-                     Object.assign(combinedRow, {
-                        'cfopSage': sheetCfop,
-                        'descricaoCfopSage': getCfopDescription(sheetCfop),
-                    });
-                    relevantCols.sheet.forEach(col => {
-                        combinedRow[`${col} Sage`] = sheetItem[col] || 'N/A';
-                    });
+                            const sheetCfop = matchingSheetItem['CFOP'];
+                            Object.assign(combinedRow, { 'cfopSage': sheetCfop, 'descricaoCfopSage': getCfopDescription(sheetCfop) });
+                            relevantCols.sheet.forEach(col => { combinedRow[`${col} Sage`] = matchingSheetItem[col] || 'N/A'; });
 
-
-                    foundInBoth.push(combinedRow);
-                    sheetItemsMap.delete(key);
-                    localXmlItemsMap.delete(key); 
+                            foundInBoth.push(combinedRow);
+                            processedSheetItems.add(matchingSheetItem);
+                        } else {
+                            onlyInXml.push(transformRow(xmlItem, 'xml', relevantCols, nfColumnName));
+                        }
+                    });
+                } else {
+                     onlyInXml.push(...xmlItems.map(item => transformRow(item, 'xml', relevantCols, nfColumnName)));
                 }
             });
-            
-            const transformRow = (item: any, type: 'xml' | 'sheet') => {
-                 const base: any = {
-                    'numeroNF': item['Número da NF'] || (nfColumnName ? item[nfColumnName] : 'N/A'),
-                };
 
-                if (type === 'xml') {
-                    base['descricaoProdutoXml'] = item['Descrição do Produto'] || 'N/A';
-                    base['NCM XML'] = item['NCM'] || 'N/A';
-                    base['Valor Total do Produto XML'] = item['Valor Total do Produto'] || 0;
-                    const cfop = item['CFOP'];
-                    base['cfopXml'] = cfop;
-                    base['descricaoCfopXml'] = getCfopDescription(cfop);
-                    relevantCols.xml.forEach(col => {
-                        base[`${col} XML`] = item[col] || 'N/A';
-                    });
-                }
+            const onlyInSheet = df.filter(item => !processedSheetItems.has(item))
+                                  .map(item => transformRow(item, 'sheet', relevantCols, nfColumnName));
 
-                if (type === 'sheet') {
-                    base['descricaoProdutoSage'] = item['Itens da Nota'] || item['Descrição do Item'] || 'N/A';
-                    base['Valor do Item Sage'] = item['Valor do Item'] || 0;
-                    const cfop = item['CFOP'];
-                    base['cfopSage'] = cfop;
-                    base['descricaoCfopSage'] = getCfopDescription(cfop);
-                    relevantCols.sheet.forEach(col => {
-                        base[`${col} Sage`] = item[col] || 'N/A';
-                    });
-                }
-                return base;
-            };
-
-            const onlyInXml = Array.from(localXmlItemsMap.values()).map(xmlItem => transformRow(xmlItem, 'xml'));
-            const onlyInSheet = Array.from(sheetItemsMap.values()).map(sheetItem => transformRow(sheetItem, 'sheet'));
-            
             finalResults[taxName] = { foundInBoth, onlyInXml, onlyInSheet };
         }
         
@@ -1387,6 +1338,30 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
     }
 }
 
+function transformRow(item: any, type: 'xml' | 'sheet', relevantCols: { sheet: string[], xml: string[] }, nfColumnName?: string) {
+    const base: any = {
+        'numeroNF': item['Número da NF'] || (nfColumnName ? item[nfColumnName] : 'N/A'),
+    };
+    if (type === 'xml') {
+        base['descricaoProdutoXml'] = item['Descrição do Produto'] || 'N/A';
+        base['NCM XML'] = item['NCM'] || 'N/A';
+        base['Valor Total do Produto XML'] = item['Valor Total do Produto'] || 0;
+        const cfop = item['CFOP'];
+        base['cfopXml'] = cfop;
+        base['descricaoCfopXml'] = getCfopDescription(cfop);
+        relevantCols.xml.forEach(col => { base[`${col} XML`] = item[col] || 'N/A'; });
+    }
+    if (type === 'sheet') {
+        base['descricaoProdutoSage'] = item['Itens da Nota'] || item['Descrição do Item'] || 'N/A';
+        base['Valor do Item Sage'] = item['Valor do Item'] || 0;
+        const cfop = item['CFOP'];
+        base['cfopSage'] = cfop;
+        base['descricaoCfopSage'] = getCfopDescription(cfop);
+        relevantCols.sheet.forEach(col => { base[`${col} Sage`] = item[col] || 'N/A'; });
+    }
+    return base;
+}
+
 export async function compareCfopAndAccounting(data: {
     cfopComparison: CfopComparisonResult;
     accountingFileContent: string;
@@ -1399,22 +1374,23 @@ export async function compareCfopAndAccounting(data: {
         
         let nfIndex: number | null = null;
         let accountIndex: number | null = null;
-        let historyIndex: number | null = null; // For the old format
-
-        // Simple format detection
+        
         const firstLine = lines[0] || "";
-        if (firstLine.includes('Número') && firstLine.includes('Conta')) {
-             // New format detected, but we'll rely on fixed positions
-             nfIndex = 1; // Column B
-             accountIndex = 7; // Column H
-        } else if (firstLine.includes('Histórico')) {
-            // Old format
-            historyIndex = 6; // Column G
-            accountIndex = 4; // Column E
-        } else {
-             // Assume new format if no headers match, as per user's last request
-             nfIndex = 1;
-             accountIndex = 7;
+        const partsFirstLine = firstLine.split('\t');
+
+        if (partsFirstLine.length > 7 && firstLine.includes("Lançamento")) {
+            nfIndex = 1;
+            accountIndex = 7;
+        } else if (partsFirstLine.length > 6 && firstLine.includes("Histórico")) {
+            nfIndex = 6;
+            accountIndex = 4;
+        } else if (partsFirstLine.length > 7) { // Fallback to B and H
+            nfIndex = 1;
+            accountIndex = 7;
+        }
+
+        if (nfIndex === null || accountIndex === null) {
+            throw new Error("Não foi possível extrair dados de contabilização do arquivo de lote. Verifique se o formato do arquivo é suportado (coluna B para NF e H para conta, ou coluna G para histórico e E para conta).");
         }
 
 
@@ -1423,15 +1399,15 @@ export async function compareCfopAndAccounting(data: {
             let nfNumber: string | null = null;
             let accountDescription: string | null = null;
             
-            if (parts.length > Math.max(nfIndex || 0, accountIndex || 0, historyIndex || 0)) {
-                 if (historyIndex !== null && accountIndex !== null) { // Old format logic
-                    const historyText = parts[historyIndex] || '';
+            if (parts.length > Math.max(nfIndex, accountIndex)) {
+                 if (nfIndex === 6) { // Old format logic
+                    const historyText = parts[nfIndex] || '';
                     const match = historyText.match(/Nota\s+(\d+)/);
                     if (match && match[1]) {
                         nfNumber = match[1].trim();
                         accountDescription = parts[accountIndex]?.trim() || null;
                     }
-                } else if (nfIndex !== null && accountIndex !== null) { // New format logic
+                } else { // New format logic
                     nfNumber = parts[nfIndex]?.trim() || null;
                     accountDescription = parts[accountIndex]?.trim() || null;
                 }
@@ -1496,10 +1472,3 @@ export async function compareCfopAndAccounting(data: {
     
 
     
-
-
-
-
-
-
-
