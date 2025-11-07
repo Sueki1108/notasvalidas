@@ -1322,7 +1322,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
                     const sheetItem = sheetItemsMap.get(key)!;
                     
                     const combinedRow: any = {
-                        'Número da NF': xmlItem['Número da NF'],
+                        'numeroNF': xmlItem['Número da NF'],
                         'descricaoProdutoXml': xmlItem['Descrição do Produto'] || 'N/A',
                         'descricaoProdutoSage': sheetItem['Itens da Nota'] || 'N/A',
                         'NCM XML': xmlItem['NCM'] || 'N/A',
@@ -1357,7 +1357,7 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
             
             const transformRow = (item: any, type: 'xml' | 'sheet') => {
                  const base: any = {
-                    'Número da NF': item['Número da NF'] || 'N/A',
+                    'numeroNF': item['Número da NF'] || 'N/A',
                 };
 
                 if (type === 'xml') {
@@ -1420,15 +1420,16 @@ export async function compareCfopAndAccounting(data: {
             const accountDescription = parts[4]; // Column E (index 4) is account description
 
             if (historyField && accountDescription) {
-                const nfMatch = historyField.match(/\d+/g); // Find all numbers
-                if (nfMatch && nfMatch.length > 0) {
-                    const nfNumber = nfMatch[0]; // Assume first number is the NF number
+                const nfMatch = historyField.match(/\b\d+\b/); // Find first standalone number
+                if (nfMatch && nfMatch[0]) {
+                    const nfNumber = nfMatch[0];
                     if (!accountingMap.has(nfNumber)) {
                         accountingMap.set(nfNumber, []);
                     }
                     // Prevent duplicate accounts for the same NF
-                    if (!accountingMap.get(nfNumber)!.includes(accountDescription.trim())) {
-                        accountingMap.get(nfNumber)!.push(accountDescription.trim());
+                    const existingAccounts = accountingMap.get(nfNumber)!;
+                    if (!existingAccounts.includes(accountDescription.trim())) {
+                        existingAccounts.push(accountDescription.trim());
                     }
                 }
             }
@@ -1438,7 +1439,7 @@ export async function compareCfopAndAccounting(data: {
         const icmsResults = cfopComparison['Planilha ICMS']?.foundInBoth || [];
 
         for (const item of icmsResults) {
-            const numeroNF = String(item['Número da NF']);
+            const numeroNF = String(item['numeroNF']);
             const accounts = accountingMap.get(numeroNF) || [];
             const contabilizacao = accounts.length > 0 ? accounts.join(', ') : 'Não encontrado';
             
@@ -1478,5 +1479,6 @@ export async function compareCfopAndAccounting(data: {
     
 
     
+
 
 
