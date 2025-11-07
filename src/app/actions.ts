@@ -56,7 +56,7 @@ export type CfopAccountingComparisonResult = {
     descricaoCfopXml: string;
     cfopSage: string;
     descricaoCfopSage: string;
-    contabilizacao: string;
+axContabilizacao: string;
 }[];
 
 
@@ -209,32 +209,35 @@ const forceCellAsString = (worksheet: XLSX.WorkSheet, headerName: string) => {
 };
 
 
-export async function validateWithSped(processedData: DataFrames, spedFileContent: string) {
+export async function validateWithSped(processedData: DataFrames, spedFileContents: string[]) {
     try {
-        const normalizedContent = spedFileContent.replace(/\r\n/g, '\n');
-        const lines = normalizedContent.split('\n');
-
-        let spedInfo: SpedInfo | null = null;
-        if (lines.length > 0 && lines[0]) {
-            spedInfo = parseSpedInfo(lines[0].trim());
-        }
-        
-        const participants = parseAllParticipants(normalizedContent);
         const allSpedKeyInfo = new Map<string, Partial<KeyInfo>>();
         
-        for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (!trimmedLine) continue;
-
-            const parsedData = parseSpedLineForData(trimmedLine, participants);
+        for (const spedFileContent of spedFileContents) {
+            const normalizedContent = spedFileContent.replace(/\r\n/g, '\n');
+            const lines = normalizedContent.split('\n');
             
-            if (parsedData && parsedData.key) {
-                const key = normalizeKey(parsedData.key);
-                if (key.length === 44 && !allSpedKeyInfo.has(key)) {
-                    allSpedKeyInfo.set(key, parsedData);
+            const participants = parseAllParticipants(normalizedContent);
+            
+            for (const line of lines) {
+                const trimmedLine = line.trim();
+                if (!trimmedLine) continue;
+
+                const parsedData = parseSpedLineForData(trimmedLine, participants);
+                
+                if (parsedData && parsedData.key) {
+                    const key = normalizeKey(parsedData.key);
+                    if (key.length === 44 && !allSpedKeyInfo.has(key)) {
+                        allSpedKeyInfo.set(key, parsedData);
+                    }
                 }
             }
         }
+
+        const firstSpedFileContent = spedFileContents[0] || "";
+        const firstLine = firstSpedFileContent.split('\n')[0] || "";
+        const spedInfo = parseSpedInfo(firstLine.trim());
+
         
         const allSpedKeys: KeyInfo[] = Array.from(allSpedKeyInfo.entries()).map(([key, data]) => ({
             key,
@@ -617,7 +620,7 @@ export async function extractNfeData(files: { name: string, content: string }[])
                 const specificData: { [key: string]: string } = { 'Arquivo': file.name };
                 for (const colName in SPECIFIC_TAGS_MAP) {
                     let value = getValueByPath(jsonObj, SPECIFIC_TAGS_MAP[colName]);
-                    if (COLUMNS_TO_FORMAT_DECIMAL.includes(colName) && value && value !== 'N/A') {
+                    if (COLUMNS_to_FORMAT_DECIMAL.includes(colName) && value && value !== 'N/A') {
                         value = parseFloat(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
                     specificData[colName] = value;
@@ -759,7 +762,7 @@ export async function extractCteData(files: { name: string, content: string }[])
                         }
                     }
 
-                    if (COLUMNS_TO_FORMAT_DECIMAL.includes(colName) && value && value !== 'N/A' && typeof value === 'string') {
+                    if (COLUMNS_to_FORMAT_DECIMAL.includes(colName) && value && value !== 'N/A' && typeof value === 'string') {
                          value = parseFloat(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
                     specificData[colName] = value;
@@ -1264,8 +1267,6 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
             const sheetData = taxSheetsData[taxName];
             if (!sheetData) continue;
             
-            const relevantCols = TAX_RELEVANT_COLUMNS[taxName as keyof typeof TAX_RELEVANT_COLUMNS] || { sheet: [], xml: [] };
-            
             const workbook = XLSX.read(sheetData, { type: 'binary' });
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
             const df: any[] = XLSX.utils.sheet_to_json(firstSheet);
@@ -1275,9 +1276,17 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
                  const headers = Object.keys(df[0]);
                  nfColumnName = headers.find(h => h.toUpperCase().includes('NF'));
             }
-             if (!nfColumnName) continue;
+            if (!nfColumnName) continue;
 
-            const sheetItemsMap = new Map(df.map(item => [item[nfColumnName!], [...(sheetItemsMap.get(item[nfColumnName!]) || []), item]]));
+            const sheetItemsMap = new Map<string, any[]>();
+            df.forEach(item => {
+                const nf = item[nfColumnName!];
+                if (!sheetItemsMap.has(nf)) {
+                    sheetItemsMap.set(nf, []);
+                }
+                sheetItemsMap.get(nf)!.push(item);
+            });
+
 
             const foundInBoth: any[] = [];
             const onlyInXml: any[] = [];
@@ -1304,25 +1313,29 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
                             };
                              const xmlCfop = xmlItem['CFOP'];
                             Object.assign(combinedRow, { 'cfopXml': xmlCfop, 'descricaoCfopXml': getCfopDescription(xmlCfop) });
-                            relevantCols.xml.forEach(col => { combinedRow[`${col} XML`] = xmlItem[col] || 'N/A'; });
+                            
+                            const relevantXmlCols = TAX_RELEVANT_COLUMNS[taxName as keyof typeof TAX_RELEVANT_COLUMNS]?.xml || [];
+                            relevantXmlCols.forEach(col => { combinedRow[`${col} XML`] = xmlItem[col] || 'N/A'; });
 
                             const sheetCfop = matchingSheetItem['CFOP'];
                             Object.assign(combinedRow, { 'cfopSage': sheetCfop, 'descricaoCfopSage': getCfopDescription(sheetCfop) });
-                            relevantCols.sheet.forEach(col => { combinedRow[`${col} Sage`] = matchingSheetItem[col] || 'N/A'; });
+                            
+                            const relevantSheetCols = TAX_RELEVANT_COLUMNS[taxName as keyof typeof TAX_RELEVANT_COLUMNS]?.sheet || [];
+                            relevantSheetCols.forEach(col => { combinedRow[`${col} Sage`] = matchingSheetItem[col] || 'N/A'; });
 
                             foundInBoth.push(combinedRow);
                             processedSheetItems.add(matchingSheetItem);
                         } else {
-                            onlyInXml.push(transformRow(xmlItem, 'xml', relevantCols, nfColumnName));
+                            onlyInXml.push(transformRow(xmlItem, 'xml', taxName, nfColumnName));
                         }
                     });
                 } else {
-                     onlyInXml.push(...xmlItems.map(item => transformRow(item, 'xml', relevantCols, nfColumnName)));
+                     onlyInXml.push(...xmlItems.map(item => transformRow(item, 'xml', taxName, nfColumnName)));
                 }
             });
 
             const onlyInSheet = df.filter(item => !processedSheetItems.has(item))
-                                  .map(item => transformRow(item, 'sheet', relevantCols, nfColumnName));
+                                  .map(item => transformRow(item, 'sheet', taxName, nfColumnName));
 
             finalResults[taxName] = { foundInBoth, onlyInXml, onlyInSheet };
         }
@@ -1338,7 +1351,8 @@ export async function compareCfopData(data: { xmlItemsData: any[], taxSheetsData
     }
 }
 
-function transformRow(item: any, type: 'xml' | 'sheet', relevantCols: { sheet: string[], xml: string[] }, nfColumnName?: string) {
+function transformRow(item: any, type: 'xml' | 'sheet', taxName: string, nfColumnName?: string) {
+    const relevantCols = TAX_RELEVANT_COLUMNS[taxName as keyof typeof TAX_RELEVANT_COLUMNS] || { sheet: [], xml: [] };
     const base: any = {
         'numeroNF': item['Número da NF'] || (nfColumnName ? item[nfColumnName] : 'N/A'),
     };
@@ -1370,27 +1384,26 @@ export async function compareCfopAndAccounting(data: {
 
     try {
         const accountingMap = new Map<string, string[]>();
-        const lines = accountingFileContent.split('\n');
+        const lines = accountingFileContent.split('\n').filter(line => line.trim() !== '');
         
+        if (lines.length === 0) {
+            throw new Error("O arquivo de lote de contabilização está vazio ou em um formato não suportado.");
+        }
+
         let nfIndex: number | null = null;
         let accountIndex: number | null = null;
         
         const firstLine = lines[0] || "";
         const partsFirstLine = firstLine.split('\t');
 
-        if (partsFirstLine.length > 7 && firstLine.includes("Lançamento")) {
-            nfIndex = 1;
-            accountIndex = 7;
-        } else if (partsFirstLine.length > 6 && firstLine.includes("Histórico")) {
-            nfIndex = 6;
-            accountIndex = 4;
-        } else if (partsFirstLine.length > 7) { // Fallback to B and H
-            nfIndex = 1;
-            accountIndex = 7;
-        }
-
-        if (nfIndex === null || accountIndex === null) {
-            throw new Error("Não foi possível extrair dados de contabilização do arquivo de lote. Verifique se o formato do arquivo é suportado (coluna B para NF e H para conta, ou coluna G para histórico e E para conta).");
+        // Detect format based on headers or fallback to positions
+        if (partsFirstLine.length > 7 && partsFirstLine[1].includes("Número") && partsFirstLine[7].includes("Conta")) {
+            nfIndex = 1; // Coluna B
+            accountIndex = 7; // Coluna H
+        } else {
+             // Fallback for format without headers
+            nfIndex = 1; // Coluna B
+            accountIndex = 7; // Coluna H
         }
 
 
@@ -1399,21 +1412,12 @@ export async function compareCfopAndAccounting(data: {
             let nfNumber: string | null = null;
             let accountDescription: string | null = null;
             
-            if (parts.length > Math.max(nfIndex, accountIndex)) {
-                 if (nfIndex === 6) { // Old format logic
-                    const historyText = parts[nfIndex] || '';
-                    const match = historyText.match(/Nota\s+(\d+)/);
-                    if (match && match[1]) {
-                        nfNumber = match[1].trim();
-                        accountDescription = parts[accountIndex]?.trim() || null;
-                    }
-                } else { // New format logic
-                    nfNumber = parts[nfIndex]?.trim() || null;
-                    accountDescription = parts[accountIndex]?.trim() || null;
-                }
+            if (parts.length > Math.max(nfIndex!, accountIndex!)) {
+                nfNumber = parts[nfIndex!].trim();
+                accountDescription = parts[accountIndex!]?.trim() || null;
             }
             
-            if (nfNumber && accountDescription) {
+            if (nfNumber && /^\d+$/.test(nfNumber) && accountDescription) {
                 if (!accountingMap.has(nfNumber)) {
                     accountingMap.set(nfNumber, []);
                 }
@@ -1425,7 +1429,7 @@ export async function compareCfopAndAccounting(data: {
         });
         
         if (accountingMap.size === 0) {
-            throw new Error("Não foi possível extrair dados de contabilização do arquivo de lote. Verifique se o formato do arquivo é suportado (coluna B para NF e H para conta, ou coluna G para histórico e E para conta).");
+            throw new Error("Não foi possível extrair dados de contabilização do arquivo de lote. Verifique se o formato do arquivo é suportado (coluna B para NF e H para conta).");
         }
 
         const finalResults: CfopAccountingComparisonResult = [];
@@ -1444,7 +1448,7 @@ export async function compareCfopAndAccounting(data: {
                 descricaoCfopXml: item['descricaoCfopXml'] || 'N/A',
                 cfopSage: item['cfopSage'] || 'N/A',
                 descricaoCfopSage: item['descricaoCfopSage'] || 'N/A',
-                contabilizacao: contabilizacao,
+                axContabilizacao: contabilizacao,
             });
         }
 
