@@ -375,7 +375,7 @@ export default function Home() {
                   }
                 
                 const monthYear = getMonthYear(xmlData.nota?.['Data de Emissão']);
-                if (!monthYear || !selectedMonths.has(monthYear)) continue;
+                if (selectedMonths.size > 0 && (!monthYear || !selectedMonths.has(monthYear))) continue;
 
                 if (xmlData.nota && xmlData.nota['Status']?.includes('Cancelada')) {
                       canceledKeys.add(xmlData.nota['Chave de acesso']);
