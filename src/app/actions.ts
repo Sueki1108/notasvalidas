@@ -1416,8 +1416,8 @@ export async function compareCfopAndAccounting(data: {
             const parts = line.split('\t');
             if (parts.length < 7) continue;
 
-            const historyField = parts[5]; // Column F (index 5) = Histórico
-            const accountDescription = parts[4]; // Column E (index 4) = Descrição da Conta
+            const historyField = parts[6]; // Column G (index 6)
+            const accountDescription = parts[4]; // Column E (index 4)
 
             if (historyField && accountDescription) {
                 const nfMatch = historyField.match(/Nota\s+(\d+)/);
@@ -1477,3 +1477,4 @@ export async function compareCfopAndAccounting(data: {
     
 
     
+
