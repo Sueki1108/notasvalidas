@@ -1406,7 +1406,7 @@ export async function compareCfopAndAccounting(data: {
         const accountingMap = new Map<string, string>();
         const lines = accountingFileContent.split('\n');
         
-        const headerIndex = lines.findIndex(line => line.includes('Est.	Número	Data	Conta	Descrição	Histórico'));
+        const headerIndex = lines.findIndex(line => line.includes('Est.	Número	Data	Conta'));
         if (headerIndex === -1) {
             throw new Error("Cabeçalho da planilha de contabilização não encontrado.");
         }
@@ -1414,12 +1414,12 @@ export async function compareCfopAndAccounting(data: {
         const dataLines = lines.slice(headerIndex + 1);
 
         for (const line of dataLines) {
-            const parts = line.split('	');
-             if (parts.length < 6) continue; // Ensure there are enough parts
+            const parts = line.split('	'); // Split by tab
+             if (parts.length < 6) continue;
 
             const nfMatch = parts[5]?.match(/Nota (\d+)/); // Histórico is at index 5
             const nfNumber = nfMatch ? nfMatch[1].trim() : null;
-            const accountDescription = parts[4]?.trim(); // Descrição (da conta) is at index 4
+            const accountDescription = parts[6]?.trim(); // The second 'Descrição' is at index 6
 
             if (nfNumber && accountDescription) {
                 if (!accountingMap.has(nfNumber)) {
@@ -1468,6 +1468,7 @@ export async function compareCfopAndAccounting(data: {
       
 
     
+
 
 
 

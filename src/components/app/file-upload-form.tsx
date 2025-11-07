@@ -28,10 +28,8 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
     }
     
     const isMultiple = (fileName: string) => {
-        if (fileName.toLowerCase().includes('planilha') || fileName.toLowerCase().includes('lote') || fileName.toLowerCase().includes('sped')) {
-            return false;
-        }
-         return true;
+        // Apenas campos de XML permitem múltiplos arquivos
+        return fileName.toLowerCase().includes('xml');
     }
     
     const getFileCount = (file: File | File[] | null) => {
