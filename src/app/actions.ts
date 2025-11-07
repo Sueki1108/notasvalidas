@@ -1409,15 +1409,15 @@ export async function compareCfopAndAccounting(data: {
     const { cfopComparison, accountingFileContent } = data;
 
     try {
-        const accountingMap = new Map<string, string>();
+        const accountingMap = new Map<string, string[]>();
         const lines = accountingFileContent.split('\n');
-        
+
         for (const line of lines) {
             const parts = line.split('\t');
             if (parts.length < 7) continue;
 
-            const nfHistoryField = parts[5]; 
-            const accountDescription = parts[4]; 
+            const nfHistoryField = parts[5]; // Coluna Histórico
+            const accountDescription = parts[4]; // Coluna Descrição da Conta
 
             if (nfHistoryField && accountDescription) {
                 const nfMatch = nfHistoryField.match(/Nota\s+(\d+)/);
@@ -1425,18 +1425,21 @@ export async function compareCfopAndAccounting(data: {
 
                 if (nfNumber) {
                     if (!accountingMap.has(nfNumber)) {
-                        accountingMap.set(nfNumber, accountDescription.trim());
+                        accountingMap.set(nfNumber, []);
                     }
+                    accountingMap.get(nfNumber)!.push(accountDescription.trim());
                 }
             }
         }
-        
+
         const finalResults: CfopAccountingComparisonResult = [];
         const icmsResults = cfopComparison['Planilha ICMS']?.foundInBoth || [];
 
         for (const item of icmsResults) {
             const numeroNF = String(item['Número da NF']);
-            const contabilizacao = accountingMap.get(numeroNF) || 'Não encontrado';
+            const accounts = accountingMap.get(numeroNF);
+            const uniqueAccounts = accounts ? [...new Set(accounts)] : [];
+            const contabilizacao = uniqueAccounts.length > 0 ? uniqueAccounts.join(', ') : 'Não encontrado';
             
             finalResults.push({
                 numeroNF: numeroNF,
@@ -1470,5 +1473,7 @@ export async function compareCfopAndAccounting(data: {
     }
 }
       
+
+    
 
     
