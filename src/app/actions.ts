@@ -35,7 +35,7 @@ export type KeyCheckResult = {
     allSpedKeys: KeyInfo[];
     keysFoundInBoth: KeyInfo[];
     keysNotFoundInTxt: KeyInfo[];
-    keysInTxtNotInSheet: string[];
+    keysInTxtNotInSheet: KeyInfo[];
     duplicateKeysInSheet: string[];
     duplicateKeysInTxt: string[];
 };
@@ -1405,33 +1405,32 @@ export async function compareCfopAndAccounting(data: {
     try {
         const accountingMap = new Map<string, string>();
         const lines = accountingFileContent.split('\n');
-        
-        const headerIndex = lines.findIndex(line => line.includes('Est.	Número	Data	Conta'));
-        if (headerIndex === -1) {
-            throw new Error("Cabeçalho da planilha de contabilização não encontrado.");
-        }
 
-        const dataLines = lines.slice(headerIndex + 1);
+        // Iterate over all lines, no header check needed.
+        for (const line of lines) {
+            const parts = line.split('\t'); // Split by tab
+            
+            // Check if line has enough parts to be a data line.
+            if (parts.length < 7) continue;
 
-        for (const line of dataLines) {
-            const parts = line.split('	'); // Split by tab
-             if (parts.length < 7) continue; // Ensure there are enough columns
+            const nfHistoryField = parts[5]; // Column F (index 5) is "Histórico"
+            const accountDescription = parts[4]; // Column E (index 4) is "Descrição"
 
-            const nfMatch = parts[5]?.match(/Nota (\d+)/); // Histórico is at index 5
-            const nfNumber = nfMatch ? nfMatch[1].trim() : null;
-            const accountDescription = parts[6]?.trim(); // The second 'Descrição' is at index 6
+            if (nfHistoryField && accountDescription) {
+                const nfMatch = nfHistoryField.match(/Nota (\d+)/);
+                const nfNumber = nfMatch ? nfMatch[1].trim() : null;
 
-            if (nfNumber && accountDescription) {
-                if (!accountingMap.has(nfNumber)) {
-                    accountingMap.set(nfNumber, accountDescription);
+                if (nfNumber) {
+                     // Always take the first description found for a given NF number
+                    if (!accountingMap.has(nfNumber)) {
+                        accountingMap.set(nfNumber, accountDescription.trim());
+                    }
                 }
             }
         }
         
         const finalResults: CfopAccountingComparisonResult = [];
-        
         const icmsResults = cfopComparison['Planilha ICMS']?.foundInBoth || [];
-
         const processedNFs = new Set<string>();
 
         for (const item of icmsResults) {
@@ -1455,6 +1454,15 @@ export async function compareCfopAndAccounting(data: {
             processedNFs.add(numeroNF);
         }
 
+        if (finalResults.length === 0 && icmsResults.length > 0) {
+             throw new Error("Nenhuma correspondência encontrada entre as notas fiscais e o lote de contabilização. Verifique se os números das notas existem em ambos os arquivos.");
+        }
+        
+        if (icmsResults.length === 0) {
+             throw new Error("Não há itens conciliados na aba 'Planilha ICMS' para comparar. Execute a 'Comparação XML X Sage' primeiro.");
+        }
+
+
         return { results: finalResults };
 
     } catch (error: any) {
@@ -1468,27 +1476,3 @@ export async function compareCfopAndAccounting(data: {
       
 
     
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
