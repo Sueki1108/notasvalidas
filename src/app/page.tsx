@@ -516,9 +516,8 @@ export default function Home() {
         setKeyCheckResult(null);
         
         try {
-            // Only using the first SPED file for now.
-            const spedFile = spedFiles[0];
-            const spedFileContent = await spedFile.text();
+            const spedContents = await Promise.all(spedFiles.map(file => file.text()));
+            const spedFileContent = spedContents.join('\n');
             
             const validationResult = await validateWithSped(results, spedFileContent);
             

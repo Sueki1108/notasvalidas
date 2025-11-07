@@ -1,3 +1,4 @@
+// src/components/app/file-upload-form.tsx
 "use client"
 
 import type { ChangeEvent } from "react";
@@ -30,8 +31,9 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
     }
     
     const isMultiple = (fileName: string) => {
-        // Apenas campos de XML permitem múltiplos arquivos
-        return fileName.toLowerCase().includes('xml');
+        const lowerCaseName = fileName.toLowerCase();
+        // Permitir múltiplos arquivos para XML e SPED
+        return lowerCaseName.includes('xml') || lowerCaseName.includes('sped txt');
     }
     
     const getFileCount = (file: File | File[] | null) => {
