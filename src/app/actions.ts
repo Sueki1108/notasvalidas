@@ -1411,28 +1411,42 @@ export async function compareCfopAndAccounting(data: {
     try {
         const accountingMap = new Map<string, string[]>();
         const lines = accountingFileContent.split('\n');
+        
+        // This regex is designed to be flexible for both file formats.
+        // It looks for a sequence of digits that likely represent the NF number.
+        const nfRegex = /(?:Nota\s*)?(\d+)/;
 
-        for (const line of lines) {
+        lines.forEach(line => {
             const parts = line.split('\t');
-            if (parts.length < 7) continue;
+            let nfNumber: string | null = null;
+            let accountDescription: string | null = null;
 
-            const historyField = parts[6]; // Column G (index 6) is history
-            const accountDescription = parts[4]; // Column E (index 4) is account description
+            // Handle new format (NF in column B, Account in column H)
+            if (parts.length >= 8) {
+                nfNumber = parts[1] ? parts[1].trim() : null;
+                accountDescription = parts[7] ? parts[7].trim() : null;
+            } 
+            // Handle old format (NF in column G, Account in column E)
+            else if (parts.length >= 7) {
+                 const historyField = parts[6] ? parts[6].trim() : null;
+                 const nfMatch = historyField ? historyField.match(nfRegex) : null;
+                 nfNumber = nfMatch ? nfMatch[1] : null;
+                 accountDescription = parts[4] ? parts[4].trim() : null;
+            }
 
-            if (historyField && accountDescription) {
-                const nfMatch = historyField.match(/\b\d+\b/); // Find first standalone number
-                if (nfMatch && nfMatch[0]) {
-                    const nfNumber = nfMatch[0];
-                    if (!accountingMap.has(nfNumber)) {
-                        accountingMap.set(nfNumber, []);
-                    }
-                    // Prevent duplicate accounts for the same NF
-                    const existingAccounts = accountingMap.get(nfNumber)!;
-                    if (!existingAccounts.includes(accountDescription.trim())) {
-                        existingAccounts.push(accountDescription.trim());
-                    }
+            if (nfNumber && accountDescription && /^\d+$/.test(nfNumber) && accountDescription) {
+                if (!accountingMap.has(nfNumber)) {
+                    accountingMap.set(nfNumber, []);
+                }
+                const existingAccounts = accountingMap.get(nfNumber)!;
+                if (!existingAccounts.includes(accountDescription)) {
+                    existingAccounts.push(accountDescription);
                 }
             }
+        });
+        
+        if (accountingMap.size === 0) {
+            throw new Error("Não foi possível extrair dados de contabilização do arquivo de lote. Verifique se o formato do arquivo é suportado (coluna B para NF e H para conta, ou coluna G para histórico e E para conta).");
         }
 
         const finalResults: CfopAccountingComparisonResult = [];
@@ -1479,6 +1493,7 @@ export async function compareCfopAndAccounting(data: {
     
 
     
+
 
 
 
