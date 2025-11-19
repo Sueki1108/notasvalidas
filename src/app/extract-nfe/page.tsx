@@ -125,7 +125,7 @@ export default function ExtractNfePage() {
                                 <DropdownMenuItem asChild><Link href="/juntar-abas" className="flex items-center gap-2 w-full"><Layers />Juntar Abas</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/solver" className="flex items-center gap-2 w-full"><Wand2 />Solver</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/unify-folders" className="flex items-center gap-2 w-full"><FolderSync />Unificar Pastas</Link></DropdownMenuItem>
-                                <DropdownMenuItem asChild><Link href="/extract-nfe" className="flex items-center gap-2 w-full"><Search />Extrair NF-e</Link></DropdownMenuItem>
+                                <DropdownMenuItem asChild><Link href="/extract-nfe" className="flex items-center gap-2 w-full"><Search />Extrair Itens (NF-e)</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/extract-cte" className="flex items-center gap-2 w-full"><Search />Extrair CT-e</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/returns" className="flex items-center gap-2 w-full"><FileText />Devoluções</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/alterar-xml" className="flex items-center gap-2 w-full"><Replace />Alterar XML</Link></DropdownMenuItem>
@@ -147,8 +147,8 @@ export default function ExtractNfePage() {
                             <div className="flex items-center gap-3">
                                 <Search className="h-8 w-8 text-primary" />
                                 <div>
-                                    <CardTitle className="font-headline text-2xl">Extrair Dados de NF-e</CardTitle>
-                                    <CardDescription>Carregue arquivos XML para extrair dados completos e específicos em uma planilha Excel.</CardDescription>
+                                    <CardTitle className="font-headline text-2xl">Extrair Itens da NF-e</CardTitle>
+                                    <CardDescription>Carregue arquivos XML para extrair dados em uma planilha, incluindo uma aba detalhada por item.</CardDescription>
                                 </div>
                             </div>
                         </CardHeader>

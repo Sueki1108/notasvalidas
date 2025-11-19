@@ -729,7 +729,7 @@ export default function Home() {
                                 <DropdownMenuItem asChild><Link href="/juntar-abas" className="flex items-center gap-2 w-full"><Layers />Juntar Abas</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/solver" className="flex items-center gap-2 w-full"><Wand2 />Solver</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/unify-folders" className="flex items-center gap-2 w-full"><FolderSync />Unificar Pastas</Link></DropdownMenuItem>
-                                <DropdownMenuItem asChild><Link href="/extract-nfe" className="flex items-center gap-2 w-full"><Search />Extrair NF-e</Link></DropdownMenuItem>
+                                <DropdownMenuItem asChild><Link href="/extract-nfe" className="flex items-center gap-2 w-full"><Search />Extrair Itens (NF-e)</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/extract-cte" className="flex items-center gap-2 w-full"><Search />Extrair CT-e</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/returns" className="flex items-center gap-2 w-full"><FileText />Devoluções</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/alterar-xml" className="flex items-center gap-2 w-full"><Replace />Alterar XML</Link></DropdownMenuItem>
@@ -936,7 +936,7 @@ export default function Home() {
                                                         <BookCheck className="h-8 w-8 text-primary" />
                                                         <div>
                                                             <CardTitle className="font-headline text-xl">Comparar CFOP e Contabilização</CardTitle>
-                                                            <CardDescription>Carregue o Lote de Contabilização para cruzar com os dados de CFOP. Requer que a "Comparação XML x Sage" seja executada primeiro na página de ferramentas.</CardDescription>
+                                                            <CardDescription>Carregue o Lote de Contabilização para cruzar com os dados de CFOP. Requer que a "Comparação XML X Sage" seja executada primeiro na página de ferramentas.</CardDescription>
                                                         </div>
                                                     </div>
                                                 </CardHeader>
