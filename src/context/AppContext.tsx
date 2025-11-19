@@ -3,9 +3,12 @@
 
 import React, { createContext, useState, ReactNode } from 'react';
 import type { KeyCheckResult, SpedInfo, CfopComparisonResult, CfopAccountingComparisonResult } from "@/app/actions";
-import { FileList } from '@/components/app/file-upload-form';
 
 type DataFrames = { [key: string]: any[] };
+
+export type FileList = {
+    [key: string]: File[] | File | null;
+}
 
 export type TaxFileList = {
     "Planilha ICMS": File | null;
@@ -26,8 +29,6 @@ interface AppContextType {
     setFiles: React.Dispatch<React.SetStateAction<FileList>>;
     spedFiles: File[] | null;
     setSpedFiles: React.Dispatch<React.SetStateAction<File[] | null>>;
-    taxFiles: TaxFileList;
-    setTaxFiles: React.Dispatch<React.SetStateAction<TaxFileList>>;
     accountingFile: File | null;
     setAccountingFile: React.Dispatch<React.SetStateAction<File | null>>;
     results: DataFrames | null;
@@ -36,8 +37,6 @@ interface AppContextType {
     setKeyCheckResult: React.Dispatch<React.SetStateAction<KeyCheckResult | null>>;
     spedInfo: SpedInfo | null;
     setSpedInfo: React.Dispatch<React.SetStateAction<SpedInfo | null>>;
-    cfopComparisonResult: CfopComparisonResult | null;
-    setCfopComparisonResult: React.Dispatch<React.SetStateAction<CfopComparisonResult | null>>;
     cfopAccountingResult: CfopAccountingComparisonResult | null;
     setCfopAccountingResult: React.Dispatch<React.SetStateAction<CfopAccountingComparisonResult | null>>;
     cteAnalysisResult: CteAnalysisResult;
@@ -60,21 +59,12 @@ const initialFilesState: FileList = {
     "XMLs de Desacordo (CTe)": null,
 };
 
-const initialTaxFilesState: TaxFileList = {
-    "Planilha ICMS": null,
-    "Planilha ICMS ST": null,
-    "Planilha PIS": null,
-    "Planilha COFINS": null,
-    "Planilha IPI": null,
-}
 
 export const AppContext = createContext<AppContextType>({
     files: initialFilesState,
     setFiles: () => {},
     spedFiles: null,
     setSpedFiles: () => {},
-    taxFiles: initialTaxFilesState,
-    setTaxFiles: () => {},
     accountingFile: null,
     setAccountingFile: () => {},
     results: null,
@@ -83,8 +73,6 @@ export const AppContext = createContext<AppContextType>({
     setKeyCheckResult: () => {},
     spedInfo: null,
     setSpedInfo: () => {},
-    cfopComparisonResult: null,
-    setCfopComparisonResult: () => {},
     cfopAccountingResult: null,
     setCfopAccountingResult: () => {},
     cteAnalysisResult: null,
@@ -101,12 +89,10 @@ export const AppContext = createContext<AppContextType>({
 export const AppProvider = ({ children }: { children: ReactNode }) => {
     const [files, setFiles] = useState<FileList>(initialFilesState);
     const [spedFiles, setSpedFiles] = useState<File[] | null>(null);
-    const [taxFiles, setTaxFiles] = useState<TaxFileList>(initialTaxFilesState);
     const [accountingFile, setAccountingFile] = useState<File | null>(null);
     const [results, setResults] = useState<DataFrames | null>(null);
     const [keyCheckResults, setKeyCheckResult] = useState<KeyCheckResult | null>(null);
     const [spedInfo, setSpedInfo] = useState<SpedInfo | null>(null);
-    const [cfopComparisonResult, setCfopComparisonResult] = useState<CfopComparisonResult | null>(null);
     const [cfopAccountingResult, setCfopAccountingResult] = useState<CfopAccountingComparisonResult | null>(null);
     const [cteAnalysisResult, setCteAnalysisResult] = useState<CteAnalysisResult>(null);
     const [activeTab, setActiveTab] = useState('process');
@@ -116,12 +102,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const clearAllData = () => {
         setFiles(initialFilesState);
         setSpedFiles(null);
-        setTaxFiles(initialTaxFilesState);
         setAccountingFile(null);
         setResults(null);
         setKeyCheckResult(null);
         setSpedInfo(null);
-        setCfopComparisonResult(null);
         setCfopAccountingResult(null);
         setCteAnalysisResult(null);
         setActiveTab("process");
@@ -136,12 +120,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         <AppContext.Provider value={{ 
             files, setFiles, 
             spedFiles, setSpedFiles, 
-            taxFiles, setTaxFiles,
             accountingFile, setAccountingFile,
             results, setResults, 
             keyCheckResults, setKeyCheckResult,
             spedInfo, setSpedInfo,
-            cfopComparisonResult, setCfopComparisonResult,
             cfopAccountingResult, setCfopAccountingResult,
             cteAnalysisResult, setCteAnalysisResult,
             activeTab, setActiveTab,

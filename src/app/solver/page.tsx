@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { Wand2, Calculator, Check, X, Loader2, Trash2, ChevronDown, Group, FileText, FolderSync, Search, Replace, Layers } from "lucide-react";
+import { Wand2, Calculator, Check, X, Loader2, Trash2, ChevronDown, Group, FileText, FolderSync, Search, Replace, Layers, GitCompare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -101,6 +101,7 @@ export default function SolverPage() {
                                 <DropdownMenuItem asChild><Link href="/returns" className="flex items-center gap-2 w-full"><FileText />Devoluções</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/alterar-xml" className="flex items-center gap-2 w-full"><Replace />Alterar XML</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/separar-xml" className="flex items-center gap-2 w-full"><FileText />Separar XML</Link></DropdownMenuItem>
+                                <DropdownMenuItem asChild><Link href="/compare-xml-sage" className="flex items-center gap-2 w-full"><GitCompare />Comparação XML x Sage</Link></DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                         <Button variant="ghost" asChild><Link href="/history">Histórico</Link></Button>
