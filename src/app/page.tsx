@@ -26,7 +26,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { FileUploadForm } from "@/components/app/file-upload-form";
 import { ResultsDisplay } from "@/components/app/results-display";
 import { KeyResultsDisplay } from "@/components/app/key-results-display";
-import { validateWithSped, compareCfopAndAccounting, analyzeCteData, type KeyCheckResult, type SpedInfo, type CfopComparisonResult, type CfopAccountingComparisonResult } from "@/app/actions";
+import { validateWithSped, analyzeCteData, type KeyCheckResult, type SpedInfo } from "@/app/actions";
 import { processDataFrames } from "@/lib/excel-processor";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -249,16 +249,12 @@ export default function Home() {
       setFiles,
       spedFiles,
       setSpedFiles,
-      accountingFile,
-      setAccountingFile,
       results,
       setResults,
       keyCheckResults,
       setKeyCheckResult,
       spedInfo,
       setSpedInfo,
-      cfopAccountingResult,
-      setCfopAccountingResult,
       cteAnalysisResult,
       setCteAnalysisResult,
       activeTab,
@@ -271,7 +267,6 @@ export default function Home() {
 
     const [processing, setProcessing] = useState(false);
     const [validating, setValidating] = useState(false);
-    const [comparingCfopAccounting, setComparingCfopAccounting] = useState(false);
     const [analyzingCte, setAnalyzingCte] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isMonthModalOpen, setIsMonthModalOpen] = useState(false);
@@ -288,8 +283,6 @@ export default function Home() {
         if (selectedFiles && selectedFiles.length > 0) {
             if (fileName === 'SPED TXT') {
                 setSpedFiles(prev => [...(prev || []), ...Array.from(selectedFiles)]);
-            } else if (fileName === 'Lote de Contabilização') {
-                setAccountingFile(selectedFiles[0]);
             }
             else {
                  setFiles(prev => ({
@@ -306,10 +299,6 @@ export default function Home() {
             setSpedInfo(null);
             setKeyCheckResult(null);
             const input = document.querySelector(`input[name="SPED TXT"]`) as HTMLInputElement;
-            if (input) input.value = "";
-        } else if (fileName === 'Lote de Contabilização') {
-            setAccountingFile(null);
-            const input = document.querySelector(`input[name="Lote de Contabilização"]`) as HTMLInputElement;
             if (input) input.value = "";
         } else {
             setFiles(prev => ({...prev, [fileName]: null}));
@@ -339,7 +328,7 @@ export default function Home() {
 
             const fileReadPromises = Object.entries(files).flatMap(([category, fileList]) => {
                 if (!fileList) return [];
-                return fileList.map(file => ({ file, category }));
+                return (fileList as File[]).map(file => ({ file, category }));
             }).map(async ({ file, category }) => {
                 const content = await file.text();
                 const type = category.includes('CTe') ? 'CTe' : 'NFe';
@@ -456,8 +445,8 @@ export default function Home() {
 
         const fileProcessingPromises = Object.keys(files).map(category => {
             const fileList = files[category];
-            if(fileList && fileList.length > 0 && category.includes('XML')) {
-                return checkFileDates(fileList, category);
+            if(fileList && (fileList as File[]).length > 0 && category.includes('XML')) {
+                return checkFileDates(fileList as File[], category);
             }
             return Promise.resolve();
         });
@@ -534,109 +523,6 @@ export default function Home() {
         }
     };
     
-    const handleCompareCfopAccounting = async () => {
-        // This function requires a valid CFOP comparison result which is now done in a separate page.
-        // Let's check for the results from the main processing first.
-        const cfopComparisonResult: CfopComparisonResult | null = null; // This would need to be passed from the new page or re-calculated. For now, this is a limitation.
-
-        if (!cfopComparisonResult) {
-            toast({ variant: "destructive", title: "Dados Incompletos", description: "Execute a 'Comparação XML X Sage' na página de ferramentas primeiro." });
-            return;
-        }
-        if (!accountingFile) {
-            toast({ variant: "destructive", title: "Arquivo Ausente", description: "Carregue o arquivo 'Lote de Contabilização'." });
-            return;
-        }
-
-        setComparingCfopAccounting(true);
-        setError(null);
-        setCfopAccountingResult(null);
-
-        try {
-            const fileContent = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (event) => event.target?.result ? resolve(event.target.result as string) : reject(new Error("Falha ao ler o arquivo."));
-                reader.onerror = () => reject(new Error("Erro ao ler o arquivo."));
-                reader.readAsText(accountingFile, 'utf-8');
-            });
-            
-            const result = await compareCfopAndAccounting({
-                cfopComparison: cfopComparisonResult,
-                accountingFileContent: fileContent,
-            });
-
-            if (result.error) throw new Error(result.error);
-
-            setCfopAccountingResult(result.results);
-            toast({ title: "Comparação Concluída", description: "CFOPs e Contabilização foram cruzados com sucesso." });
-        } catch(err: any) {
-             setError(err.message || "Ocorreu um erro desconhecido na comparação contábil.");
-            toast({ variant: "destructive", title: "Erro na Comparação Contábil", description: err.message });
-        } finally {
-            setComparingCfopAccounting(false);
-        }
-    };
-
-    const handleDownloadCfopAccounting = () => {
-        if (!cfopAccountingResult || cfopAccountingResult.length === 0) {
-            toast({ variant: "destructive", title: "Sem dados", description: "Não há dados para baixar." });
-            return;
-        }
-        const worksheet = XLSX.utils.json_to_sheet(cfopAccountingResult);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "CFOP_x_Contabilizacao");
-        XLSX.writeFile(workbook, "relatorio_cfop_contabilizacao.ods", { bookType: "ods" });
-        toast({ title: "Download Iniciado", description: "O relatório foi gerado." });
-    };
-
-     const handleAnalyzeCte = async () => {
-        const cteFiles = files['XMLs de Entrada (CTe)'];
-        const nfeSaidaFiles = files['XMLs de Saída'];
-        
-        if (!cteFiles || cteFiles.length === 0) {
-            toast({ variant: "destructive", title: "Arquivos Ausentes", description: "Carregue os 'XMLs de Entrada (CTe)' na Etapa 1." });
-            return;
-        }
-        if (!nfeSaidaFiles || nfeSaidaFiles.length === 0) {
-            toast({ variant: "destructive", title: "Arquivos Ausentes", description: "Carregue os 'XMLs de Saída' na Etapa 1." });
-            return;
-        }
-         if (!spedInfo || !spedInfo.cnpj) {
-            toast({ variant: "destructive", title: "CNPJ da Empresa Ausente", description: "Processe um arquivo SPED na Etapa 2 para identificar o CNPJ da empresa." });
-            return;
-        }
-
-
-        setAnalyzingCte(true);
-        setError(null);
-        setCteAnalysisResult(null);
-
-        try {
-            const fileContents = async (fileList: File[]) => {
-                return Promise.all(
-                    fileList.map(file => file.text().then(content => ({ name: file.name, content })))
-                );
-            };
-            
-            const result = await analyzeCteData({
-                cteFiles: await fileContents(cteFiles),
-                nfeSaidaFiles: await fileContents(nfeSaidaFiles),
-                companyCnpj: spedInfo.cnpj,
-            });
-
-            if (result.error) throw new Error(result.error);
-
-            setCteAnalysisResult(result);
-            toast({ title: "Análise de CT-e Concluída", description: "CT-es foram classificados e cruzados com as NF-es de origem." });
-
-        } catch (err: any) {
-            setError(err.message || "Ocorreu um erro na análise de CT-e.");
-            toast({ variant: "destructive", title: "Erro na Análise de CT-e", description: err.message });
-        } finally {
-            setAnalyzingCte(false);
-        }
-    };
-
 
     const handleDownload = () => {
         if (!results) return;
@@ -702,6 +588,55 @@ export default function Home() {
         const competence = `${month}/${year}`;
         return { cnpj, companyName, competence };
     };
+
+     const handleAnalyzeCte = async () => {
+        const cteFiles = files['XMLs de Entrada (CTe)'];
+        const nfeSaidaFiles = files['XMLs de Saída'];
+        
+        if (!cteFiles || (cteFiles as File[]).length === 0) {
+            toast({ variant: "destructive", title: "Arquivos Ausentes", description: "Carregue os 'XMLs de Entrada (CTe)' na Etapa 1." });
+            return;
+        }
+        if (!nfeSaidaFiles || (nfeSaidaFiles as File[]).length === 0) {
+            toast({ variant: "destructive", title: "Arquivos Ausentes", description: "Carregue os 'XMLs de Saída' na Etapa 1." });
+            return;
+        }
+         if (!spedInfo || !spedInfo.cnpj) {
+            toast({ variant: "destructive", title: "CNPJ da Empresa Ausente", description: "Processe um arquivo SPED na Etapa 2 para identificar o CNPJ da empresa." });
+            return;
+        }
+
+
+        setAnalyzingCte(true);
+        setError(null);
+        setCteAnalysisResult(null);
+
+        try {
+            const fileContents = async (fileList: File[]) => {
+                return Promise.all(
+                    fileList.map(file => file.text().then(content => ({ name: file.name, content })))
+                );
+            };
+            
+            const result = await analyzeCteData({
+                cteFiles: await fileContents(cteFiles as File[]),
+                nfeSaidaFiles: await fileContents(nfeSaidaFiles as File[]),
+                companyCnpj: spedInfo.cnpj,
+            });
+
+            if (result.error) throw new Error(result.error);
+
+            setCteAnalysisResult(result);
+            toast({ title: "Análise de CT-e Concluída", description: "CT-es foram classificados e cruzados com as NF-es de origem." });
+
+        } catch (err: any) {
+            setError(err.message || "Ocorreu um erro na análise de CT-e.");
+            toast({ variant: "destructive", title: "Erro na Análise de CT-e", description: err.message });
+        } finally {
+            setAnalyzingCte(false);
+        }
+    };
+
 
     return (
         <div className="min-h-screen bg-background text-foreground">
@@ -925,42 +860,9 @@ export default function Home() {
                                 </CardHeader>
                                 <CardContent>
                                      <Tabs defaultValue="compare-cfop-accounting">
-                                        <TabsList className="grid w-full grid-cols-2">
-                                            <TabsTrigger value="compare-cfop-accounting">CFOP x Contabilização</TabsTrigger>
+                                        <TabsList className="grid w-full grid-cols-1">
                                             <TabsTrigger value="cte-analysis">Análise de CT-e</TabsTrigger>
                                         </TabsList>
-                                        <TabsContent value="compare-cfop-accounting" className="mt-4">
-                                            <Card>
-                                                <CardHeader>
-                                                     <div className="flex items-center gap-3">
-                                                        <BookCheck className="h-8 w-8 text-primary" />
-                                                        <div>
-                                                            <CardTitle className="font-headline text-xl">Comparar CFOP e Contabilização</CardTitle>
-                                                            <CardDescription>Carregue o Lote de Contabilização para cruzar com os dados de CFOP. Requer que a "Comparação XML X Sage" seja executada primeiro na página de ferramentas.</CardDescription>
-                                                        </div>
-                                                    </div>
-                                                </CardHeader>
-                                                 <CardContent className="space-y-6">
-                                                    <FileUploadForm
-                                                        requiredFiles={["Lote de Contabilização"]}
-                                                        files={{ "Lote de Contabilização": accountingFile }}
-                                                        onFileChange={handleFileChange}
-                                                        onClearFile={handleClearFile}
-                                                    />
-                                                    <Button onClick={handleCompareCfopAccounting} disabled={comparingCfopAccounting || !accountingFile} className="w-full">
-                                                        {comparingCfopAccounting ? "Comparando..." : "Gerar Relatório CFOP x Contabilização"}
-                                                    </Button>
-                                                     {cfopAccountingResult && cfopAccountingResult.length > 0 && (
-                                                        <>
-                                                            <DataTable columns={getColumns(cfopAccountingResult)} data={cfopAccountingResult} />
-                                                            <Button onClick={handleDownloadCfopAccounting} className="w-full">
-                                                                <DownloadIcon className="mr-2" /> Baixar Relatório
-                                                            </Button>
-                                                        </>
-                                                    )}
-                                                </CardContent>
-                                            </Card>
-                                        </TabsContent>
                                          <TabsContent value="cte-analysis" className="mt-4">
                                             <Card>
                                                 <CardHeader>
