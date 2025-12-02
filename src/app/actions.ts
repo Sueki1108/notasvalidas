@@ -822,7 +822,7 @@ export async function extractCteData(files: { name: string, content: string }[])
         const buffer = XLSX.write(wb, { bookType: 'ods', type: 'array' });
 
         let binary = '';
-        const bytes = new Uint8Array(buffer);
+        const bytes = new Uint8Array(outputBuffer);
         for (let i = 0; i < bytes.byteLength; i++) {
             binary += String.fromCharCode(bytes[i]);
         }
@@ -846,19 +846,21 @@ export async function analyzeCteData(data: { cteFiles: { name: string, content: 
 
         // 1. Create a map of NF-e Saída for quick lookup
         const nfeSaidaMap = new Map<string, { cfop: string }>();
-        for (const file of nfeSaidaFiles) {
-            try {
-                const jsonObj = parser.parse(file.content);
-                const chaveNFe = jsonObj.nfeProc?.protNFe?.infProt?.chNFe;
-                const infNFe = jsonObj.nfeProc?.NFe?.infNFe;
-                if (!infNFe || !chaveNFe) continue;
+        if (nfeSaidaFiles) {
+            for (const file of nfeSaidaFiles) {
+                try {
+                    const jsonObj = parser.parse(file.content);
+                    const chaveNFe = jsonObj.nfeProc?.protNFe?.infProt?.chNFe;
+                    const infNFe = jsonObj.nfeProc?.NFe?.infNFe;
+                    if (!infNFe || !chaveNFe) continue;
 
-                const firstItemCfop = infNFe.det?.[0]?.prod?.CFOP || infNFe.det?.prod?.CFOP || 'N/A';
-                
-                nfeSaidaMap.set(chaveNFe, { cfop: firstItemCfop });
-                
-            } catch (e) {
-                console.warn(`Could not parse NF-e file ${file.name}, skipping.`, e);
+                    const firstItemCfop = infNFe.det?.[0]?.prod?.CFOP || infNFe.det?.prod?.CFOP || 'N/A';
+                    
+                    nfeSaidaMap.set(chaveNFe, { cfop: firstItemCfop });
+                    
+                } catch (e) {
+                    console.warn(`Could not parse NF-e file ${file.name}, skipping.`, e);
+                }
             }
         }
 
@@ -893,7 +895,7 @@ export async function analyzeCteData(data: { cteFiles: { name: string, content: 
 
             // 3. Cross-reference and enrich
             let cfopOrigem = 'N/A';
-            if (chavesNfe.length > 0) {
+            if (chavesNfe.length > 0 && nfeSaidaMap.size > 0) {
                 const nfeData = nfeSaidaMap.get(chavesNfe[0]); // Check first referenced key
                 if (nfeData) {
                     cfopOrigem = nfeData.cfop;
@@ -1469,6 +1471,7 @@ export async function compareCfopAndAccounting(data: {
     
 
     
+
 
 
 

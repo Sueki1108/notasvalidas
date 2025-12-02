@@ -590,22 +590,17 @@ export default function Home() {
     };
 
      const handleAnalyzeCte = async () => {
-        const cteFiles = files['CT-e (Remetente)'] as File[];
-        const nfeSaidaFiles = files['XMLs de Saída'] as File[];
+        const cteFiles = (files['CT-e (Remetente)'] || []) as File[];
+        const nfeSaidaFiles = (files['XMLs de Saída'] || []) as File[];
         
         if (!cteFiles || cteFiles.length === 0) {
             toast({ variant: "destructive", title: "Arquivos Ausentes", description: "Carregue os 'CT-e (Remetente)' na Etapa 1." });
-            return;
-        }
-        if (!nfeSaidaFiles || nfeSaidaFiles.length === 0) {
-            toast({ variant: "destructive", title: "Arquivos Ausentes", description: "Carregue os 'XMLs de Saída' na Etapa 1." });
             return;
         }
          if (!spedInfo || !spedInfo.cnpj) {
             toast({ variant: "destructive", title: "CNPJ da Empresa Ausente", description: "Processe um arquivo SPED na Etapa 2 para identificar o CNPJ da empresa." });
             return;
         }
-
 
         setAnalyzingCte(true);
         setError(null);
@@ -875,7 +870,7 @@ export default function Home() {
                                                     </div>
                                                 </CardHeader>
                                                  <CardContent className="space-y-6">
-                                                    <Button onClick={handleAnalyzeCte} disabled={analyzingCte || !(files['CT-e (Remetente)'] && files['XMLs de Saída'])} className="w-full">
+                                                    <Button onClick={handleAnalyzeCte} disabled={analyzingCte || !(files['CT-e (Remetente)'])} className="w-full">
                                                         {analyzingCte ? "Analisando..." : "Analisar CT-es"}
                                                     </Button>
                                                     {cteAnalysisResult && (
