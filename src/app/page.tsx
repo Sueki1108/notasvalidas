@@ -274,7 +274,7 @@ export default function Home() {
     const { toast } = useToast();
     
 
-    const primaryXmlFiles = ["XMLs de Entrada (NFe)", "XMLs de Entrada (CTe)", "XMLs de Saída"];
+    const primaryXmlFiles = ["XMLs de Entrada (NFe)", "CT-e (Remetente)", "CT-e (Destinatário)", "XMLs de Saída"];
     const manifestationXmlFiles = ["XMLs de Operação Não Realizada", "XMLs de Desconhecimento do Destinatário", "XMLs de Desacordo (CTe)"];
     
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -331,8 +331,8 @@ export default function Home() {
                 return (fileList as File[]).map(file => ({ file, category }));
             }).map(async ({ file, category }) => {
                 const content = await file.text();
-                const type = category.includes('CTe') ? 'CTe' : 'NFe';
-                const uploadSource = category.includes('Saída') ? 'saida' : (category.includes('Entrada') ? 'entrada' : 'exception');
+                const type = category.includes('CT-e') ? 'CTe' : 'NFe';
+                const uploadSource = category.includes('Saída') ? 'saida' : (category.includes('Entrada') || category.includes('Remetente') || category.includes('Destinatário') ? 'entrada' : 'exception');
                 return type === 'NFe' ? extractNfeDataFromXml(content, uploadSource) : extractCteDataFromXml(content, uploadSource);
             });
             
@@ -423,7 +423,7 @@ export default function Home() {
         };
 
         const checkFileDates = async (fileList: File[], category: string) => {
-            const type = category.includes('CTe') ? 'CTe' : 'NFe';
+            const type = category.includes('CT-e') ? 'CTe' : 'NFe';
             
             const fileReadPromises = fileList.map(file => file.text());
             const fileContents = await Promise.all(fileReadPromises);
@@ -590,14 +590,14 @@ export default function Home() {
     };
 
      const handleAnalyzeCte = async () => {
-        const cteFiles = files['XMLs de Entrada (CTe)'];
-        const nfeSaidaFiles = files['XMLs de Saída'];
+        const cteFiles = files['CT-e (Remetente)'] as File[];
+        const nfeSaidaFiles = files['XMLs de Saída'] as File[];
         
-        if (!cteFiles || (cteFiles as File[]).length === 0) {
-            toast({ variant: "destructive", title: "Arquivos Ausentes", description: "Carregue os 'XMLs de Entrada (CTe)' na Etapa 1." });
+        if (!cteFiles || cteFiles.length === 0) {
+            toast({ variant: "destructive", title: "Arquivos Ausentes", description: "Carregue os 'CT-e (Remetente)' na Etapa 1." });
             return;
         }
-        if (!nfeSaidaFiles || (nfeSaidaFiles as File[]).length === 0) {
+        if (!nfeSaidaFiles || nfeSaidaFiles.length === 0) {
             toast({ variant: "destructive", title: "Arquivos Ausentes", description: "Carregue os 'XMLs de Saída' na Etapa 1." });
             return;
         }
@@ -619,8 +619,8 @@ export default function Home() {
             };
             
             const result = await analyzeCteData({
-                cteFiles: await fileContents(cteFiles as File[]),
-                nfeSaidaFiles: await fileContents(nfeSaidaFiles as File[]),
+                cteFiles: await fileContents(cteFiles),
+                nfeSaidaFiles: await fileContents(nfeSaidaFiles),
                 companyCnpj: spedInfo.cnpj,
             });
 
@@ -875,7 +875,7 @@ export default function Home() {
                                                     </div>
                                                 </CardHeader>
                                                  <CardContent className="space-y-6">
-                                                    <Button onClick={handleAnalyzeCte} disabled={analyzingCte || !(files['XMLs de Entrada (CTe)'] && files['XMLs de Saída'])} className="w-full">
+                                                    <Button onClick={handleAnalyzeCte} disabled={analyzingCte || !(files['CT-e (Remetente)'] && files['XMLs de Saída'])} className="w-full">
                                                         {analyzingCte ? "Analisando..." : "Analisar CT-es"}
                                                     </Button>
                                                     {cteAnalysisResult && (

@@ -169,7 +169,7 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
         
         if (!key || key.length !== 44) return null;
         
-        const directionValue = parts[2];
+        const directionValue = parts[2]; // 0 = Saída, 1 = Entrada for D100
         direction = directionValue === '0' ? 'Saída' : 'Entrada';
         docType = 'CTe';
         value = parseFloat(parts[16] ? parts[16].replace(',', '.') : '0'); 
@@ -1469,6 +1469,7 @@ export async function compareCfopAndAccounting(data: {
     
 
     
+
 
 
 

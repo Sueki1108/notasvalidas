@@ -40,7 +40,8 @@ interface AppContextType {
 
 const initialFilesState: FileList = {
     "XMLs de Entrada (NFe)": null,
-    "XMLs de Entrada (CTe)": null,
+    "CT-e (Remetente)": null,
+    "CT-e (Destinatário)": null,
     "XMLs de Saída": null,
     "XMLs de Operação Não Realizada": null,
     "XMLs de Desconhecimento do Destinatário": null,
