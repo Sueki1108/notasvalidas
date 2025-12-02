@@ -445,7 +445,7 @@ export default function Home() {
 
         const fileProcessingPromises = Object.keys(files).map(category => {
             const fileList = files[category];
-            if(fileList && (fileList as File[]).length > 0 && category.includes('XML')) {
+            if(fileList && (fileList as File[]).length > 0 && (category.includes('XML') || category.includes('CT-e'))) {
                 return checkFileDates(fileList as File[], category);
             }
             return Promise.resolve();
@@ -590,11 +590,14 @@ export default function Home() {
     };
 
      const handleAnalyzeCte = async () => {
-        const cteFiles = (files['CT-e (Remetente)'] || []) as File[];
+        const cteFiles = [
+            ...(files['CT-e (Remetente)'] || []),
+            ...(files['CT-e (Destinatário)'] || [])
+        ] as File[];
         const nfeSaidaFiles = (files['XMLs de Saída'] || []) as File[];
         
         if (!cteFiles || cteFiles.length === 0) {
-            toast({ variant: "destructive", title: "Arquivos Ausentes", description: "Carregue os 'CT-e (Remetente)' na Etapa 1." });
+            toast({ variant: "destructive", title: "Arquivos Ausentes", description: "Carregue os arquivos de CT-e na Etapa 1." });
             return;
         }
          if (!spedInfo || !spedInfo.cnpj) {
@@ -608,6 +611,7 @@ export default function Home() {
 
         try {
             const fileContents = async (fileList: File[]) => {
+                if (!fileList) return [];
                 return Promise.all(
                     fileList.map(file => file.text().then(content => ({ name: file.name, content })))
                 );
@@ -849,50 +853,43 @@ export default function Home() {
                                         <BrainCircuit className="h-8 w-8 text-primary" />
                                         <div>
                                             <CardTitle className="font-headline text-2xl">Análises Avançadas</CardTitle>
-                                            <CardDescription>Carregue planilhas de impostos e realize comparações detalhadas.</CardDescription>
+                                            <CardDescription>Realize cruzamentos de dados entre CT-es, NF-es e planilhas de impostos.</CardDescription>
                                         </div>
                                     </div>
                                 </CardHeader>
                                 <CardContent>
-                                     <Tabs defaultValue="compare-cfop-accounting">
-                                        <TabsList className="grid w-full grid-cols-1">
-                                            <TabsTrigger value="cte-analysis">Análise de CT-e</TabsTrigger>
-                                        </TabsList>
-                                         <TabsContent value="cte-analysis" className="mt-4">
-                                            <Card>
-                                                <CardHeader>
-                                                     <div className="flex items-center gap-3">
-                                                        <Truck className="h-8 w-8 text-primary" />
-                                                        <div>
-                                                            <CardTitle className="font-headline text-xl">Análise de CT-e</CardTitle>
-                                                            <CardDescription>Cruze os dados de CT-e com as NF-es de saída para encontrar o CFOP de origem. Requer o SPED carregado (Etapa 2) para identificar o CNPJ.</CardDescription>
-                                                        </div>
-                                                    </div>
-                                                </CardHeader>
-                                                 <CardContent className="space-y-6">
-                                                    <Button onClick={handleAnalyzeCte} disabled={analyzingCte || !(files['CT-e (Remetente)'])} className="w-full">
-                                                        {analyzingCte ? "Analisando..." : "Analisar CT-es"}
-                                                    </Button>
-                                                    {cteAnalysisResult && (
-                                                        <div className="space-y-4">
-                                                             <Card>
-                                                                <CardHeader><CardTitle>CT-e como Remetente ({cteAnalysisResult.cteRemetente.length})</CardTitle></CardHeader>
-                                                                <CardContent>
-                                                                     {cteAnalysisResult.cteRemetente.length > 0 ? <DataTable columns={getColumns(cteAnalysisResult.cteRemetente)} data={cteAnalysisResult.cteRemetente} /> : <p>Nenhum CT-e encontrado.</p>}
-                                                                </CardContent>
-                                                            </Card>
-                                                             <Card>
-                                                                <CardHeader><CardTitle>CT-e como Destinatário ({cteAnalysisResult.cteDestinatario.length})</CardTitle></CardHeader>
-                                                                <CardContent>
-                                                                     {cteAnalysisResult.cteDestinatario.length > 0 ? <DataTable columns={getColumns(cteAnalysisResult.cteDestinatario)} data={cteAnalysisResult.cteDestinatario} /> : <p>Nenhum CT-e encontrado.</p>}
-                                                                </CardContent>
-                                                            </Card>
-                                                        </div>
-                                                    )}
-                                                </CardContent>
-                                            </Card>
-                                        </TabsContent>
-                                     </Tabs>
+                                    <Card>
+                                        <CardHeader>
+                                                <div className="flex items-center gap-3">
+                                                <Truck className="h-8 w-8 text-primary" />
+                                                <div>
+                                                    <CardTitle className="font-headline text-xl">Análise de CT-e</CardTitle>
+                                                    <CardDescription>Cruze os dados de CT-e com as NF-es de saída para encontrar o CFOP de origem. Requer o SPED carregado (Etapa 2) para identificar o CNPJ.</CardDescription>
+                                                </div>
+                                            </div>
+                                        </CardHeader>
+                                            <CardContent className="space-y-6">
+                                            <Button onClick={handleAnalyzeCte} disabled={analyzingCte || !(files['CT-e (Remetente)'] || files['CT-e (Destinatário)'])} className="w-full">
+                                                {analyzingCte ? "Analisando..." : "Analisar CT-es"}
+                                            </Button>
+                                            {cteAnalysisResult && (
+                                                <div className="space-y-4">
+                                                        <Card>
+                                                        <CardHeader><CardTitle>CT-e como Remetente ({cteAnalysisResult.cteRemetente.length})</CardTitle></CardHeader>
+                                                        <CardContent>
+                                                                {cteAnalysisResult.cteRemetente.length > 0 ? <DataTable columns={getColumns(cteAnalysisResult.cteRemetente)} data={cteAnalysisResult.cteRemetente} /> : <p>Nenhum CT-e encontrado.</p>}
+                                                        </CardContent>
+                                                    </Card>
+                                                        <Card>
+                                                        <CardHeader><CardTitle>CT-e como Destinatário ({cteAnalysisResult.cteDestinatario.length})</CardTitle></CardHeader>
+                                                        <CardContent>
+                                                                {cteAnalysisResult.cteDestinatario.length > 0 ? <DataTable columns={getColumns(cteAnalysisResult.cteDestinatario)} data={cteAnalysisResult.cteDestinatario} /> : <p>Nenhum CT-e encontrado.</p>}
+                                                        </CardContent>
+                                                    </Card>
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
                                 </CardContent>
                             </Card>
                         </TabsContent>
