@@ -4,7 +4,7 @@
 import * as React from "react";
 import { useState } from "react";
 import Link from 'next/link';
-import { Sheet, UploadCloud, Download, Trash2, File as FileIcon, Loader2, History, Group, ChevronDown, FileText, FolderSync, Search, Replace, Layers, Wand2, GitCompare } from "lucide-react";
+import { Sheet, UploadCloud, Download, Trash2, File as FileIcon, Loader2, History, Group, ChevronDown, FileText, FolderSync, Search, Replace, Layers, Wand2, GitCompare, BookCheck, BrainCircuit } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,9 +15,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { compareCfopData, type CfopComparisonResult } from "@/app/actions";
-import { FileUploadForm, type FileList } from "@/components/app/file-upload-form";
+import { compareCfopData, compareCfopAndAccounting, type CfopComparisonResult, type CfopAccountingComparisonResult } from "@/app/actions";
+import { FileUploadForm, type FullFileList } from "@/components/app/file-upload-form";
 import { CfopResultsDisplay } from "@/components/app/cfop-results-display";
+import * as XLSX from "xlsx";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DataTable } from "@/components/app/data-table";
+import { getColumns } from "@/lib/columns-helper";
+
 
 // Helper function to extract NFE data from XML
 const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
@@ -82,32 +87,79 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
     return itens;
 }
 
+const CfopAccountingResultTable = ({ data, filename }: { data: CfopAccountingComparisonResult; filename: string }) => {
+    const { toast } = useToast();
+
+    const handleDownload = () => {
+        if (data.length === 0) {
+            toast({ variant: 'destructive', title: 'Nenhum dado para baixar' });
+            return;
+        }
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Dados");
+        XLSX.writeFile(workbook, filename, { bookType: "ods" });
+        toast({ title: "Download Iniciado", description: `O arquivo ${filename} está sendo baixado.` });
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                        <CardTitle className="font-headline text-xl">Resultado da Comparação com Lote de Contabilização ({data.length})</CardTitle>
+                        <CardDescription>Itens do ICMS cruzados com as contas do lote de contabilização.</CardDescription>
+                    </div>
+                    <Button onClick={handleDownload} disabled={data.length === 0}>
+                        <Download className="mr-2 h-4 w-4" /> Baixar (.ods)
+                    </Button>
+                </div>
+            </CardHeader>
+            <CardContent>
+                {data.length > 0 ? (
+                    <DataTable columns={getColumns(data)} data={data} />
+                ) : (
+                    <p className="text-muted-foreground italic p-4 text-center">Nenhum item encontrado.</p>
+                )}
+            </CardContent>
+        </Card>
+    );
+};
+
+
 export default function CompareXmlSagePage() {
-    const [xmlFiles, setXmlFiles] = useState<FileList>({});
-    const [taxFiles, setTaxFiles] = useState<FileList>({});
-    const [processing, setProcessing] = useState(false);
+    const [xmlFiles, setXmlFiles] = useState<FullFileList>({});
+    const [taxFiles, setTaxFiles] = useState<FullFileList>({});
+    const [accountingFile, setAccountingFile] = useState<FullFileList>({});
+    
+    const [cfopProcessing, setCfopProcessing] = useState(false);
+    const [accountingProcessing, setAccountingProcessing] = useState(false);
+    
     const [error, setError] = useState<string | null>(null);
     const [comparisonResult, setComparisonResult] = useState<CfopComparisonResult | null>(null);
+    const [accountingResult, setAccountingResult] = useState<CfopAccountingComparisonResult | null>(null);
+
     const { toast } = useToast();
 
     const xmlFileCategories = ["XMLs de Entrada", "XMLs de Saída"];
     const taxSheetCategories = ["Planilha ICMS", "Planilha ICMS ST", "Planilha PIS", "Planilha COFINS", "Planilha IPI"];
+    const accountingFileCategory = ["Planilha Lote de Contabilização"];
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, categoryList: string[]) => {
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, categoryList: string[], setFunction: React.Dispatch<React.SetStateAction<FullFileList>>) => {
         const selectedFiles = e.target.files;
         const fileName = e.target.name;
         if (selectedFiles && selectedFiles.length > 0) {
-            if (categoryList.includes(fileName)) {
-                (xmlFileCategories.includes(fileName) ? setXmlFiles : setTaxFiles)(prev => ({
+             const isMultiple = (e.target as HTMLInputElement).multiple;
+             if (categoryList.includes(fileName)) {
+                setFunction(prev => ({
                     ...prev,
-                    [fileName]: categoryList === xmlFileCategories ? [...(prev[fileName] || []), ...Array.from(selectedFiles)] : selectedFiles[0]
+                    [fileName]: isMultiple ? [...(prev[fileName] as File[] || []), ...Array.from(selectedFiles)] : selectedFiles[0]
                 }));
             }
         }
     };
     
-    const handleClearFile = (fileName: string, categoryList: string[]) => {
-        const setFunction = categoryList === xmlFileCategories ? setXmlFiles : setTaxFiles;
+    const handleClearFile = (fileName: string, setFunction: React.Dispatch<React.SetStateAction<FullFileList>>) => {
         setFunction(prev => ({...prev, [fileName]: null}));
         const input = document.querySelector(`input[name="${fileName}"]`) as HTMLInputElement;
         if (input) input.value = "";
@@ -116,15 +168,17 @@ export default function CompareXmlSagePage() {
     const handleClearAll = () => {
         setXmlFiles({});
         setTaxFiles({});
+        setAccountingFile({});
         setComparisonResult(null);
+        setAccountingResult(null);
         setError(null);
         document.querySelectorAll('input[type="file"]').forEach(input => (input as HTMLInputElement).value = "");
         toast({title: "Todos os arquivos e resultados foram limpos."});
     }
 
-    const handleSubmit = async () => {
+    const handleCfopSubmit = async () => {
         const activeTaxFiles = Object.entries(taxFiles).filter(([_, file]) => file !== null);
-        const activeXmlFiles = Object.entries(xmlFiles).filter(([_, fileList]) => fileList && fileList.length > 0);
+        const activeXmlFiles = Object.entries(xmlFiles).filter(([_, fileList]) => fileList && (fileList as File[]).length > 0);
 
         if (activeXmlFiles.length === 0) {
             toast({ variant: "destructive", title: "Nenhum XML Carregado", description: "Por favor, carregue pelo menos um arquivo XML." });
@@ -136,11 +190,11 @@ export default function CompareXmlSagePage() {
         }
         
         setError(null);
-        setProcessing(true);
+        setCfopProcessing(true);
         setComparisonResult(null);
+        setAccountingResult(null); // Reset accounting results too
 
         try {
-            // 1. Process XMLs to get items
             const allXmlItems: any[] = [];
             for (const [category, fileList] of activeXmlFiles) {
                 if (!fileList) continue;
@@ -153,11 +207,8 @@ export default function CompareXmlSagePage() {
                 allXmlItems.push(...itemsFromFiles.flat());
             }
             
-            if (allXmlItems.length === 0) {
-                throw new Error("Nenhum item válido encontrado nos arquivos XML carregados.");
-            }
+            if (allXmlItems.length === 0) throw new Error("Nenhum item válido encontrado nos arquivos XML carregados.");
 
-            // 2. Read Tax Sheets
             const sheetsData: { [key: string]: string } = {};
             for (const [taxName, file] of activeTaxFiles) {
                 if (file) {
@@ -170,12 +221,7 @@ export default function CompareXmlSagePage() {
                 }
             }
 
-            // 3. Call server action
-            const result = await compareCfopData({
-                xmlItemsData: allXmlItems,
-                taxSheetsData: sheetsData,
-            });
-            
+            const result = await compareCfopData({ xmlItemsData: allXmlItems, taxSheetsData: sheetsData });
             if (result.error) throw new Error(result.error);
             
             setComparisonResult(result.results);
@@ -186,9 +232,52 @@ export default function CompareXmlSagePage() {
             setComparisonResult(null);
             toast({ variant: "destructive", title: "Erro na Comparação", description: err.message });
         } finally {
-            setProcessing(false);
+            setCfopProcessing(false);
         }
     };
+    
+    const handleAccountingSubmit = async () => {
+        if (!comparisonResult) {
+            toast({ variant: "destructive", title: "Sem dados para comparar", description: "Execute a 'Comparação XML x Sage' primeiro." });
+            return;
+        }
+        const accFile = accountingFile[accountingFileCategory[0]];
+        if (!accFile) {
+            toast({ variant: "destructive", title: "Arquivo Ausente", description: "Carregue a planilha do lote de contabilização." });
+            return;
+        }
+        
+        setError(null);
+        setAccountingProcessing(true);
+        setAccountingResult(null);
+
+        try {
+            const fileContent = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => event.target?.result ? resolve(event.target.result as string) : reject(new Error("Falha ao ler o arquivo de lote."));
+                reader.onerror = reject;
+                reader.readAsText(accFile as File);
+            });
+            
+            const result = await compareCfopAndAccounting({
+                cfopComparison: comparisonResult,
+                accountingFileContent: fileContent,
+            });
+
+            if (result.error) throw new Error(result.error);
+
+            setAccountingResult(result.results);
+            toast({ title: "Comparação Contábil Concluída", description: "O resultado está disponível na aba 'Resultado Contábil'."});
+        
+        } catch (err: any) {
+            setError(err.message || "Ocorreu um erro na comparação contábil.");
+            setAccountingResult(null);
+            toast({ variant: "destructive", title: "Erro na Comparação", description: err.message });
+        } finally {
+            setAccountingProcessing(false);
+        }
+    };
+
 
     return (
         <div className="min-h-screen bg-background text-foreground">
@@ -231,54 +320,70 @@ export default function CompareXmlSagePage() {
                             <div className="flex items-center gap-3">
                                 <GitCompare className="h-8 w-8 text-primary" />
                                 <div>
-                                    <CardTitle className="font-headline text-2xl">Comparação XML x Sage</CardTitle>
-                                    <CardDescription>Carregue os arquivos XML e as planilhas de impostos do Sage para comparar os itens.</CardDescription>
+                                    <CardTitle className="font-headline text-2xl">Comparação XML x Sage e Lote Contábil</CardTitle>
+                                    <CardDescription>Compare os itens dos XMLs com as planilhas de impostos do Sage e, opcionalmente, com o lote de contabilização.</CardDescription>
                                 </div>
                             </div>
                         </CardHeader>
                         <CardContent className="space-y-6">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>1. Carregar Arquivos XML</CardTitle>
-                                    <CardDescription>Faça o upload dos arquivos XML de notas fiscais de entrada e/ou saída.</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <FileUploadForm
-                                        requiredFiles={xmlFileCategories}
-                                        files={xmlFiles}
-                                        onFileChange={(e) => handleFileChange(e, xmlFileCategories)}
-                                        onClearFile={(name) => handleClearFile(name, xmlFileCategories)}
-                                    />
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>2. Carregar Planilhas de Impostos (Sage)</CardTitle>
-                                    <CardDescription>Carregue as planilhas exportadas do Sage para cada tipo de imposto.</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <FileUploadForm
-                                        requiredFiles={taxSheetCategories}
-                                        files={taxFiles}
-                                        onFileChange={(e) => handleFileChange(e, taxSheetCategories)}
-                                        onClearFile={(name) => handleClearFile(name, taxSheetCategories)}
-                                    />
-                                </CardContent>
-                            </Card>
+                            <Tabs defaultValue="cfop" className="w-full">
+                                <TabsList className="grid w-full grid-cols-2">
+                                    <TabsTrigger value="cfop">1. Comparação XML x Sage</TabsTrigger>
+                                    <TabsTrigger value="accounting" disabled={!comparisonResult}>2. Comparação com Lote Contábil</TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="cfop" className="mt-4 space-y-6">
+                                    <Card>
+                                        <CardHeader>
+                                            <CardTitle>Carregar Arquivos XML</CardTitle>
+                                            <CardDescription>Faça o upload dos arquivos XML de notas fiscais de entrada e/ou saída.</CardDescription>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <FileUploadForm requiredFiles={xmlFileCategories} files={xmlFiles} onFileChange={(e) => handleFileChange(e, xmlFileCategories, setXmlFiles)} onClearFile={(name) => handleClearFile(name, setXmlFiles)} />
+                                        </CardContent>
+                                    </Card>
+                                     <Card>
+                                        <CardHeader>
+                                            <CardTitle>Carregar Planilhas de Impostos (Sage)</CardTitle>
+                                            <CardDescription>Carregue as planilhas exportadas do Sage para cada tipo de imposto.</CardDescription>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <FileUploadForm requiredFiles={taxSheetCategories} files={taxFiles} onFileChange={(e) => handleFileChange(e, taxSheetCategories, setTaxFiles)} onClearFile={(name) => handleClearFile(name, setTaxFiles)} />
+                                        </CardContent>
+                                    </Card>
+                                     <Button onClick={handleCfopSubmit} disabled={cfopProcessing} className="w-full">
+                                        {cfopProcessing ? <><Loader2 className="animate-spin" /> Comparando...</> : <><GitCompare /> Comparar Itens</>}
+                                    </Button>
+                                </TabsContent>
+                                <TabsContent value="accounting" className="mt-4 space-y-6">
+                                     <Card>
+                                        <CardHeader>
+                                            <div className="flex items-center gap-3">
+                                                <BookCheck className="h-8 w-8 text-primary" />
+                                                <div>
+                                                    <CardTitle className="font-headline text-xl">Comparar com Lote de Contabilização</CardTitle>
+                                                    <CardDescription>Carregue o arquivo de lote de contabilização para cruzar com os resultados da comparação de CFOP.</CardDescription>
+                                                </div>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            <FileUploadForm requiredFiles={accountingFileCategory} files={accountingFile} onFileChange={(e) => handleFileChange(e, accountingFileCategory, setAccountingFile)} onClearFile={(name) => handleClearFile(name, setAccountingFile)} />
+                                            <Button onClick={handleAccountingSubmit} disabled={accountingProcessing || !comparisonResult} className="w-full">
+                                                {accountingProcessing ? "Comparando..." : "Gerar Relatório CFOP x Contabilização"}
+                                            </Button>
+                                        </CardContent>
+                                    </Card>
+                                </TabsContent>
+                            </Tabs>
                             
                              {error && (
-                                <Alert variant="destructive">
+                                <Alert variant="destructive" className="mt-6">
                                     <FileIcon className="h-4 w-4" />
                                     <AlertTitle>Erro</AlertTitle>
                                     <AlertDescription>{error}</AlertDescription>
                                 </Alert>
                             )}
                             
-                            <div className="flex flex-col gap-2 sm:flex-row">
-                                <Button onClick={handleSubmit} disabled={processing} className="flex-grow">
-                                    {processing ? <><Loader2 className="animate-spin" /> Comparando...</> : <><GitCompare /> Comparar Itens</>}
-                                </Button>
+                            <div className="flex justify-end">
                                 <Button onClick={handleClearAll} variant="destructive" className="flex-shrink-0">
                                     <Trash2 /> Limpar Tudo
                                 </Button>
@@ -287,14 +392,34 @@ export default function CompareXmlSagePage() {
                         </CardContent>
                     </Card>
 
-                    {comparisonResult && (
+                    {(comparisonResult || accountingResult) && (
                         <Card className="shadow-lg">
                             <CardHeader>
-                                <CardTitle className="font-headline text-2xl">Resultados da Comparação</CardTitle>
-                                <CardDescription>Análise detalhada dos itens encontrados.</CardDescription>
+                                <div className="flex items-center gap-3">
+                                    <BrainCircuit className="h-8 w-8 text-primary" />
+                                    <div>
+                                        <CardTitle className="font-headline text-2xl">Resultados da Análise</CardTitle>
+                                        <CardDescription>Análise detalhada dos itens encontrados.</CardDescription>
+                                    </div>
+                                </div>
                             </CardHeader>
-                             <CardContent>
-                                <CfopResultsDisplay results={comparisonResult} />
+                            <CardContent>
+                                <Tabs defaultValue="cfop-results" className="w-full">
+                                    <TabsList>
+                                        {comparisonResult && <TabsTrigger value="cfop-results">Resultados XML x Sage</TabsTrigger>}
+                                        {accountingResult && <TabsTrigger value="accounting-results">Resultado Contábil</TabsTrigger>}
+                                    </TabsList>
+                                    {comparisonResult && (
+                                         <TabsContent value="cfop-results" className="mt-4">
+                                            <CfopResultsDisplay results={comparisonResult} />
+                                        </TabsContent>
+                                    )}
+                                    {accountingResult && (
+                                        <TabsContent value="accounting-results" className="mt-4">
+                                            <CfopAccountingResultTable data={accountingResult} filename="resultado_contabil.ods"/>
+                                        </TabsContent>
+                                    )}
+                                </Tabs>
                             </CardContent>
                         </Card>
                     )}
