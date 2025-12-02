@@ -58,12 +58,11 @@ export function processDataFrames(dfs: DataFrames, exceptionKeys: ExceptionKeys,
             const items = (nota.docType === 'NFe') 
                 ? (dfs["Itens de Entrada"] || []).filter(item => normalizeKey(item['Chave de acesso']) === cleanKey)
                 : [];
-
+            
             const isDevolution = nota.uploadSource === 'entrada' && items.some(item => {
                 const cfop = String(item.CFOP);
-                return cfop.startsWith('1') || cfop.startsWith('2');
+                return cfop.startsWith('12') || cfop.startsWith('22');
             });
-
 
             if (isOwnEmissionByCnpj || isDevolution) {
                 ownEmissionNotes.push(nota);
@@ -88,13 +87,8 @@ export function processDataFrames(dfs: DataFrames, exceptionKeys: ExceptionKeys,
             .filter(key => key)
     );
 
-    const allValidSheetKeys = new Set([
-        ...chavesValidasEntrada, 
-        ...ownEmissionKeys, 
-        ...canceledKeys
-    ]);
-
-    processedDfs["Chaves Válidas"] = Array.from(allValidSheetKeys).map(key => ({ "Chave de acesso": key }));
+    // Chaves válidas para SPED são apenas as que não são emissão própria
+    processedDfs["Chaves Válidas"] = Array.from(chavesValidasEntrada).map(key => ({ "Chave de acesso": key }));
     
     processedDfs["Itens de Entrada"] = (dfs["Itens de Entrada"] || []).filter(row => 
         row && chavesValidasEntrada.has(normalizeKey(row["Chave de acesso"]))
