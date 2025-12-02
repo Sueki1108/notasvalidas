@@ -54,9 +54,15 @@ export function processDataFrames(dfs: DataFrames, exceptionKeys: ExceptionKeys,
             if (exceptionKeySet.has(cleanKey)) return;
             
             const isOwnEmissionByCnpj = nota['Emitente CPF/CNPJ'] === companyCnpj;
-            const cfop = nota.CFOP || (nota.itens && nota.itens.length > 0 ? nota.itens[0].CFOP : '');
-            // Devolution is an own emission from an accounting perspective
-            const isDevolution = nota.uploadSource === 'entrada' && (String(cfop).startsWith('1') || String(cfop).startsWith('2'));
+
+            const items = (nota.docType === 'NFe') 
+                ? (dfs["Itens de Entrada"] || []).filter(item => normalizeKey(item['Chave de acesso']) === cleanKey)
+                : [];
+
+            const isDevolution = nota.uploadSource === 'entrada' && items.some(item => {
+                const cfop = String(item.CFOP);
+                return cfop.startsWith('1') || cfop.startsWith('2');
+            });
 
 
             if (isOwnEmissionByCnpj || isDevolution) {
@@ -78,7 +84,6 @@ export function processDataFrames(dfs: DataFrames, exceptionKeys: ExceptionKeys,
 
     const chavesValidasEntrada = new Set(
         notasValidas
-            .filter(row => !ownEmissionKeys.has(normalizeKey(row['Chave de acesso'])))
             .map(row => row && normalizeKey(row["Chave de acesso"]))
             .filter(key => key)
     );
