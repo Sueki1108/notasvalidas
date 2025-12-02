@@ -183,7 +183,7 @@ export default function ReturnsPage() {
                                         <UploadCloud className="w-8 h-8 mb-4 text-muted-foreground" />
                                         <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Clique para carregar</span> ou arraste e solte</p>
                                     </div>
-                                    <input id="devolutions-upload" type="file" className="sr-only" onChange={(e) => handleFileChange(e, 'devolutions')} multiple accept=".xml, text/xml" />
+                                    <input id="devolutions-upload" type="file" className="sr-only" onChange={(e) => handleFileChange(e, 'devolutions')} multiple accept=".xml,text/xml,application/xml" />
                                 </label>
                                 {devolutionFiles.length > 0 && (
                                     <div>
@@ -212,7 +212,7 @@ export default function ReturnsPage() {
                                         <UploadCloud className="w-8 h-8 mb-4 text-muted-foreground" />
                                         <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Clique para carregar</span> ou arraste e solte</p>
                                     </div>
-                                    <input id="referenced-upload" type="file" className="sr-only" onChange={(e) => handleFileChange(e, 'referenced')} multiple accept=".xml, text/xml" />
+                                    <input id="referenced-upload" type="file" className="sr-only" onChange={(e) => handleFileChange(e, 'referenced')} multiple accept=".xml,text/xml,application/xml" />
                                 </label>
                                 {referencedFiles.length > 0 && (
                                      <div>

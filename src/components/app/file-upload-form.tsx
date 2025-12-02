@@ -22,7 +22,7 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
             return '.txt, text/plain';
         }
         if (fileName.toLowerCase().includes('xml')) {
-            return '.xml, text/xml, application/xml';
+            return '.xml,text/xml,application/xml';
         }
         if (fileName.toLowerCase().includes('lote de contabilização')) {
              return ".txt, text/plain, .csv, application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, .ods, application/vnd.oasis.opendocument.spreadsheet, .slk";

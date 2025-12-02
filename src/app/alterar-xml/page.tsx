@@ -218,7 +218,7 @@ export default function AlterarXmlPage() {
                                         className="sr-only"
                                         onChange={handleFileChange}
                                         multiple
-                                        accept=".xml, text/xml"
+                                        accept=".xml,text/xml,application/xml"
                                     />
                                 </div>
                                  {files.length > 0 && (
