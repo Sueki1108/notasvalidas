@@ -21,7 +21,7 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
         if (fileName.toLowerCase().includes('sped txt')) {
             return '.txt, text/plain';
         }
-        if (fileName.toLowerCase().includes('xml')) {
+        if (fileName.toLowerCase().includes('xml') || fileName.toLowerCase().includes('ct-e')) {
             return '.xml,text/xml,application/xml';
         }
         if (fileName.toLowerCase().includes('lote de contabilização')) {
@@ -32,8 +32,8 @@ export function FileUploadForm({ requiredFiles, files, onFileChange, onClearFile
     
     const isMultiple = (fileName: string) => {
         const lowerCaseName = fileName.toLowerCase();
-        // Permitir múltiplos arquivos para XML e SPED
-        return lowerCaseName.includes('xml') || lowerCaseName.includes('sped txt');
+        // Permitir múltiplos arquivos para XML, SPED e CT-e
+        return lowerCaseName.includes('xml') || lowerCaseName.includes('sped txt') || lowerCaseName.includes('ct-e');
     }
     
     const getFileCount = (file: File | File[] | null) => {
