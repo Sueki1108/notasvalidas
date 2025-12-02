@@ -55,16 +55,16 @@ export function processDataFrames(dfs: DataFrames, exceptionKeys: ExceptionKeys,
             
             const isOwnEmissionByCnpj = nota['Emitente CPF/CNPJ'] === companyCnpj;
 
-            const items = (nota.docType === 'NFe') 
-                ? (dfs["Itens de Entrada"] || []).filter(item => normalizeKey(item['Chave de acesso']) === cleanKey)
-                : [];
-            
-            const isDevolution = nota.uploadSource === 'entrada' && items.some(item => {
-                const cfop = String(item.CFOP);
-                return cfop.startsWith('12') || cfop.startsWith('22');
-            });
+            // An entry note (tpNF=0) where we are the receiver is OUR emission if it's NOT a regular purchase/transfer.
+            // i.e., CFOP does not start with '1' (or '2' for interstate, which is already handled).
+            const isReturnOrSimilar = !isOwnEmissionByCnpj && 
+                                      nota.docType === 'NFe' &&
+                                      nota.uploadSource === 'entrada' &&
+                                      nota.CFOP &&
+                                      (String(nota.CFOP).startsWith('19') || String(nota.CFOP).startsWith('29'));
 
-            if (isOwnEmissionByCnpj || isDevolution) {
+
+            if (isOwnEmissionByCnpj || isReturnOrSimilar) {
                 ownEmissionNotes.push(nota);
                 ownEmissionKeys.add(cleanKey);
             }
