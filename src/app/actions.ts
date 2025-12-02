@@ -169,7 +169,7 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
         
         if (!key || key.length !== 44) return null;
         
-        const directionValue = parts[2]; // 0 = Saída, 1 = Entrada for D100
+        const directionValue = parts[2]; // 0 = Saída (Emissão), 1 = Entrada (Tomador)
         direction = directionValue === '0' ? 'Saída' : 'Entrada';
         docType = 'CTe';
         value = parseFloat(parts[16] ? parts[16].replace(',', '.') : '0'); 
@@ -315,7 +315,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             });
 
         const duplicateKeysInSheet = findDuplicates(spreadsheetKeysArray);
-        const duplicateKeysInTxt = findDuplicates(Array.from(spedKeys));
+        const duplicateKeysInTxt = findDuplicates(Array.from(allSpedKeyInfo.keys()));
 
         const keyCheckResults: KeyCheckResult = { 
             allSpedKeys: allSpedKeys || [],
@@ -1469,6 +1469,7 @@ export async function compareCfopAndAccounting(data: {
     
 
     
+
 
 
 
