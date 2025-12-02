@@ -161,6 +161,9 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
     else if (recordType === 'D100') {
         const docModel = parts[5];
         if (docModel !== '57') return null;
+        
+        const docStatus = parts[6];
+        if (['02', '03', '04', '05'].includes(docStatus)) return null;
 
         key = parts[10];
         
@@ -245,7 +248,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             ...data
         } as KeyInfo));
         
-        const spedKeys = allSpedKeys.map(k => k.key);
+        const spedKeys = new Set(allSpedKeys.map(k => k.key));
 
         const validSheetNotes = processedData["Chaves Válidas"] || [];
         const validSheetMap = new Map((processedData["Notas Válidas"] || []).map(note => [
@@ -253,15 +256,16 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             note
         ]));
 
-        const spreadsheetKeysArray = validSheetNotes
-            .map(row => normalizeKey(row['Chave de acesso']))
-            .filter(key => key);
-        const spreadsheetKeys = new Set(spreadsheetKeysArray);
-        
         const canceledXmlKeys = new Set((processedData['Notas Canceladas'] || []).map(r => normalizeKey(r['Chave de acesso'])));
         
+        const spreadsheetKeysArray = validSheetNotes
+            .map(row => normalizeKey(row['Chave de acesso']))
+            .filter(key => key && !canceledXmlKeys.has(key)); // Exclude canceled keys
+            
+        const spreadsheetKeys = new Set(spreadsheetKeysArray);
+        
         const keysNotFoundInTxt = [...spreadsheetKeys]
-            .filter(key => !spedKeys.includes(key))
+            .filter(key => !spedKeys.has(key))
             .map(key => {
                 const note = validSheetMap.get(key);
                 const isCte = note && ( (note.docType && note.docType === 'CTe') || (note.uploadSource && note.uploadSource.includes('CTe')) || (normalizeKey(note['Chave de acesso']).substring(20, 22) === '57'));
@@ -277,7 +281,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                 }
             });
 
-        const keysInTxtNotInSheet = spedKeys
+        const keysInTxtNotInSheet = Array.from(spedKeys)
             .filter(key => !spreadsheetKeys.has(key) && !canceledXmlKeys.has(key))
             .map(key => {
                 const spedData = allSpedKeyInfo.get(key);
@@ -294,7 +298,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             });
         
         const keysFoundInBoth = [...spreadsheetKeys]
-            .filter(key => spedKeys.includes(key))
+            .filter(key => spedKeys.has(key))
             .map(key => {
                 const note = validSheetMap.get(key);
                 const isCte = note && ( (note.docType && note.docType === 'CTe') || (note.uploadSource && note.uploadSource.includes('CTe')) || (normalizeKey(note['Chave de acesso']).substring(20, 22) === '57'));
@@ -311,7 +315,7 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
             });
 
         const duplicateKeysInSheet = findDuplicates(spreadsheetKeysArray);
-        const duplicateKeysInTxt = findDuplicates(spedKeys);
+        const duplicateKeysInTxt = findDuplicates(Array.from(spedKeys));
 
         const keyCheckResults: KeyCheckResult = { 
             allSpedKeys: allSpedKeys || [],
@@ -1399,46 +1403,26 @@ export async function compareCfopAndAccounting(data: {
             throw new Error("O arquivo de lote de contabilização está vazio ou em um formato não suportado.");
         }
 
-        let nfIndex: number | null = null;
-        let accountIndex: number | null = null;
-        
-        // Flexible format detection
-        const headerLine = lines[0] || "";
-        const headerParts = headerLine.split('\t');
-
-        if (headerParts.length > 7 && headerParts[1].toLowerCase().includes("número") && headerParts[7].toLowerCase().includes("conta")) {
-            nfIndex = 1; // Coluna B
-            accountIndex = 7; // Coluna H
-        } else {
-             // Fallback for format without headers or different structure
-            nfIndex = 1; // Assume Coluna B for NF
-            accountIndex = 7; // Assume Coluna H for Account
-        }
-
-
         lines.forEach(line => {
             const parts = line.split('\t');
-            let nfNumber: string | null = null;
-            let accountDescription: string | null = null;
-            
-            if (parts.length > Math.max(nfIndex!, accountIndex!)) {
-                nfNumber = parts[nfIndex!]?.trim().match(/\d+/g)?.join('') || null; // Extract all digits
-                accountDescription = parts[accountIndex!]?.trim() || null;
-            }
-            
-            if (nfNumber && /^\d+$/.test(nfNumber) && accountDescription) {
-                if (!accountingMap.has(nfNumber)) {
-                    accountingMap.set(nfNumber, []);
-                }
-                const existingAccounts = accountingMap.get(nfNumber)!;
-                if (!existingAccounts.includes(accountDescription)) {
-                    existingAccounts.push(accountDescription);
+            if (parts.length > 7) {
+                const nfNumber = parts[1]?.trim();
+                const accountDescription = parts[7]?.trim();
+                
+                if (nfNumber && /^\d+$/.test(nfNumber) && accountDescription) {
+                    if (!accountingMap.has(nfNumber)) {
+                        accountingMap.set(nfNumber, []);
+                    }
+                    const existingAccounts = accountingMap.get(nfNumber)!;
+                    if (!existingAccounts.includes(accountDescription)) {
+                        existingAccounts.push(accountDescription);
+                    }
                 }
             }
         });
         
         if (accountingMap.size === 0) {
-            throw new Error("Não foi possível extrair dados de contabilização do arquivo de lote. Verifique se o formato do arquivo é suportado (coluna B para NF e H para conta, ou coluna G para histórico e E para conta).");
+            throw new Error("Não foi possível extrair dados de contabilização do arquivo de lote. Verifique se o formato do arquivo é suportado (coluna B para NF e H para conta).");
         }
 
         const finalResults: CfopAccountingComparisonResult = [];
@@ -1485,4 +1469,5 @@ export async function compareCfopAndAccounting(data: {
     
 
     
+
 
