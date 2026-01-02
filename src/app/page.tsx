@@ -704,7 +704,10 @@ export default function Home() {
 
             if (result.error) throw new Error(result.error);
 
-            setCteAnalysisResult(result);
+            setCteAnalysisResult({
+                cteRemetente: result.cteRemetente || [],
+                cteDestinatario: result.cteDestinatario || []
+            });
             toast({ title: "Análise de CT-e Concluída", description: "CT-es foram classificados e cruzados com as NF-es de origem." });
 
         } catch (err: any) {
