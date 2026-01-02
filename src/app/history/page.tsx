@@ -51,7 +51,7 @@ const forceCellAsString = (worksheet: XLSX.WorkSheet, headerName: string) => {
 };
 
 type VerificationKey = KeyInfo & {
-  foundInSped: boolean;
+  foundInSped?: boolean;
 };
 
 type VerificationStats = {
@@ -72,7 +72,7 @@ type Verification = {
 };
 
 
-const DetailRow = ({ item }: { item: VerificationKey }) => {
+const DetailRow = ({ item }: { item: KeyInfo | VerificationKey }) => {
     const { toast } = useToast();
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text).then(() => {
