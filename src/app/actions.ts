@@ -275,8 +275,8 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                     partnerName: note?.['Fornecedor/Cliente'] || '',
                     emissionDate: note?.['Data de Emissão'] || '',
                     value: note?.['Valor'] || 0,
-                    docType: isCte ? 'CTe' : 'NFe',
-                    direction: isSaida ? 'Saída' : 'Entrada'
+                    docType: (isCte ? 'CTe' : 'NFe') as 'NFe' | 'CTe' | 'N/A',
+                    direction: (isSaida ? 'Saída' : 'Entrada') as 'Entrada' | 'Saída' | 'N/A'
                 }
             });
 
@@ -291,8 +291,8 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                     emissionDate: spedData?.emissionDate || 'N/A',
                     value: spedData?.value || 0,
                     comment: spedData?.comment || '',
-                    docType: spedData?.docType || 'N/A',
-                    direction: spedData?.direction || 'N/A'
+                    docType: (spedData?.docType || 'N/A') as 'NFe' | 'CTe' | 'N/A',
+                    direction: (spedData?.direction || 'N/A') as 'Entrada' | 'Saída' | 'N/A'
                 }
             });
         
@@ -308,8 +308,8 @@ export async function validateWithSped(processedData: DataFrames, spedFileConten
                     partnerName: note?.['Fornecedor/Cliente'] || '',
                     emissionDate: note?.['Data de Emissão'] || '',
                     value: note?.['Valor'] || 0,
-                    docType: isCte ? 'CTe' : 'NFe',
-                    direction: isSaida ? 'Saída' : 'Entrada'
+                    docType: (isCte ? 'CTe' : 'NFe') as 'NFe' | 'CTe' | 'N/A',
+                    direction: (isSaida ? 'Saída' : 'Entrada') as 'Entrada' | 'Saída' | 'N/A'
                 }
             });
 
