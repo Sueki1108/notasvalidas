@@ -124,7 +124,7 @@ const parseSpedLineForData = (line: string, participants: Map<string, string>): 
     
     let key = '';
     let direction: 'Entrada' | 'Saída' | 'N/A' = 'N/A';
-    let docType : 'NFe' | 'CTe' | 'N/A' = 'N/A';
+    let docType: 'NFe' | 'CTe' | 'N/A' = 'N/A';
     let value = 0;
     let emissionDate = '';
     let partnerName = '';
