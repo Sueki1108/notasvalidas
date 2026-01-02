@@ -665,9 +665,12 @@ export default function Home() {
     };
 
      const handleAnalyzeCte = async () => {
+        const remetente = files['CT-e (Remetente)'];
+        const destinatario = files['CT-e (Destinatário)'];
+        
         const cteFiles = [
-            ...(files['CT-e (Remetente)'] || []),
-            ...(files['CT-e (Destinatário)'] || [])
+            ...(Array.isArray(remetente) ? remetente : (remetente ? [remetente] : [])),
+            ...(Array.isArray(destinatario) ? destinatario : (destinatario ? [destinatario] : []))
         ] as File[];
         
         if (cteFiles.length === 0) {
