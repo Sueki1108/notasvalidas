@@ -481,7 +481,10 @@ export default function Home() {
         setError(null);
         setKeyCheckResult(null);
         
-        if (!Object.values(files).some(fileList => fileList && fileList.length > 0)) {
+        if (!Object.values(files).some(fileList => {
+            if (!fileList) return false;
+            return Array.isArray(fileList) ? fileList.length > 0 : true;
+        })) {
             toast({ variant: "destructive", title: "Nenhum arquivo carregado", description: "Por favor, carregue pelo menos um arquivo XML." });
             return;
         }
