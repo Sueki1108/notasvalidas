@@ -201,7 +201,7 @@ export default function HistoryPage() {
                         'Tipo': item.docType || 'N/A',
                         'Direção': item.direction || 'N/A',
                         'Parceiro': item.partnerName || 'N/A',
-                        'Emissão': formatDate(item.emissionDate),
+                        'Emissão': formatDate(item.emissionDate || ''),
                         'Valor': item.value ? item.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'N/A',
                         'Comentário': item.comment || ''
                     }));
