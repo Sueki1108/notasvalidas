@@ -387,7 +387,7 @@ export default function Home() {
             }
             const canceledKeys = new Set<string>();
 
-            const getMonthYear = (dateStr: string) => {
+            const getMonthYear = (dateStr: string | undefined | null) => {
                 if (!dateStr) return null;
                 try { return format(parseISO(dateStr), "MM/yyyy"); } catch { return null; }
             };
@@ -489,7 +489,7 @@ export default function Home() {
         setProcessing(true);
         const months = new Set<string>();
 
-        const getMonthYear = (dateStr: string) => {
+        const getMonthYear = (dateStr: string | undefined | null) => {
             if (!dateStr) return null;
             try { return format(parseISO(dateStr), "MM/yyyy"); } catch { return null; }
         };
