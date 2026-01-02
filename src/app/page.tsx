@@ -348,9 +348,11 @@ export default function Home() {
                 setSpedFiles(prev => [...(prev || []), ...Array.from(selectedFiles)]);
             }
             else {
+                 const existingFiles = prev[fileName];
+                 const existingArray = Array.isArray(existingFiles) ? existingFiles : (existingFiles ? [existingFiles] : []);
                  setFiles(prev => ({
                     ...prev,
-                    [fileName]: [...(prev[fileName] || []), ...Array.from(selectedFiles)]
+                    [fileName]: [...existingArray, ...Array.from(selectedFiles)]
                 }));
             }
         }
