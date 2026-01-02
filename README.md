@@ -37,21 +37,57 @@ To get a local copy up and running, follow these simple steps.
 
 ### Installation & Running
 
-1.  Clone the repository:
-    ```sh
-    git clone <YOUR_REPOSITORY_URL>
-    ```
-2.  Navigate to the project directory:
-    ```sh
-    cd <PROJECT_DIRECTORY>
-    ```
-3.  Install NPM packages:
+1.  Navigate to the project directory in your terminal.
+2.  Install NPM packages:
     ```sh
     npm install
     ```
-4.  Run the development server:
+3.  Run the development server:
     ```sh
     npm run dev
     ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+## Publishing to GitHub
+
+Follow these steps to publish your project to a new GitHub repository.
+
+1.  **Initialize a Git repository:**
+    In your project's root directory, run:
+    ```sh
+    git init -b main
+    ```
+
+2.  **Add all files to staging:**
+    ```sh
+    git add .
+    ```
+
+3.  **Create your first commit:**
+    A commit is a snapshot of your code at a specific point in time.
+    ```sh
+    git commit -m "Initial commit"
+    ```
+
+4.  **Create a new repository on GitHub:**
+    - Go to [GitHub.com](https://github.com) and log in.
+    - Click the `+` icon in the top-right corner and select **"New repository"**.
+    - Give your repository a name (e.g., `excel-workflow-automator`).
+    - Make sure the repository is set to **Public** or **Private** as you prefer.
+    - **Do not** initialize it with a README, .gitignore, or license, as your project already has these.
+    - Click **"Create repository"**.
+
+5.  **Link your local repository to GitHub:**
+    On the new repository page, GitHub will show you a URL. Copy it and run the following command, replacing the URL with your own.
+    ```sh
+    git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git
+    ```
+
+6.  **Push your code to GitHub:**
+    This command sends your committed files to the GitHub repository.
+    ```sh
+    git push -u origin main
+    ```
+
+Now, your project code is safely stored on GitHub!
