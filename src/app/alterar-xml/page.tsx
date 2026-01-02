@@ -4,7 +4,7 @@
 import * as React from "react";
 import { useState, useTransition } from "react";
 import Link from 'next/link';
-import { Sheet, Replace, UploadCloud, File as FileIcon, ChevronDown, History, Group, FileText, FolderSync, Search, Loader2, Download, Trash2, Wand2, Layers, GitCompare } from "lucide-react";
+import { Sheet, Replace, UploadCloud, File as FileIcon, ChevronDown, History, Group, FileText, FolderSync, Search, Loader2, Download, Trash2, Calculator, Layers, GitCompare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -171,7 +171,7 @@ export default function AlterarXmlPage() {
                             <DropdownMenuContent>
                                 <DropdownMenuItem asChild><Link href="/merger" className="flex items-center gap-2 w-full"><Group />Agrupador de Planilhas</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/juntar-abas" className="flex items-center gap-2 w-full"><Layers />Juntar Abas</Link></DropdownMenuItem>
-                                <DropdownMenuItem asChild><Link href="/solver" className="flex items-center gap-2 w-full"><Wand2 />Solver</Link></DropdownMenuItem>
+                                <DropdownMenuItem asChild><Link href="/solver" className="flex items-center gap-2 w-full"><Calculator />Solver</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/unify-folders" className="flex items-center gap-2 w-full"><FolderSync />Unificar Pastas</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/extract-nfe" className="flex items-center gap-2 w-full"><Search />Extrair Itens (NF-e)</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/extract-cte" className="flex items-center gap-2 w-full"><Search />Extrair CT-e</Link></DropdownMenuItem>
@@ -292,7 +292,7 @@ export default function AlterarXmlPage() {
                                     disabled={isProcessing || !selectedPath || newText === ''} 
                                     className="flex-grow"
                                 >
-                                    {isProcessing ? <><Loader2 className="animate-spin" /> Processando...</> : <><Wand2 /> Alterar e Baixar .zip</>}
+                                    {isProcessing ? <><Loader2 className="animate-spin" /> Processando...</> : <><Download /> Alterar e Baixar .zip</>}
                                 </Button>
                                 <Button onClick={handleClear} variant="destructive" className="flex-shrink-0" disabled={files.length === 0}>
                                     <Trash2 /> Limpar Tudo

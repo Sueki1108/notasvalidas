@@ -3,7 +3,7 @@
 
 import { useContext, useState } from "react";
 import * as XLSX from "xlsx";
-import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon, FolderSync, Search, Replace, Download as DownloadIcon, Layers, Wand2, GitCompare, FileWarning, LandPlot, BookCheck, Truck, Loader2 } from "lucide-react";
+import { Sheet, FileText, UploadCloud, Cpu, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon, FolderSync, Search, Replace, Download as DownloadIcon, Layers, Calculator, GitCompare, FileWarning, LandPlot, BookCheck, Truck, Loader2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -846,7 +846,7 @@ export default function Home() {
                             <DropdownMenuContent>
                                 <DropdownMenuItem asChild><Link href="/merger" className="flex items-center gap-2 w-full"><Group />Agrupador de Planilhas</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/juntar-abas" className="flex items-center gap-2 w-full"><Layers />Juntar Abas</Link></DropdownMenuItem>
-                                <DropdownMenuItem asChild><Link href="/solver" className="flex items-center gap-2 w-full"><Wand2 />Solver</Link></DropdownMenuItem>
+                                <DropdownMenuItem asChild><Link href="/solver" className="flex items-center gap-2 w-full"><Calculator />Solver</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/unify-folders" className="flex items-center gap-2 w-full"><FolderSync />Unificar Pastas</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/extract-nfe" className="flex items-center gap-2 w-full"><Search />Extrair Itens (NF-e)</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/extract-cte" className="flex items-center gap-2 w-full"><Search />Extrair CT-e</Link></DropdownMenuItem>
@@ -1036,7 +1036,7 @@ export default function Home() {
                             <Card>
                                 <CardHeader>
                                      <div className="flex items-center gap-3">
-                                        <BrainCircuit className="h-8 w-8 text-primary" />
+                                        <Cpu className="h-8 w-8 text-primary" />
                                         <div>
                                             <CardTitle className="font-headline text-2xl">Análises Avançadas</CardTitle>
                                             <CardDescription>Realize cruzamentos de dados entre CT-es, NF-es e planilhas de impostos.</CardDescription>
@@ -1138,7 +1138,7 @@ export default function Home() {
                                         <Card className="shadow-lg mt-8">
                                             <CardHeader>
                                                 <div className="flex items-center gap-3">
-                                                    <BrainCircuit className="h-8 w-8 text-primary" />
+                                                    <Cpu className="h-8 w-8 text-primary" />
                                                     <div>
                                                         <CardTitle className="font-headline text-2xl">Resultados da Análise</CardTitle>
                                                         <CardDescription>Análise detalhada dos itens encontrados.</CardDescription>

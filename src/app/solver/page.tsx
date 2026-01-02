@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { Wand2, Calculator, Check, X, Loader2, Trash2, ChevronDown, Group, FileText, FolderSync, Search, Replace, Layers, GitCompare } from "lucide-react";
+import { Calculator, Check, X, Loader2, Trash2, ChevronDown, Group, FileText, FolderSync, Search, Replace, Layers, GitCompare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -94,7 +94,7 @@ export default function SolverPage() {
                             <DropdownMenuContent>
                                 <DropdownMenuItem asChild><Link href="/merger" className="flex items-center gap-2 w-full"><Group />Agrupador de Planilhas</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/juntar-abas" className="flex items-center gap-2 w-full"><Layers />Juntar Abas</Link></DropdownMenuItem>
-                                <DropdownMenuItem asChild><Link href="/solver" className="flex items-center gap-2 w-full"><Wand2 />Solver</Link></DropdownMenuItem>
+                                <DropdownMenuItem asChild><Link href="/solver" className="flex items-center gap-2 w-full"><Calculator />Solver</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/unify-folders" className="flex items-center gap-2 w-full"><FolderSync />Unificar Pastas</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/extract-nfe" className="flex items-center gap-2 w-full"><Search />Extrair Itens (NF-e)</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/extract-cte" className="flex items-center gap-2 w-full"><Search />Extrair CT-e</Link></DropdownMenuItem>
@@ -112,7 +112,7 @@ export default function SolverPage() {
                     <Card className="shadow-lg">
                          <CardHeader>
                             <div className="flex items-center gap-3">
-                                <Wand2 className="h-8 w-8 text-primary" />
+                                <Calculator className="h-8 w-8 text-primary" />
                                 <div>
                                     <CardTitle className="font-headline text-2xl">Solver de Combinações</CardTitle>
                                     <CardDescription>Encontre combinações de números que somam um valor alvo.</CardDescription>

@@ -4,7 +4,7 @@
 import * as React from "react";
 import { useState, type ChangeEvent } from "react";
 import Link from 'next/link';
-import { Sheet, UploadCloud, FolderSync, Download, Trash2, File as FileIcon, Loader2, History, ChevronDown, FileText, Group, Search, Replace, Layers, Wand2, GitCompare } from "lucide-react";
+import { Sheet, UploadCloud, FolderSync, Download, Trash2, File as FileIcon, Loader2, History, ChevronDown, FileText, Group, Search, Replace, Layers, Calculator, GitCompare } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -136,7 +136,7 @@ export default function UnifyFoldersPage() {
                             <DropdownMenuContent>
                                 <DropdownMenuItem asChild><Link href="/merger" className="flex items-center gap-2 w-full"><Group />Agrupador de Planilhas</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/juntar-abas" className="flex items-center gap-2 w-full"><Layers />Juntar Abas</Link></DropdownMenuItem>
-                                <DropdownMenuItem asChild><Link href="/solver" className="flex items-center gap-2 w-full"><Wand2 />Solver</Link></DropdownMenuItem>
+                                <DropdownMenuItem asChild><Link href="/solver" className="flex items-center gap-2 w-full"><Calculator />Solver</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/unify-folders" className="flex items-center gap-2 w-full"><FolderSync />Unificar Pastas</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/extract-nfe" className="flex items-center gap-2 w-full"><Search />Extrair Itens (NF-e)</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/extract-cte" className="flex items-center gap-2 w-full"><Search />Extrair CT-e</Link></DropdownMenuItem>
