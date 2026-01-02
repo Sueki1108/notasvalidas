@@ -1,6 +1,4 @@
 // src/ai/flows/derive-logic.ts
-'use server';
-
 /**
  * @fileOverview Automatically derives spreadsheet processing logic using GenAI.
  *

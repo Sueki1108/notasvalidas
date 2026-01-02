@@ -1,5 +1,3 @@
-'use server';
-
 /**
  * @fileOverview Enhances a spreadsheet with insights based on its data.
  *

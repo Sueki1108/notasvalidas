@@ -1,5 +1,4 @@
 // src/app/actions.ts
-'use server';
 
 import { db } from '@/lib/firebase';
 import { collection, doc, getDoc, getDocs, setDoc, serverTimestamp, updateDoc, query, orderBy } from 'firebase/firestore';
@@ -401,12 +400,11 @@ export async function mergeExcelFiles(files: { name: string, content: string }[]
         const sheetsData: { [sheetName: string]: any[][] } = {};
 
         for (const file of files) {
-            const buffer = Buffer.from(file.content, 'base64');
-            const workbook = XLSX.read(buffer, { type: 'buffer' });
+            const workbook = XLSX.read(file.content, { type: 'base64' });
             
             // Standardize to ODS in memory before processing
-            const odsOutput = XLSX.write(workbook, { bookType: 'ods', type: 'buffer' });
-            const standardizedWorkbook = XLSX.read(odsOutput, { type: 'buffer' });
+            const odsOutput = XLSX.write(workbook, { bookType: 'ods', type: 'array' });
+            const standardizedWorkbook = XLSX.read(odsOutput, { type: 'array' });
 
             for (const sheetName of standardizedWorkbook.SheetNames) {
                 const worksheet = standardizedWorkbook.Sheets[sheetName];
@@ -458,8 +456,7 @@ export async function mergeExcelFiles(files: { name: string, content: string }[]
 
 export async function joinExcelSheets(file: { name: string, content: string }) {
     try {
-        const buffer = Buffer.from(file.content, 'base64');
-        const workbook = XLSX.read(buffer, { type: 'buffer' });
+        const workbook = XLSX.read(file.content, { type: 'base64' });
         
         const allData: any[] = [];
         const allHeaders = new Set<string>();
@@ -514,7 +511,7 @@ export async function unifyZipFiles(files: { name: string, content: string }[]) 
             const filePromises = Object.keys(zip.files).map(async (filename) => {
                 const zipEntry = zip.files[filename];
                 if (!zipEntry.dir) {
-                    const fileData = await zipEntry.async('nodebuffer');
+                    const fileData = await zipEntry.async('uint8array');
                     // This is a browser-safe way to get the basename
                     const baseName = filename.substring(filename.lastIndexOf('/') + 1);
                     finalZip.file(baseName, fileData);
@@ -822,7 +819,7 @@ export async function extractCteData(files: { name: string, content: string }[])
         const buffer = XLSX.write(wb, { bookType: 'ods', type: 'array' });
 
         let binary = '';
-        const bytes = new Uint8Array(outputBuffer);
+        const bytes = new Uint8Array(buffer);
         for (let i = 0; i < bytes.byteLength; i++) {
             binary += String.fromCharCode(bytes[i]);
         }
@@ -1027,7 +1024,13 @@ export async function extractReturnData(files: { name: string; content: string }
   XLSX.utils.book_append_sheet(wb, ws, 'Dados');
 
   const buffer = XLSX.write(wb, { bookType: 'ods', type: 'array' });
-  const base64 = Buffer.from(buffer).toString('base64');
+  
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const base64 = btoa(binary);
   
   return { base64Data: base64 };
 }
