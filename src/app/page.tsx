@@ -3,7 +3,7 @@
 
 import { useContext, useState } from "react";
 import * as XLSX from "xlsx";
-import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon, FolderSync, Search, Replace, Download as DownloadIcon, Layers, Wand2, GitCompare, FileWarning, LandPlot, BookCheck, Truck } from "lucide-react";
+import { Sheet, FileText, UploadCloud, Cpu, BrainCircuit, Trash2, History, Group, AlertTriangle, KeyRound, ChevronDown, FileText as FileTextIcon, FolderSync, Search, Replace, Download as DownloadIcon, Layers, Wand2, GitCompare, FileWarning, LandPlot, BookCheck, Truck, Loader2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,10 +23,10 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileUploadForm } from "@/components/app/file-upload-form";
+import { FileUploadForm, type FullFileList } from "@/components/app/file-upload-form";
 import { ResultsDisplay } from "@/components/app/results-display";
 import { KeyResultsDisplay } from "@/components/app/key-results-display";
-import { validateWithSped, analyzeCteData, type KeyCheckResult, type SpedInfo } from "@/app/actions";
+import { validateWithSped, analyzeCteData, type KeyCheckResult, type SpedInfo, compareCfopData, compareCfopAndAccounting, type CfopComparisonResult, type CfopAccountingComparisonResult } from "@/app/actions";
 import { processDataFrames } from "@/lib/excel-processor";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -40,6 +40,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { DataTable } from "@/components/app/data-table";
 import { getColumns } from "@/lib/columns-helper";
+import { CfopResultsDisplay } from "@/components/app/cfop-results-display";
 
 
 type DataFrames = { [key: string]: any[] };
@@ -55,7 +56,71 @@ type ExceptionKeys = {
     Desacordo: Set<string>;
 };
 
+// Helper function to extract NFE data from XML
 const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
+    if (typeof window === 'undefined') return null;
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlContent, "application/xml");
+    const errorNode = xmlDoc.querySelector("parsererror");
+    if (errorNode) {
+      console.error("Error parsing XML:", errorNode.textContent);
+      return null;
+    }
+
+    const getValue = (tag: string, context: Element | null) => context?.getElementsByTagName(tag)[0]?.textContent || '';
+    
+    const infNFe = xmlDoc.getElementsByTagName('infNFe')[0];
+    if(!infNFe) return null;
+
+    const ide = infNFe.getElementsByTagName('ide')[0];
+    const numeroNF = getValue('nNF', ide);
+
+    const itens: any[] = [];
+    const detElements = Array.from(infNFe.getElementsByTagName('det'));
+
+    for (const det of detElements) {
+        const prod = det.getElementsByTagName('prod')[0];
+        const imposto = det.getElementsByTagName('imposto')[0];
+        if (!prod || !imposto) continue;
+
+        const icms = imposto.getElementsByTagName('ICMS')[0]?.firstElementChild;
+        const ipi = imposto.getElementsByTagName('IPI')[0]?.getElementsByTagName('IPITrib')[0];
+        const pis = imposto.getElementsByTagName('PIS')[0]?.firstElementChild;
+        const cofins = imposto.getElementsByTagName('COFINS')[0]?.firstElementChild;
+
+        itens.push({
+            'Número da NF': numeroNF,
+            'Código do Produto': getValue('cProd', prod),
+            'Descrição do Produto': getValue('xProd', prod),
+            'CFOP': getValue('CFOP', prod),
+            'NCM': getValue('NCM', prod),
+            'Valor Total do Produto': parseFloat(getValue('vProd', prod) || '0'),
+            'ICMS CST': icms ? getValue('CST', icms) : '',
+            'ICMS Base de Cálculo': icms ? parseFloat(getValue('vBC', icms) || '0') : 0,
+            'ICMS Alíquota': icms ? parseFloat(getValue('pICMS', icms) || '0') : 0,
+            'ICMS Valor': icms ? parseFloat(getValue('vICMS', icms) || '0') : 0,
+            'ICMS vBCSTRet': icms ? parseFloat(getValue('vBCSTRet', icms) || '0') : 0,
+            'ICMS pST': icms ? parseFloat(getValue('pST', icms) || '0') : 0,
+            'ICMS vICMSSTRet': icms ? parseFloat(getValue('vICMSSTRet', icms) || '0') : 0,
+            'IPI CST': ipi ? getValue('CST', ipi) : '',
+            'IPI Base de Cálculo': ipi ? parseFloat(getValue('vBC', ipi) || '0') : 0,
+            'IPI Alíquota': ipi ? parseFloat(getValue('pIPI', ipi) || '0') : 0,
+            'IPI Valor': ipi ? parseFloat(getValue('vIPI', ipi) || '0') : 0,
+            'PIS CST': pis ? getValue('CST', pis) : '',
+            'PIS Base de Cálculo': pis ? parseFloat(getValue('vBC', pis) || '0') : 0,
+            'PIS Alíquota': pis ? parseFloat(getValue('pPIS', pis) || '0') : 0,
+            'PIS Valor': pis ? parseFloat(getValue('vPIS', pis) || '0') : 0,
+            'COFINS CST': cofins ? getValue('CST', cofins) : '',
+            'COFINS Base de Cálculo': cofins ? parseFloat(getValue('vBC', cofins) || '0') : 0,
+            'COFINS Alíquota': cofins ? parseFloat(getValue('pCOFINS', cofins) || '0') : 0,
+            'COFINS Valor': cofins ? parseFloat(getValue('vCOFINS', cofins) || '0') : 0,
+        });
+    }
+    return itens;
+}
+
+
+const extractNfeHeaderFromXml = (xmlContent: string, uploadSource: string) => {
     if (typeof window === 'undefined') return null;
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlContent, "application/xml");
@@ -128,61 +193,7 @@ const extractNfeDataFromXml = (xmlContent: string, uploadSource: string) => {
         'docType': 'NFe',
     };
 
-    const itens: any[] = [];
-    const detElements = Array.from(infNFe.getElementsByTagName('det'));
-
-    for (const det of detElements) {
-        const prod = det.getElementsByTagName('prod')[0];
-        const imposto = det.getElementsByTagName('imposto')[0];
-        if (!prod || !imposto) continue;
-
-        const icms = imposto.getElementsByTagName('ICMS')[0]?.firstElementChild;
-        const ipi = imposto.getElementsByTagName('IPI')[0]?.getElementsByTagName('IPITrib')[0];
-        const pis = imposto.getElementsByTagName('PIS')[0]?.firstElementChild;
-        const cofins = imposto.getElementsByTagName('COFINS')[0]?.firstElementChild;
-
-        itens.push({
-            'Chave de acesso': chNFe,
-            'Número da NF': numeroNF,
-            'Número do Item': det.getAttribute('nItem'),
-            'Código do Produto': getValue('cProd', prod),
-            'Descrição do Produto': getValue('xProd', prod),
-            'CFOP': getValue('CFOP', prod),
-            'NCM': getValue('NCM', prod),
-            'Quantidade': parseFloat(getValue('qCom', prod) || '0'),
-            'Unidade': getValue('uCom', prod),
-            'Valor Unitário': parseFloat(getValue('vUnCom', prod) || '0'),
-            'Valor Total do Produto': parseFloat(getValue('vProd', prod) || '0'),
-            'Valor do Desconto': parseFloat(getValue('vDesc', prod) || '0'),
-            'EAN': getValue('cEAN', prod),
-            'CEST': getValue('CEST', prod),
-            'Pedido Compra': getValue('xPed', prod),
-            'ICMS Origem': icms ? getValue('orig', icms) : '',
-            'ICMS CST': icms ? getValue('CST', icms) : '',
-            'ICMS Modalidade BC': icms ? getValue('modBC', icms) : '',
-            'ICMS Base de Cálculo': icms ? parseFloat(getValue('vBC', icms) || '0') : 0,
-            'ICMS Alíquota': icms ? parseFloat(getValue('pICMS', icms) || '0') : 0,
-            'ICMS Valor': icms ? parseFloat(getValue('vICMS', icms) || '0') : 0,
-            'ICMS vBCSTRet': icms ? parseFloat(getValue('vBCSTRet', icms) || '0') : 0,
-            'ICMS pST': icms ? parseFloat(getValue('pST', icms) || '0') : 0,
-            'ICMS vICMSSTRet': icms ? parseFloat(getValue('vICMSSTRet', icms) || '0') : 0,
-            'IPI CST': ipi ? getValue('CST', ipi) : '',
-            'IPI Base de Cálculo': ipi ? parseFloat(getValue('vBC', ipi) || '0') : 0,
-            'IPI Alíquota': ipi ? parseFloat(getValue('pIPI', ipi) || '0') : 0,
-            'IPI Valor': ipi ? parseFloat(getValue('vIPI', ipi) || '0') : 0,
-            'PIS CST': pis ? getValue('CST', pis) : '',
-            'PIS Base de Cálculo': pis ? parseFloat(getValue('vBC', pis) || '0') : 0,
-            'PIS Alíquota': pis ? parseFloat(getValue('pPIS', pis) || '0') : 0,
-            'PIS Valor': pis ? parseFloat(getValue('vPIS', pis) || '0') : 0,
-            'COFINS CST': cofins ? getValue('CST', cofins) : '',
-            'COFINS Base de Cálculo': cofins ? parseFloat(getValue('vBC', cofins) || '0') : 0,
-            'COFINS Alíquota': cofins ? parseFloat(getValue('pCOFINS', cofins) || '0') : 0,
-            'COFINS Valor': cofins ? parseFloat(getValue('vCOFINS', cofins) || '0') : 0,
-            'uploadSource': uploadSource
-        });
-    }
-
-    return { nota, itens };
+    return { nota };
 }
 
 const extractCteDataFromXml = (xmlContent: string, uploadSource: string) => {
@@ -243,6 +254,46 @@ const extractCteDataFromXml = (xmlContent: string, uploadSource: string) => {
     return { nota };
 }
 
+const CfopAccountingResultTable = ({ data, filename }: { data: CfopAccountingComparisonResult; filename: string }) => {
+    const { toast } = useToast();
+
+    const handleDownload = () => {
+        if (data.length === 0) {
+            toast({ variant: 'destructive', title: 'Nenhum dado para baixar' });
+            return;
+        }
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Dados");
+        XLSX.writeFile(workbook, filename, { bookType: "ods" });
+        toast({ title: "Download Iniciado", description: `O arquivo ${filename} está sendo baixado.` });
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                        <CardTitle className="font-headline text-xl">Resultado da Comparação com Lote de Contabilização ({data.length})</CardTitle>
+                        <CardDescription>Itens do ICMS cruzados com as contas do lote de contabilização.</CardDescription>
+                    </div>
+                    <Button onClick={handleDownload} disabled={data.length === 0}>
+                        <DownloadIcon className="mr-2 h-4 w-4" /> Baixar (.ods)
+                    </Button>
+                </div>
+            </CardHeader>
+            <CardContent>
+                {data.length > 0 ? (
+                    <DataTable columns={getColumns(data)} data={data} />
+                ) : (
+                    <p className="text-muted-foreground italic p-4 text-center">Nenhum item encontrado.</p>
+                )}
+            </CardContent>
+        </Card>
+    );
+};
+
+
 export default function Home() {
     const {
       files,
@@ -271,6 +322,18 @@ export default function Home() {
     const [error, setError] = useState<string | null>(null);
     const [isMonthModalOpen, setIsMonthModalOpen] = useState(false);
     const [tempSelectedMonths, setTempSelectedMonths] = useState<Set<string>>(new Set());
+    
+    // State for CFOP/Accounting Comparison
+    const [taxFiles, setTaxFiles] = useState<FullFileList>({});
+    const [accountingFile, setAccountingFile] = useState<FullFileList>({});
+    const [cfopProcessing, setCfopProcessing] = useState(false);
+    const [accountingProcessing, setAccountingProcessing] = useState(false);
+    const [comparisonResult, setComparisonResult] = useState<CfopComparisonResult | null>(null);
+    const [accountingResult, setAccountingResult] = useState<CfopAccountingComparisonResult | null>(null);
+    const [cfopError, setCfopError] = useState<string | null>(null);
+    const [activeCfopTab, setActiveCfopTab] = useState('cfop');
+
+
     const { toast } = useToast();
     
 
@@ -312,8 +375,7 @@ export default function Home() {
         try {
             const allNfe: any[] = [];
             const allCte: any[] = [];
-            const allNfeItensEntrada: any[] = [];
-            const allNfeItensSaida: any[] = [];
+            const allNfeItens: any[] = [];
             const exceptionKeys: ExceptionKeys = {
                 OperacaoNaoRealizada: new Set<string>(),
                 Desconhecimento: new Set<string>(),
@@ -333,42 +395,49 @@ export default function Home() {
                 const content = await file.text();
                 const type = category.includes('CT-e') ? 'CTe' : 'NFe';
                 const uploadSource = category.includes('Saída') ? 'saida' : (category.includes('Entrada') || category.includes('Remetente') || category.includes('Destinatário') ? 'entrada' : 'exception');
-                return type === 'NFe' ? extractNfeDataFromXml(content, uploadSource) : extractCteDataFromXml(content, uploadSource);
+                
+                if (type === 'NFe') {
+                    const nfeHeader = extractNfeHeaderFromXml(content, uploadSource);
+                    const nfeItems = extractNfeDataFromXml(content, uploadSource);
+                    return { header: nfeHeader, items: nfeItems };
+                } else {
+                     const cteData = extractCteDataFromXml(content, uploadSource);
+                     return { header: cteData };
+                }
             });
             
             const allXmlData = await Promise.all(fileReadPromises);
 
             for (const xmlData of allXmlData) {
-                if (!xmlData) continue;
-                if (xmlData.isEvent) {
-                      if (xmlData.eventType === 'Cancelamento') {
-                          canceledKeys.add(xmlData.key);
-                      } else if (xmlData.eventType) {
-                          const eventSet = exceptionKeys[xmlData.eventType as keyof typeof exceptionKeys];
-                          if (eventSet) eventSet.add(xmlData.key);
+                if (!xmlData || !xmlData.header) continue;
+                
+                if (xmlData.header.isEvent) {
+                      if (xmlData.header.eventType === 'Cancelamento') {
+                          canceledKeys.add(xmlData.header.key);
+                      } else if (xmlData.header.eventType) {
+                          const eventSet = exceptionKeys[xmlData.header.eventType as keyof typeof exceptionKeys];
+                          if (eventSet) eventSet.add(xmlData.header.key);
                       }
                       continue;
-                  }
+                }
                 
-                const monthYear = getMonthYear(xmlData.nota?.['Data de Emissão']);
+                const monthYear = getMonthYear(xmlData.header.nota?.['Data de Emissão']);
                 if (selectedMonths.size > 0 && (!monthYear || !selectedMonths.has(monthYear))) continue;
 
-                if (xmlData.nota && xmlData.nota['Status']?.includes('Cancelada')) {
-                      canceledKeys.add(xmlData.nota['Chave de acesso']);
+                if (xmlData.header.nota && xmlData.header.nota['Status']?.includes('Cancelada')) {
+                      canceledKeys.add(xmlData.header.nota['Chave de acesso']);
                 }
 
-                if (xmlData.nota) {
-                    if (xmlData.nota.docType === 'NFe') {
-                        allNfe.push(xmlData);
-                    } else if (xmlData.nota.docType === 'CTe') {
-                        allCte.push(xmlData);
+                if (xmlData.header.nota) {
+                    if (xmlData.header.nota.docType === 'NFe') {
+                        allNfe.push(xmlData.header);
+                    } else if (xmlData.header.nota.docType === 'CTe') {
+                        allCte.push(xmlData.header);
                     }
                 }
 
-                if(xmlData.itens){
-                    const uploadSource = xmlData.nota.uploadSource;
-                    if(uploadSource === 'entrada') allNfeItensEntrada.push(...xmlData.itens);
-                    else if (uploadSource === 'saida') allNfeItensSaida.push(...xmlData.itens);
+                if(xmlData.items){
+                    allNfeItens.push(...xmlData.items);
                 }
             }
 
@@ -376,8 +445,7 @@ export default function Home() {
             const initialFrames = {
                 'NF-Stock NFE': allNfe.filter(d => d.nota).map(d => d.nota),
                 'NF-Stock CTE': allCte.filter(d => d.nota).map(d => d.nota),
-                'Itens de Entrada': allNfeItensEntrada,
-                'Itens de Saída': allNfeItensSaida,
+                'Itens': allNfeItens,
                 'NF-Stock Emitidas': [],
                 'Notas Canceladas': Array.from(canceledKeys).map(key => ({ 'Chave de acesso': key }))
             };
@@ -430,7 +498,7 @@ export default function Home() {
 
             const parsingPromises = fileContents.map(content => {
                 return Promise.resolve(
-                    type === 'NFe' ? extractNfeDataFromXml(content, 'check') : extractCteDataFromXml(content, 'check')
+                    type === 'NFe' ? extractNfeHeaderFromXml(content, 'check') : extractCteDataFromXml(content, 'check')
                 );
             });
             const allXmlData = (await Promise.all(parsingPromises)).filter(Boolean);
@@ -594,9 +662,8 @@ export default function Home() {
             ...(files['CT-e (Remetente)'] || []),
             ...(files['CT-e (Destinatário)'] || [])
         ] as File[];
-        const nfeSaidaFiles = (files['XMLs de Saída'] || []) as File[];
         
-        if (!cteFiles || cteFiles.length === 0) {
+        if (cteFiles.length === 0) {
             toast({ variant: "destructive", title: "Arquivos Ausentes", description: "Carregue os arquivos de CT-e na Etapa 1." });
             return;
         }
@@ -610,8 +677,10 @@ export default function Home() {
         setCteAnalysisResult(null);
 
         try {
+            const nfeSaidaFiles = (files['XMLs de Saída'] || []) as File[];
+
             const fileContents = async (fileList: File[]) => {
-                if (!fileList) return [];
+                if (!fileList || fileList.length === 0) return [];
                 return Promise.all(
                     fileList.map(file => file.text().then(content => ({ name: file.name, content })))
                 );
@@ -633,6 +702,122 @@ export default function Home() {
             toast({ variant: "destructive", title: "Erro na Análise de CT-e", description: err.message });
         } finally {
             setAnalyzingCte(false);
+        }
+    };
+    
+    // --- Handlers for CFOP/Accounting Comparison ---
+    const taxSheetCategories = ["Planilha ICMS", "Planilha ICMS ST", "Planilha PIS", "Planilha COFINS", "Planilha IPI"];
+    const accountingFileCategory = ["Planilha Lote de Contabilização"];
+
+    const handleTaxFileChange = (e: React.ChangeEvent<HTMLInputElement>, categoryList: string[], setFunction: React.Dispatch<React.SetStateAction<FullFileList>>) => {
+        const selectedFiles = e.target.files;
+        const fileName = e.target.name;
+        if (selectedFiles && selectedFiles.length > 0) {
+             const isMultiple = (e.target as HTMLInputElement).multiple;
+             if (categoryList.includes(fileName)) {
+                setFunction(prev => ({
+                    ...prev,
+                    [fileName]: isMultiple ? [...(prev[fileName] as File[] || []), ...Array.from(selectedFiles)] : selectedFiles[0]
+                }));
+            }
+        }
+    };
+
+    const handleClearTaxFile = (fileName: string, setFunction: React.Dispatch<React.SetStateAction<FullFileList>>) => {
+        setFunction(prev => ({...prev, [fileName]: null}));
+        const input = document.querySelector(`input[name="${fileName}"]`) as HTMLInputElement;
+        if (input) input.value = "";
+    };
+
+    const handleCfopSubmit = async () => {
+        const activeTaxFiles = Object.entries(taxFiles).filter(([_, file]) => file !== null);
+        
+        if (!results || !results['Itens de Entrada']) {
+             toast({ variant: "destructive", title: "Dados não processados", description: "Processe os arquivos XML na aba 'Processamento Principal' primeiro." });
+             return;
+        }
+
+        if (activeTaxFiles.length === 0) {
+            toast({ variant: "destructive", title: "Nenhuma Planilha Carregada", description: "Por favor, carregue pelo menos uma planilha de imposto." });
+            return;
+        }
+        
+        setCfopError(null);
+        setCfopProcessing(true);
+        setComparisonResult(null);
+        setAccountingResult(null); // Reset accounting results too
+
+        try {
+            const xmlItemsData = [...(results['Itens de Entrada'] || []), ...(results['Itens de Saída'] || [])];
+
+            if (xmlItemsData.length === 0) throw new Error("Nenhum item válido encontrado nos arquivos XML processados.");
+
+            const sheetsData: { [key: string]: string } = {};
+            for (const [taxName, file] of activeTaxFiles) {
+                if (file) {
+                    sheetsData[taxName] = await new Promise<string>((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = (event) => event.target?.result ? resolve(event.target.result as string) : reject(new Error(`Falha ao ler ${file.name}`));
+                        reader.onerror = () => reject(new Error(`Erro ao ler ${file.name}`));
+                        reader.readAsBinaryString(file as File);
+                    });
+                }
+            }
+
+            const result = await compareCfopData({ xmlItemsData, taxSheetsData: sheetsData });
+            if (result.error) throw new Error(result.error);
+            
+            setComparisonResult(result.results);
+            toast({ title: "Comparação de Impostos Concluída", description: "A verificação dos itens foi finalizada." });
+
+        } catch (err: any) {
+            setCfopError(err.message || "Ocorreu um erro na comparação de impostos.");
+            setComparisonResult(null);
+            toast({ variant: "destructive", title: "Erro na Comparação", description: err.message });
+        } finally {
+            setCfopProcessing(false);
+        }
+    };
+    
+    const handleAccountingSubmit = async () => {
+        if (!comparisonResult) {
+            toast({ variant: "destructive", title: "Sem dados para comparar", description: "Execute a 'Comparação XML x Sage' primeiro." });
+            return;
+        }
+        const accFile = accountingFile[accountingFileCategory[0]];
+        if (!accFile) {
+            toast({ variant: "destructive", title: "Arquivo Ausente", description: "Carregue a planilha do lote de contabilização." });
+            return;
+        }
+        
+        setCfopError(null);
+        setAccountingProcessing(true);
+        setAccountingResult(null);
+
+        try {
+            const fileContent = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => event.target?.result ? resolve(event.target.result as string) : reject(new Error("Falha ao ler o arquivo de lote."));
+                reader.onerror = reject;
+                reader.readAsText(accFile as File);
+            });
+            
+            const result = await compareCfopAndAccounting({
+                cfopComparison: comparisonResult,
+                accountingFileContent: fileContent,
+            });
+
+            if (result.error) throw new Error(result.error);
+
+            setAccountingResult(result.results);
+            toast({ title: "Comparação Contábil Concluída", description: "O resultado está disponível na aba 'Resultado Contábil'."});
+        
+        } catch (err: any) {
+            setCfopError(err.message || "Ocorreu um erro na comparação contábil.");
+            setAccountingResult(null);
+            toast({ variant: "destructive", title: "Erro na Comparação", description: err.message });
+        } finally {
+            setAccountingProcessing(false);
         }
     };
 
@@ -733,10 +918,11 @@ export default function Home() {
                     </div>
 
                     <Tabs value={activeTab} onValueChange={setActiveTab}>
-                        <TabsList className="grid w-full grid-cols-3">
+                        <TabsList className="grid w-full grid-cols-4">
                             <TabsTrigger value="process">1. Processamento XML</TabsTrigger>
                             <TabsTrigger value="validate" disabled={!results}>2. Validação SPED</TabsTrigger>
                             <TabsTrigger value="advanced" disabled={!results}>3. Análises Avançadas</TabsTrigger>
+                            <TabsTrigger value="accounting" disabled={!results}>4. Análise de Itens e Contabilização</TabsTrigger>
                         </TabsList>
                         <TabsContent value="process" className="mt-6 space-y-6">
                             <Card className="shadow-lg">
@@ -864,7 +1050,7 @@ export default function Home() {
                                                 <Truck className="h-8 w-8 text-primary" />
                                                 <div>
                                                     <CardTitle className="font-headline text-xl">Análise de CT-e</CardTitle>
-                                                    <CardDescription>Cruze os dados de CT-e com as NF-es de saída para encontrar o CFOP de origem. Requer o SPED carregado (Etapa 2) para identificar o CNPJ.</CardDescription>
+                                                    <CardDescription>Cruze os dados de CT-e com as NF-es de saída para encontrar o CFOP de origem. O SPED deve estar carregado (Etapa 2) para identificar o CNPJ da empresa.</CardDescription>
                                                 </div>
                                             </div>
                                         </CardHeader>
@@ -890,6 +1076,95 @@ export default function Home() {
                                             )}
                                         </CardContent>
                                     </Card>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+                        <TabsContent value="accounting" className="mt-6">
+                             <Card className="shadow-lg">
+                                <CardHeader>
+                                     <div className="flex items-center gap-3">
+                                        <GitCompare className="h-8 w-8 text-primary" />
+                                        <div>
+                                            <CardTitle className="font-headline text-2xl">Comparação XML x Sage e Lote Contábil</CardTitle>
+                                            <CardDescription>Compare os itens dos XMLs com as planilhas de impostos do Sage e, opcionalmente, com o lote de contabilização.</CardDescription>
+                                        </div>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="space-y-6">
+                                    <Tabs value={activeCfopTab} onValueChange={setActiveCfopTab} className="w-full">
+                                        <TabsList className="grid w-full grid-cols-2">
+                                            <TabsTrigger value="cfop">1. Comparação Itens</TabsTrigger>
+                                            <TabsTrigger value="accounting-comp" disabled={!comparisonResult}>2. Comparação Contábil</TabsTrigger>
+                                        </TabsList>
+                                        <TabsContent value="cfop" className="mt-4 space-y-6">
+                                            <Card>
+                                                <CardHeader>
+                                                    <CardTitle>Carregar Planilhas de Impostos (Sage)</CardTitle>
+                                                    <CardDescription>Carregue as planilhas exportadas do Sage para cada tipo de imposto.</CardDescription>
+                                                </CardHeader>
+                                                <CardContent>
+                                                    <FileUploadForm requiredFiles={taxSheetCategories} files={taxFiles} onFileChange={(e) => handleTaxFileChange(e, taxSheetCategories, setTaxFiles)} onClearFile={(name) => handleClearTaxFile(name, setTaxFiles)} />
+                                                </CardContent>
+                                            </Card>
+                                            <Button onClick={handleCfopSubmit} disabled={cfopProcessing} className="w-full">
+                                                {cfopProcessing ? <><Loader2 className="animate-spin" /> Comparando...</> : <><GitCompare /> Comparar Itens XML x Sage</>}
+                                            </Button>
+                                        </TabsContent>
+                                        <TabsContent value="accounting-comp" className="mt-4 space-y-6">
+                                            <Card>
+                                                <CardHeader>
+                                                    <CardTitle>Carregar Lote de Contabilização</CardTitle>
+                                                    <CardDescription>Carregue o arquivo de lote para cruzar com os resultados da comparação de itens.</CardDescription>
+                                                </CardHeader>
+                                                <CardContent className="space-y-4">
+                                                    <FileUploadForm requiredFiles={accountingFileCategory} files={accountingFile} onFileChange={(e) => handleTaxFileChange(e, accountingFileCategory, setAccountingFile)} onClearFile={(name) => handleClearTaxFile(name, setAccountingFile)} />
+                                                    <Button onClick={handleAccountingSubmit} disabled={accountingProcessing || !comparisonResult} className="w-full">
+                                                        {accountingProcessing ? "Comparando..." : "Gerar Relatório CFOP x Contabilização"}
+                                                    </Button>
+                                                </CardContent>
+                                            </Card>
+                                        </TabsContent>
+                                    </Tabs>
+                                    
+                                    {cfopError && (
+                                        <Alert variant="destructive" className="mt-6">
+                                            <FileIcon className="h-4 w-4" />
+                                            <AlertTitle>Erro na Análise</AlertTitle>
+                                            <AlertDescription>{cfopError}</AlertDescription>
+                                        </Alert>
+                                    )}
+
+                                    {(comparisonResult || accountingResult) && (
+                                        <Card className="shadow-lg mt-8">
+                                            <CardHeader>
+                                                <div className="flex items-center gap-3">
+                                                    <BrainCircuit className="h-8 w-8 text-primary" />
+                                                    <div>
+                                                        <CardTitle className="font-headline text-2xl">Resultados da Análise</CardTitle>
+                                                        <CardDescription>Análise detalhada dos itens encontrados.</CardDescription>
+                                                    </div>
+                                                </div>
+                                            </CardHeader>
+                                            <CardContent>
+                                                <Tabs defaultValue="cfop-results" className="w-full">
+                                                    <TabsList>
+                                                        {comparisonResult && <TabsTrigger value="cfop-results">Resultados XML x Sage</TabsTrigger>}
+                                                        {accountingResult && <TabsTrigger value="accounting-results">Resultado Contábil</TabsTrigger>}
+                                                    </TabsList>
+                                                    {comparisonResult && (
+                                                        <TabsContent value="cfop-results" className="mt-4">
+                                                            <CfopResultsDisplay results={comparisonResult} />
+                                                        </TabsContent>
+                                                    )}
+                                                    {accountingResult && (
+                                                        <TabsContent value="accounting-results" className="mt-4">
+                                                            <CfopAccountingResultTable data={accountingResult} filename="resultado_contabil.ods"/>
+                                                        </TabsContent>
+                                                    )}
+                                                </Tabs>
+                                            </CardContent>
+                                        </Card>
+                                    )}
                                 </CardContent>
                             </Card>
                         </TabsContent>

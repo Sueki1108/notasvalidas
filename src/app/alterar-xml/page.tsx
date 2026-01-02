@@ -178,7 +178,6 @@ export default function AlterarXmlPage() {
                                 <DropdownMenuItem asChild><Link href="/returns" className="flex items-center gap-2 w-full"><FileText />Devoluções</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/alterar-xml" className="flex items-center gap-2 w-full"><Replace />Alterar XML</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/separar-xml" className="flex items-center gap-2 w-full"><FileText />Separar XML</Link></DropdownMenuItem>
-                                <DropdownMenuItem asChild><Link href="/compare-xml-sage" className="flex items-center gap-2 w-full"><GitCompare />Comparação XML x Sage</Link></DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                         <Button variant="ghost" asChild>

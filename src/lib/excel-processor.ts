@@ -56,15 +56,14 @@ export function processDataFrames(dfs: DataFrames, exceptionKeys: ExceptionKeys,
             const isOwnEmissionByCnpj = nota['Emitente CPF/CNPJ'] === companyCnpj;
 
             const cfopString = String(nota.CFOP || '');
-            const isPurchaseOrTransfer = cfopString.startsWith('1') || cfopString.startsWith('2');
-
-            // An entry note (tpNF=0) is considered "own emission" if it's NOT a standard purchase/transfer.
+             // An entry note (tpNF=0) is considered "own emission" if it's NOT a standard purchase/transfer.
             // This covers return operations like CFOP 1949, 1202, etc.
             const isReturnOrSimilarEntry = !isOwnEmissionByCnpj &&
                                       nota.docType === 'NFe' &&
                                       nota.uploadSource === 'entrada' &&
                                       nota['Destinatário CPF/CNPJ'] === companyCnpj &&
-                                      !isPurchaseOrTransfer;
+                                      !(cfopString.startsWith('1') && !cfopString.startsWith('12')) &&
+                                      !(cfopString.startsWith('2') && !cfopString.startsWith('22'));
 
 
             if (isOwnEmissionByCnpj || isReturnOrSimilarEntry) {
@@ -93,10 +92,11 @@ export function processDataFrames(dfs: DataFrames, exceptionKeys: ExceptionKeys,
     // Chaves válidas para SPED são apenas as que não são emissão própria
     processedDfs["Chaves Válidas"] = Array.from(chavesValidasEntrada).map(key => ({ "Chave de acesso": key }));
     
-    processedDfs["Itens de Entrada"] = (dfs["Itens de Entrada"] || []).filter(row => 
+    const allItems = dfs["Itens"] || [];
+    processedDfs["Itens de Entrada"] = allItems.filter(row => 
         row && chavesValidasEntrada.has(normalizeKey(row["Chave de acesso"]))
     );
-     processedDfs["Itens de Saída"] = (dfs["Itens de Saída"] || []).filter(row => 
+     processedDfs["Itens de Saída"] = allItems.filter(row => 
         row && ownEmissionKeys.has(normalizeKey(row["Chave de acesso"]))
     );
 
@@ -137,6 +137,8 @@ export function processDataFrames(dfs: DataFrames, exceptionKeys: ExceptionKeys,
 
     delete processedDfs["NF-Stock NFE"];
     delete processedDfs["NF-Stock CTE"];
+    delete processedDfs["Itens"];
+
 
     return processedDfs;
 }
