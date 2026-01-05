@@ -21,12 +21,17 @@ export type KeyInfo = {
     key: string;
     origin: 'planilha' | 'sped';
     comment?: string;
-    // Enriched data
     partnerName?: string;
     emissionDate?: string;
     value?: number;
     docType?: 'NFe' | 'CTe' | 'N/A';
     direction?: 'Entrada' | 'Saída' | 'N/A';
+};
+
+export type CteAnalysisResult = {
+    cteRemetente: any[];
+    cteDestinatario: any[];
+    error?: string;
 };
 
 
@@ -833,7 +838,11 @@ export async function extractCteData(files: { name: string, content: string }[])
     }
 }
 
-export async function analyzeCteData(data: { cteFiles: { name: string, content: string }[], nfeSaidaFiles: { name: string, content: string }[], companyCnpj: string }) {
+export async function analyzeCteData(data: { 
+    cteFiles: { name: string, content: string }[], 
+    nfeSaidaFiles: { name: string, content: string }[], 
+    companyCnpj: string 
+}): Promise<CteAnalysisResult> {
     const { cteFiles, nfeSaidaFiles, companyCnpj } = data;
     try {
         const parser = new XMLParser({
@@ -841,7 +850,6 @@ export async function analyzeCteData(data: { cteFiles: { name: string, content: 
             isArray: (name, jpath) => name === "infNFe" || (jpath.endsWith('.det') && name === 'det')
         });
 
-        // 1. Create a map of NF-e Saída for quick lookup
         const nfeSaidaMap = new Map<string, { cfop: string }>();
         if (nfeSaidaFiles) {
             for (const file of nfeSaidaFiles) {
@@ -850,70 +858,56 @@ export async function analyzeCteData(data: { cteFiles: { name: string, content: 
                     const chaveNFe = jsonObj.nfeProc?.protNFe?.infProt?.chNFe;
                     const infNFe = jsonObj.nfeProc?.NFe?.infNFe;
                     if (!infNFe || !chaveNFe) continue;
-
                     const firstItemCfop = infNFe.det?.[0]?.prod?.CFOP || infNFe.det?.prod?.CFOP || 'N/A';
-                    
                     nfeSaidaMap.set(chaveNFe, { cfop: firstItemCfop });
-                    
                 } catch (e) {
-                    console.warn(`Could not parse NF-e file ${file.name}, skipping.`, e);
+                    console.warn(`Erro ao ler NF-e ${file.name}`);
                 }
             }
         }
 
-        // 2. Process CT-e files
         const cteRemetente: any[] = [];
         const cteDestinatario: any[] = [];
         
-        const cteDetailsPromises = cteFiles.map(async (file) => {
-            const jsonObj = parser.parse(file.content);
-            const specificData: { [key: string]: any } = {};
-
-            // Re-implementing parts of extractCteData to get structured data
-            const remCnpj = getValueByPath(jsonObj, "cteProc/CTe/infCte/rem/CNPJ");
-            const destCnpj = getValueByPath(jsonObj, "cteProc/CTe/infCte/dest/CNPJ");
-            
-            specificData['Número CT-e'] = getValueByPath(jsonObj, "cteProc/CTe/infCte/ide/nCT");
-            specificData['Chave CT-e'] = getValueByPath(jsonObj, "cteProc/protCTe/infProt/chCTe");
-            specificData['Nome do Remetente'] = getValueByPath(jsonObj, "cteProc/CTe/infCte/rem/xNome");
-            specificData['CNPJ do Remetente'] = remCnpj;
-            specificData['Nome do Destinatário'] = getValueByPath(jsonObj, "cteProc/CTe/infCte/dest/xNome");
-            specificData['CNPJ do Destinatário'] = destCnpj;
-            specificData['Valor Total Prestação'] = getValueByPath(jsonObj, "cteProc/CTe/infCte/vPrest/vTPrest");
-            
-            let chavesNfe = [];
-            const infNFe_array = getValueByPath(jsonObj, "cteProc/CTe/infCte/infCTeNorm/infDoc/infNFe");
-            if (infNFe_array && infNFe_array !== 'N/A') {
-                chavesNfe = Array.isArray(infNFe_array) 
-                    ? infNFe_array.map((nfe: any) => nfe.chave).filter(Boolean) 
-                    : [infNFe_array.chave].filter(Boolean);
-            }
-            specificData['Chave NF-e'] = chavesNfe.join(', ');
-
-            // 3. Cross-reference and enrich
-            let cfopOrigem = 'N/A';
-            if (chavesNfe.length > 0 && nfeSaidaMap.size > 0) {
-                const nfeData = nfeSaidaMap.get(chavesNfe[0]); // Check first referenced key
-                if (nfeData) {
-                    cfopOrigem = nfeData.cfop;
+        for (const file of cteFiles) {
+            try {
+                const jsonObj = parser.parse(file.content);
+                const specificData: any = { 'Arquivo': file.name };
+                const remCnpj = getValueByPath(jsonObj, "cteProc/CTe/infCte/rem/CNPJ");
+                const destCnpj = getValueByPath(jsonObj, "cteProc/CTe/infCte/dest/CNPJ");
+                
+                specificData['Número CT-e'] = getValueByPath(jsonObj, "cteProc/CTe/infCte/ide/nCT");
+                specificData['Chave CT-e'] = getValueByPath(jsonObj, "cteProc/protCTe/infProt/chCTe");
+                specificData['Nome do Remetente'] = getValueByPath(jsonObj, "cteProc/CTe/infCte/rem/xNome");
+                specificData['CNPJ do Remetente'] = remCnpj;
+                specificData['Nome do Destinatário'] = getValueByPath(jsonObj, "cteProc/CTe/infCte/dest/xNome");
+                specificData['CNPJ do Destinatário'] = destCnpj;
+                specificData['Valor Total Prestação'] = getValueByPath(jsonObj, "cteProc/CTe/infCte/vPrest/vTPrest");
+                
+                let chavesNfe: string[] = [];
+                const infNFe_array = getValueByPath(jsonObj, "cteProc/CTe/infCte/infCTeNorm/infDoc/infNFe");
+                if (infNFe_array && infNFe_array !== 'N/A') {
+                    chavesNfe = Array.isArray(infNFe_array) ? infNFe_array.map((n: any) => n.chave) : [infNFe_array.chave];
                 }
+                specificData['Chave NF-e'] = chavesNfe.join(', ');
+
+                let cfopOrigem = 'N/A';
+                if (chavesNfe.length > 0) {
+                    const nfeData = nfeSaidaMap.get(chavesNfe[0]);
+                    if (nfeData) cfopOrigem = nfeData.cfop;
+                }
+                specificData['CFOP da NF-e de Origem'] = cfopOrigem;
+                
+                if (remCnpj === companyCnpj) cteRemetente.push(specificData);
+                else if (destCnpj === companyCnpj) cteDestinatario.push(specificData);
+            } catch (e) {
+                console.warn(`Erro ao ler CT-e ${file.name}`);
             }
-            specificData['CFOP da NF-e de Origem'] = cfopOrigem;
-            
-            // 4. Classify
-            if (remCnpj === companyCnpj) {
-                cteRemetente.push(specificData);
-            } else if (destCnpj === companyCnpj) {
-                cteDestinatario.push(specificData);
-            }
-        });
-        await Promise.all(cteDetailsPromises);
+        }
 
         return { cteRemetente, cteDestinatario };
-
     } catch (error: any) {
-        console.error("Erro ao analisar dados de CT-e:", error);
-        return { error: error.message || "Ocorreu um erro ao analisar os dados de CT-e." };
+        return { cteRemetente: [], cteDestinatario: [], error: error.message };
     }
 }
 
