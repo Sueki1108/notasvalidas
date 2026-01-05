@@ -731,7 +731,7 @@ export default function Home() {
                 setFunction(prev => ({
                     ...prev,
                     [fileName]: isMultiple ? [...(prev[fileName] as File[] || []), ...Array.from(selectedFiles)] : selectedFiles[0]
-                }));
+                } as FullFileList));
             }
         }
     };
