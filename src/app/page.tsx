@@ -1142,7 +1142,7 @@ export default function Home() {
                                     
                                     {cfopError && (
                                         <Alert variant="destructive" className="mt-6">
-                                            <FileIcon className="h-4 w-4" />
+                                            <FileTextIcon className="h-4 w-4" />
                                             <AlertTitle>Erro na Análise</AlertTitle>
                                             <AlertDescription>{cfopError}</AlertDescription>
                                         </Alert>
