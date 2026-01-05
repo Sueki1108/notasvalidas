@@ -354,7 +354,7 @@ export default function Home() {
                     return {
                         ...prev,
                         [fileName]: [...existingArray, ...Array.from(selectedFiles)]
-                    };
+                    } as FileList;
                  });
             }
         }
@@ -368,7 +368,7 @@ export default function Home() {
             const input = document.querySelector(`input[name="SPED TXT"]`) as HTMLInputElement;
             if (input) input.value = "";
         } else {
-            setFiles(prev => ({...prev, [fileName]: null}));
+            setFiles(prev => ({...prev, [fileName]: null} as FileList));
             const input = document.querySelector(`input[name="${fileName}"]`) as HTMLInputElement;
             if (input) input.value = "";
         }
@@ -737,7 +737,7 @@ export default function Home() {
     };
 
     const handleClearTaxFile = (fileName: string, setFunction: React.Dispatch<React.SetStateAction<FullFileList>>) => {
-        setFunction(prev => ({...prev, [fileName]: null}));
+        setFunction(prev => ({...prev, [fileName]: null} as FullFileList));
         const input = document.querySelector(`input[name="${fileName}"]`) as HTMLInputElement;
         if (input) input.value = "";
     };
