@@ -354,7 +354,7 @@ export default function Home() {
                     return {
                         ...prev,
                         [fileName]: [...existingArray, ...Array.from(selectedFiles)]
-                    } as FileList;
+                    } as FullFileList;
                  });
             }
         }
@@ -368,7 +368,7 @@ export default function Home() {
             const input = document.querySelector(`input[name="SPED TXT"]`) as HTMLInputElement;
             if (input) input.value = "";
         } else {
-            setFiles(prev => ({...prev, [fileName]: null} as FileList));
+            setFiles(prev => ({...prev, [fileName]: null} as FullFileList));
             const input = document.querySelector(`input[name="${fileName}"]`) as HTMLInputElement;
             if (input) input.value = "";
         }
@@ -704,9 +704,10 @@ export default function Home() {
 
             if (result.error) throw new Error(result.error);
 
+            const analysis = result as { cteRemetente: any[]; cteDestinatario: any[] };
             setCteAnalysisResult({
-                cteRemetente: result.cteRemetente || [],
-                cteDestinatario: result.cteDestinatario || []
+                cteRemetente: analysis.cteRemetente || [],
+                cteDestinatario: analysis.cteDestinatario || []
             });
             toast({ title: "Análise de CT-e Concluída", description: "CT-es foram classificados e cruzados com as NF-es de origem." });
 
